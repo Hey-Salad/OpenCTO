@@ -1,0 +1,35 @@
+{
+  "name": "opencto-api-worker",
+  "version": "0.1.0",
+  "description": "OpenCTO Cloudflare Workers API",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "lint": "eslint src --ext .ts",
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "opencto",
+    "api"
+  ],
+  "author": "HeySalad",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240512.0",
+    "@types/node": "^20.12.7",
+    "@typescript-eslint/eslint-plugin": "^7.8.0",
+    "@typescript-eslint/parser": "^7.8.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0",
+    "wrangler": "^3.53.1"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^10.0.0",
+    "stripe": "^15.5.0"
+  }
+}
