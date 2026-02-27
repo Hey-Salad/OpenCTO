@@ -107,7 +107,8 @@ Phase 5 implements the Cloudflare Workers backend API that replaces the mock ada
   - Warning system when approaching limits
   - Server-side validation (prevents client-side bypass)
 
-### Plan Limits:
+### Plan Limits
+
 | Plan       | Jobs/mo | Workers | Users | Codex Credit | Features                                      |
 |------------|---------|---------|-------|--------------|-----------------------------------------------|
 | STARTER    | 10      | 1       | 1     | $10          | basic_jobs                                    |
@@ -116,7 +117,8 @@ Phase 5 implements the Cloudflare Workers backend API that replaces the mock ada
 | PRO        | ∞       | ∞       | 25    | $1000        | +advanced_compliance                          |
 | ENTERPRISE | ∞       | ∞       | ∞     | Custom       | +sla, custom_integrations, dedicated_support  |
 
-### Entitlement Actions:
+### Entitlement Actions
+
 - `CREATE_JOB` - Check job limits before job creation
 - `APPROVE_DANGEROUS_STEP` - Requires Developer+ plan
 - `EXPORT_EVIDENCE_PACKAGE` - Requires Team+ plan
@@ -176,6 +178,7 @@ Type compatibility maintained with:
    - Database update validation
 
 ### Running Tests
+
 ```bash
 cd opencto/opencto-api-worker
 npm install
@@ -233,6 +236,7 @@ npm test
 
 ### Setup
 1. Create D1 database:
+
    ```bash
    wrangler d1 create opencto-production
    ```
@@ -240,11 +244,13 @@ npm test
 2. Update `database_id` in `wrangler.toml`
 
 3. Run migrations:
+
    ```bash
    wrangler d1 execute opencto-production --file=./migrations/0001_initial_schema.sql
    ```
 
 4. Set secrets:
+
    ```bash
    wrangler secret put STRIPE_SECRET_KEY
    wrangler secret put STRIPE_WEBHOOK_SECRET
@@ -254,6 +260,7 @@ npm test
    ```
 
 5. Deploy:
+
    ```bash
    cd opencto/opencto-api-worker
    npm run deploy
