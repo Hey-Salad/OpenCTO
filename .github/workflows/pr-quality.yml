@@ -1,0 +1,40 @@
+name: PR Quality
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint and Repo Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required root files
+        run: |
+          test -f README.md
+          test -f LICENSE
+          test -f NOTICE
+          test -f TRADEMARKS.md
+
+      - name: Markdown lint
+        uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          globs: |
+            **/*.md
+            !**/node_modules/**
+
+      - name: Workflow YAML lint
+        run: |
+          python3 -m pip install --quiet yamllint
+          yamllint .github/workflows/*.yml
+
+      - name: Shell script syntax check
+        run: |
+          find . -type f -name '*.sh' -print0 | xargs -0 -I{} bash -n "{}"
