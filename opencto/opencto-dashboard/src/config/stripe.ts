@@ -22,32 +22,36 @@ const requiredKeys = [
   'VITE_STRIPE_PRICE_ENTERPRISE',
 ] as const
 
-function readRequired(name: keyof ImportMetaEnv): string {
-  const value = import.meta.env[name]
+export type StripePublicEnvKey = (typeof requiredKeys)[number]
+
+function readRequired(env: ImportMetaEnv, name: StripePublicEnvKey): string {
+  const value = env[name]
   if (!value || value.trim().length === 0) {
+    // Keep error content key-only so no env values are ever surfaced.
     throw new Error(`Missing required env var: ${name}`)
   }
+
   return value
 }
 
-export function getStripePublicConfig(): StripePublicConfig {
+export function getStripePublicConfig(env: ImportMetaEnv = import.meta.env): StripePublicConfig {
   return {
-    publishableKey: readRequired('VITE_STRIPE_PUBLISHABLE_KEY'),
-    defaultSuccessUrl: readRequired('VITE_STRIPE_SUCCESS_URL'),
-    defaultCancelUrl: readRequired('VITE_STRIPE_CANCEL_URL'),
+    publishableKey: readRequired(env, 'VITE_STRIPE_PUBLISHABLE_KEY'),
+    defaultSuccessUrl: readRequired(env, 'VITE_STRIPE_SUCCESS_URL'),
+    defaultCancelUrl: readRequired(env, 'VITE_STRIPE_CANCEL_URL'),
     priceIds: {
-      starter: readRequired('VITE_STRIPE_PRICE_STARTER'),
-      developer: readRequired('VITE_STRIPE_PRICE_DEVELOPER'),
-      team: readRequired('VITE_STRIPE_PRICE_TEAM'),
-      pro: readRequired('VITE_STRIPE_PRICE_PRO'),
-      enterprise: readRequired('VITE_STRIPE_PRICE_ENTERPRISE'),
+      starter: readRequired(env, 'VITE_STRIPE_PRICE_STARTER'),
+      developer: readRequired(env, 'VITE_STRIPE_PRICE_DEVELOPER'),
+      team: readRequired(env, 'VITE_STRIPE_PRICE_TEAM'),
+      pro: readRequired(env, 'VITE_STRIPE_PRICE_PRO'),
+      enterprise: readRequired(env, 'VITE_STRIPE_PRICE_ENTERPRISE'),
     },
   }
 }
 
-export function getStripeMissingEnvVars(): string[] {
+export function getStripeMissingEnvVars(env: ImportMetaEnv = import.meta.env): StripePublicEnvKey[] {
   return requiredKeys.filter((key) => {
-    const value = import.meta.env[key]
+    const value = env[key]
     return !value || value.trim().length === 0
   })
 }

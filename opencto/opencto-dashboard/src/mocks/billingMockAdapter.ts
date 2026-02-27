@@ -91,6 +91,7 @@ const invoices: InvoicesResponse = {
       amountPaidUsd: 99,
       currency: 'USD',
       status: 'paid',
+      pdfUrl: 'https://invoices.stripe.com/mock/in_1.pdf',
     },
     {
       id: 'in_2',
@@ -99,6 +100,7 @@ const invoices: InvoicesResponse = {
       amountPaidUsd: 99,
       currency: 'USD',
       status: 'paid',
+      hostedInvoiceUrl: 'https://dashboard.stripe.com/invoices/in_2',
     },
   ],
 }
@@ -117,11 +119,11 @@ export class BillingMockAdapter implements BillingApi {
     }
   }
 
-  async fetchSubscriptionSummary(): Promise<BillingSummaryResponse> {
+  async getSubscriptionSummary(): Promise<BillingSummaryResponse> {
     return structuredClone(summary)
   }
 
-  async fetchInvoices(): Promise<InvoicesResponse> {
+  async getInvoices(): Promise<InvoicesResponse> {
     return structuredClone(invoices)
   }
 }

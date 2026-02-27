@@ -10,8 +10,8 @@ import type {
 export interface BillingApi {
   createCheckoutSession: (planCode: PlanCode, interval: BillingInterval) => Promise<CheckoutSessionResponse>
   createBillingPortalSession: () => Promise<BillingPortalSessionResponse>
-  fetchSubscriptionSummary: () => Promise<BillingSummaryResponse>
-  fetchInvoices: () => Promise<InvoicesResponse>
+  getSubscriptionSummary: () => Promise<BillingSummaryResponse>
+  getInvoices: () => Promise<InvoicesResponse>
 }
 
 async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
@@ -52,11 +52,11 @@ export class BillingHttpClient implements BillingApi {
     })
   }
 
-  fetchSubscriptionSummary(): Promise<BillingSummaryResponse> {
+  getSubscriptionSummary(): Promise<BillingSummaryResponse> {
     return fetchJson<BillingSummaryResponse>(`${this.baseUrl}/subscription`)
   }
 
-  fetchInvoices(): Promise<InvoicesResponse> {
+  getInvoices(): Promise<InvoicesResponse> {
     return fetchJson<InvoicesResponse>(`${this.baseUrl}/invoices`)
   }
 }
