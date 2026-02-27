@@ -27,11 +27,11 @@ function usageValue(used: number, limit: number | null, suffix = ''): string {
 
 function getInvoiceActionLabel(invoice: Invoice): string {
   if (invoice.pdfUrl) {
-    return 'Download PDF'
+    return `Download ${invoice.number}`
   }
 
   if (invoice.hostedInvoiceUrl) {
-    return 'View Invoice'
+    return `View ${invoice.number}`
   }
 
   return 'Pending'
@@ -139,7 +139,6 @@ export function BillingDashboard({
           <table className="invoice-table">
             <thead>
               <tr>
-                <th>Invoice</th>
                 <th>Date</th>
                 <th>Amount</th>
                 <th>Status</th>
@@ -151,7 +150,6 @@ export function BillingDashboard({
                 const actionHref = getInvoiceActionHref(invoice)
                 return (
                   <tr key={invoice.id}>
-                    <td>{invoice.number}</td>
                     <td>{new Date(invoice.createdAt).toLocaleDateString()}</td>
                     <td>${invoice.amountPaidUsd.toFixed(2)}</td>
                     <td>{invoice.status}</td>

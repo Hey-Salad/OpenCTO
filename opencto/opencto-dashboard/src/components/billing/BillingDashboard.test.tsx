@@ -64,7 +64,7 @@ test('renders invoices and action handlers when billing is configured', async ()
     />,
   )
 
-  expect(screen.getByText('INV-2026-002')).toBeInTheDocument()
+  expect(screen.getByText('Download INV-2026-002')).toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: 'Upgrade Plan' }))
   fireEvent.click(screen.getByRole('button', { name: 'Manage Billing' }))

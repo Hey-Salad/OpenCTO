@@ -11,6 +11,17 @@ export interface StripePublicConfig {
   }
 }
 
+// Server-only secret contract for backend implementation. Do not expose these in frontend env.
+export interface StripeServerSecretContract {
+  stripeSecretKeyEnvVar: 'STRIPE_SECRET_KEY'
+  stripeWebhookSecretEnvVar: 'STRIPE_WEBHOOK_SECRET'
+}
+
+export const STRIPE_SERVER_SECRET_CONTRACT: StripeServerSecretContract = {
+  stripeSecretKeyEnvVar: 'STRIPE_SECRET_KEY',
+  stripeWebhookSecretEnvVar: 'STRIPE_WEBHOOK_SECRET',
+}
+
 const requiredKeys = [
   'VITE_STRIPE_PUBLISHABLE_KEY',
   'VITE_STRIPE_SUCCESS_URL',
