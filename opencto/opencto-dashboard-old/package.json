@@ -1,0 +1,11 @@
+{
+  "name": "opencto-dashboard",
+  "version": "1.0.0",
+  "description": "OpenCTO Token Management Dashboard",
+  "scripts": {
+    "deploy": "wrangler pages deploy . --project-name=opencto-dashboard"
+  },
+  "keywords": ["opencto", "dashboard", "token-management"],
+  "author": "HeySalad",
+  "license": "MIT"
+}

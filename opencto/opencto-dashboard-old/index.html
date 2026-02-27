@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenCTO - Token Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .token-blur {
+      filter: blur(5px);
+      transition: filter 0.2s;
+    }
+    .token-blur:hover {
+      filter: blur(0);
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Navigation -->
+  <nav class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16 items-center">
+        <div class="flex items-center space-x-3">
+          <span class="text-3xl">🍓</span>
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900">
+              Open<span class="text-red-600">CTO</span>
+            </h1>
+            <p class="text-xs text-gray-500">Token Management</p>
+          </div>
+        </div>
+        <div id="user-menu" class="hidden items-center space-x-4">
+          <div class="text-right">
+            <p class="text-sm font-medium text-gray-900" id="user-email"></p>
+            <p class="text-xs text-gray-500" id="user-plan"></p>
+          </div>
+          <button
+            id="logout-btn"
+            class="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Login/Register Section -->
+    <div id="auth-section" class="max-w-md mx-auto">
+      <div class="bg-white rounded-xl shadow-md p-8">
+        <div class="text-center mb-8">
+          <span class="text-5xl">🍓</span>
+          <h2 class="text-3xl font-bold text-gray-900 mt-4">
+            Welcome to <span class="text-red-600">OpenCTO</span>
+          </h2>
+          <p class="text-gray-600 mt-2">Autonomous Multi-Agent Development Platform</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b mb-6">
+          <button
+            id="login-tab"
+            class="flex-1 py-2 text-center font-medium text-red-600 border-b-2 border-red-600"
+          >
+            Login
+          </button>
+          <button
+            id="register-tab"
+            class="flex-1 py-2 text-center font-medium text-gray-500 hover:text-gray-700"
+          >
+            Register
+          </button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              id="login-email"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              id="login-password"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            class="w-full bg-red-600 text-white py-2 rounded-lg font-medium hover:bg-red-700 transition"
+          >
+            Login
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="register-form" class="space-y-4 hidden">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              id="register-email"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              id="register-password"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+          <div class="text-xs text-gray-500">
+            By registering, you'll start on the free plan (100 requests/day)
+          </div>
+          <button
+            type="submit"
+            class="w-full bg-red-600 text-white py-2 rounded-lg font-medium hover:bg-red-700 transition"
+          >
+            Create Account
+          </button>
+        </form>
+
+        <div id="auth-error" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"></div>
+      </div>
+    </div>
+
+    <!-- Dashboard Section -->
+    <div id="dashboard-section" class="hidden space-y-6">
+      <!-- Usage Stats -->
+      <div class="bg-white rounded-xl shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Usage Today</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-sm text-gray-600">Requests</span>
+              <span class="text-sm font-medium text-gray-900">
+                <span id="usage-requests">0</span> / <span id="limit-requests">100</span>
+              </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div id="usage-requests-bar" class="bg-red-600 h-2 rounded-full" style="width: 0%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-sm text-gray-600">Tokens</span>
+              <span class="text-sm font-medium text-gray-900">
+                <span id="usage-tokens">0</span> / <span id="limit-tokens">50000</span>
+              </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div id="usage-tokens-bar" class="bg-red-600 h-2 rounded-full" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Token Management -->
+      <div class="bg-white rounded-xl shadow-md p-6">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-xl font-bold text-gray-900">API Tokens</h2>
+          <button
+            id="generate-token-btn"
+            class="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition"
+          >
+            Generate New Token
+          </button>
+        </div>
+
+        <div id="tokens-list" class="space-y-4">
+          <!-- Tokens will be inserted here -->
+        </div>
+
+        <div id="no-tokens" class="text-center py-8 text-gray-500">
+          No tokens yet. Generate your first token to get started!
+        </div>
+      </div>
+
+      <!-- Getting Started -->
+      <div class="bg-white rounded-xl shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Getting Started</h2>
+        <div class="prose prose-sm max-w-none">
+          <h3 class="text-lg font-semibold text-gray-900 mt-0">Install Sheri-ML CLI</h3>
+          <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code>npm install -g @heysalad/sheri-ml-cli</code></pre>
+
+          <h3 class="text-lg font-semibold text-gray-900 mt-6">Authenticate with Token</h3>
+          <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code>export HEYSALAD_API_KEY=your_token_here
+sheri whoami</code></pre>
+
+          <h3 class="text-lg font-semibold text-gray-900 mt-6">Start Multi-Agent Mode</h3>
+          <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code>sheri --mqtt --role deployment --broker mqtt://localhost:1883</code></pre>
+
+          <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p class="text-sm text-blue-900">
+              <strong>Learn more:</strong> Check out the
+              <a href="https://github.com/heysalad/opencto" class="text-blue-600 hover:underline">OpenCTO documentation</a>
+              on GitHub.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const API_BASE = 'https://heysalad-sheri-auth.heysalad-o.workers.dev';
+    let currentToken = localStorage.getItem('heysalad_token');
+
+    // Tab switching
+    document.getElementById('login-tab').addEventListener('click', () => {
+      document.getElementById('login-tab').classList.add('text-red-600', 'border-red-600');
+      document.getElementById('login-tab').classList.remove('text-gray-500');
+      document.getElementById('register-tab').classList.remove('text-red-600', 'border-red-600');
+      document.getElementById('register-tab').classList.add('text-gray-500');
+      document.getElementById('login-form').classList.remove('hidden');
+      document.getElementById('register-form').classList.add('hidden');
+    });
+
+    document.getElementById('register-tab').addEventListener('click', () => {
+      document.getElementById('register-tab').classList.add('text-red-600', 'border-red-600');
+      document.getElementById('register-tab').classList.remove('text-gray-500');
+      document.getElementById('login-tab').classList.remove('text-red-600', 'border-red-600');
+      document.getElementById('login-tab').classList.add('text-gray-500');
+      document.getElementById('register-form').classList.remove('hidden');
+      document.getElementById('login-form').classList.add('hidden');
+    });
+
+    // Register
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('register-email').value;
+      const password = document.getElementById('register-password').value;
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          showAuthError(data.error || 'Registration failed');
+          return;
+        }
+
+        // Auto-login after registration
+        currentToken = data.token;
+        localStorage.setItem('heysalad_token', currentToken);
+        showDashboard();
+      } catch (error) {
+        showAuthError('Network error. Please try again.');
+      }
+    });
+
+    // Login
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          showAuthError(data.error || 'Login failed');
+          return;
+        }
+
+        currentToken = data.token;
+        localStorage.setItem('heysalad_token', currentToken);
+        showDashboard();
+      } catch (error) {
+        showAuthError('Network error. Please try again.');
+      }
+    });
+
+    // Logout
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      if (!currentToken) return;
+
+      try {
+        await fetch(`${API_BASE}/auth/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${currentToken}` },
+        });
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+
+      localStorage.removeItem('heysalad_token');
+      currentToken = null;
+      showAuth();
+    });
+
+    // Generate token
+    document.getElementById('generate-token-btn').addEventListener('click', async () => {
+      if (!currentToken) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/token/generate`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${currentToken}` },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.error || 'Failed to generate token');
+          return;
+        }
+
+        alert(`New token generated:\n\n${data.token}\n\nSave it now - you won't see it again!`);
+        loadTokens();
+      } catch (error) {
+        alert('Network error. Please try again.');
+      }
+    });
+
+    // Show auth section
+    function showAuth() {
+      document.getElementById('auth-section').classList.remove('hidden');
+      document.getElementById('dashboard-section').classList.add('hidden');
+      document.getElementById('user-menu').classList.add('hidden');
+    }
+
+    // Show auth error
+    function showAuthError(message) {
+      const errorEl = document.getElementById('auth-error');
+      errorEl.textContent = message;
+      errorEl.classList.remove('hidden');
+      setTimeout(() => errorEl.classList.add('hidden'), 5000);
+    }
+
+    // Show dashboard
+    async function showDashboard() {
+      document.getElementById('auth-section').classList.add('hidden');
+      document.getElementById('dashboard-section').classList.remove('hidden');
+      document.getElementById('user-menu').classList.remove('hidden');
+
+      await loadUserData();
+      await loadTokens();
+    }
+
+    // Load user data
+    async function loadUserData() {
+      if (!currentToken) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${currentToken}` },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          showAuth();
+          return;
+        }
+
+        // Update user info
+        document.getElementById('user-email').textContent = data.user.email;
+        document.getElementById('user-plan').textContent = data.user.plan.toUpperCase() + ' Plan';
+
+        // Update usage
+        const requests = data.usage.today.requests;
+        const tokens = data.usage.today.tokens;
+        const requestLimit = data.usage.limits.requests === -1 ? '∞' : data.usage.limits.requests;
+        const tokenLimit = data.usage.limits.tokens === -1 ? '∞' : data.usage.limits.tokens;
+
+        document.getElementById('usage-requests').textContent = requests;
+        document.getElementById('usage-tokens').textContent = tokens;
+        document.getElementById('limit-requests').textContent = requestLimit;
+        document.getElementById('limit-tokens').textContent = tokenLimit;
+
+        const requestPercent = data.usage.limits.requests === -1 ? 0 : (requests / data.usage.limits.requests) * 100;
+        const tokenPercent = data.usage.limits.tokens === -1 ? 0 : (tokens / data.usage.limits.tokens) * 100;
+
+        document.getElementById('usage-requests-bar').style.width = `${Math.min(requestPercent, 100)}%`;
+        document.getElementById('usage-tokens-bar').style.width = `${Math.min(tokenPercent, 100)}%`;
+      } catch (error) {
+        console.error('Failed to load user data:', error);
+      }
+    }
+
+    // Load tokens
+    async function loadTokens() {
+      if (!currentToken) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/tokens`, {
+          headers: { 'Authorization': `Bearer ${currentToken}` },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error('Failed to load tokens');
+          return;
+        }
+
+        const tokensList = document.getElementById('tokens-list');
+        const noTokens = document.getElementById('no-tokens');
+
+        if (data.tokens.length === 0) {
+          tokensList.innerHTML = '';
+          noTokens.classList.remove('hidden');
+          return;
+        }
+
+        noTokens.classList.add('hidden');
+        tokensList.innerHTML = data.tokens.map(token => {
+          const createdDate = new Date(token.created_at * 1000).toLocaleDateString();
+          const expiresDate = new Date(token.expires_at * 1000).toLocaleDateString();
+          const lastUsed = token.last_used_at
+            ? new Date(token.last_used_at * 1000).toLocaleDateString()
+            : 'Never';
+
+          const statusClass = token.is_expired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
+          const statusText = token.is_expired ? 'Expired' : 'Active';
+
+          return `
+            <div class="border border-gray-200 rounded-lg p-4">
+              <div class="flex justify-between items-start mb-3">
+                <div class="flex-1">
+                  <div class="flex items-center space-x-2 mb-2">
+                    <code class="text-sm font-mono bg-gray-100 px-3 py-1 rounded token-blur">${token.token}</code>
+                    ${token.is_current ? '<span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Current</span>' : ''}
+                    <span class="text-xs ${statusClass} px-2 py-1 rounded">${statusText}</span>
+                  </div>
+                  <div class="text-xs text-gray-500 space-y-1">
+                    <div>Created: ${createdDate}</div>
+                    <div>Expires: ${expiresDate}</div>
+                    <div>Last used: ${lastUsed}</div>
+                  </div>
+                </div>
+                <button
+                  onclick="revokeToken('${token.token}')"
+                  class="ml-4 px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50"
+                  ${token.is_current ? 'disabled' : ''}
+                >
+                  Revoke
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (error) {
+        console.error('Failed to load tokens:', error);
+      }
+    }
+
+    // Revoke token
+    async function revokeToken(token) {
+      if (!currentToken) return;
+      if (!confirm('Are you sure you want to revoke this token?')) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/token/revoke`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.error || 'Failed to revoke token');
+          return;
+        }
+
+        loadTokens();
+      } catch (error) {
+        alert('Network error. Please try again.');
+      }
+    }
+
+    // Make revoke function global
+    window.revokeToken = revokeToken;
+
+    // Initialize
+    if (currentToken) {
+      showDashboard();
+    } else {
+      showAuth();
+    }
+  </script>
+</body>
+</html>

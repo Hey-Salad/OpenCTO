@@ -1,0 +1,182 @@
+/* OpenCTO Main App Styles */
+
+#root {
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Utility classes */
+.text-muted {
+  color: var(--color-muted-text);
+}
+
+.text-success {
+  color: var(--color-success);
+}
+
+.text-warning {
+  color: var(--color-warning);
+}
+
+.text-error {
+  color: var(--color-error);
+}
+
+.text-info {
+  color: var(--color-info);
+}
+
+.bg-surface {
+  background-color: var(--color-surface);
+}
+
+.bg-surface2 {
+  background-color: var(--color-surface2);
+}
+
+.border-thin {
+  border: 1px solid var(--color-border);
+}
+
+.border-medium {
+  border: 2px solid var(--color-border);
+}
+
+/* Role label styles */
+.role-label {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.role-orchestrator {
+  background-color: var(--color-success);
+  color: var(--color-background);
+}
+
+.role-worker {
+  background-color: var(--color-info);
+  color: var(--color-background);
+}
+
+.role-compliance {
+  background-color: var(--color-warning);
+  color: var(--color-background);
+}
+
+.role-planning {
+  background-color: var(--color-secondary);
+  color: var(--color-background);
+}
+
+.role-code-review {
+  background-color: var(--color-primary);
+  color: var(--color-base);
+}
+
+/* Button hover states */
+button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+/* Input focus states */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(237, 76, 76, 0.2);
+}
+
+/* Toggle switch focus */
+.toggle-switch input:focus + .toggle-slider {
+  box-shadow: 0 0 0 2px rgba(237, 76, 76, 0.2);
+}
+
+/* Approval card specific */
+.approval-card {
+  border-left: 3px solid var(--color-secondary) !important;
+}
+
+.approval-warning {
+  color: var(--color-warning);
+  font-size: 20px;
+}
+
+/* Session divider */
+.session-divider {
+  position: relative;
+  text-align: center;
+  color: var(--color-muted-text);
+  font-size: 14px;
+}
+
+.session-divider::before,
+.session-divider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 45%;
+  height: 1px;
+  background-color: var(--color-border);
+}
+
+.session-divider::before {
+  left: 0;
+}
+
+.session-divider::after {
+  right: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .right-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .left-sidebar {
+    display: none;
+  }
+  
+  .center-stream {
+    padding: 80px 16px 16px;
+  }
+}
+
+/* Loading states */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loading::after {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
