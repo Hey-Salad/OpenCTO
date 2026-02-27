@@ -85,7 +85,12 @@ p { margin: 0; }
   cursor: pointer;
 }
 
-.nav-item:hover { background: rgba(255, 208, 205, 0.08); }
+.nav-item:hover:not(:disabled) { background: rgba(255, 208, 205, 0.08); }
+
+.nav-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 .nav-item-active {
   border-left-color: var(--brand-primary);
@@ -110,7 +115,14 @@ p { margin: 0; }
   grid-area: right;
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 10px;
+}
+
+.env-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .config-control {
@@ -349,6 +361,174 @@ p { margin: 0; }
   gap: 8px;
 }
 
+.pricing-header,
+.billing-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.billing-toggle {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 4px;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.toggle-button {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.toggle-button-active {
+  background: var(--brand-primary);
+  color: #ffffff;
+}
+
+.plans-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.plan-card {
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface-2);
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.plan-card-highlighted {
+  border-color: var(--brand-primary);
+  box-shadow: inset 0 0 0 1px rgba(237, 76, 76, 0.2);
+}
+
+.plan-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.recommended-badge {
+  border: 1px solid var(--brand-secondary);
+  color: var(--brand-secondary);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.plan-price {
+  font-size: 24px;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+.plan-period,
+.plan-credit {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.plan-features {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-body);
+  font-size: 13px;
+  display: grid;
+  gap: 4px;
+}
+
+.billing-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.current-plan-card {
+  margin-top: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-surface-2);
+}
+
+.status-badge {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.status-active,
+.status-trialing {
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: var(--status-success);
+}
+
+.status-past_due {
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--status-warning);
+}
+
+.status-canceled {
+  border: 1px solid rgba(237, 76, 76, 0.4);
+  color: var(--status-error);
+}
+
+.usage-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.usage-item {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #151515;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.invoices-panel {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #151515;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.invoice-table th,
+.invoice-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.invoice-table th {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -360,6 +540,13 @@ p { margin: 0; }
       'right';
   }
 
+  .pricing-header,
+  .billing-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .usage-grid { grid-template-columns: 1fr 1fr; }
   .approval-grid { grid-template-columns: 1fr; }
   .stream-container { max-height: none; }
 }
