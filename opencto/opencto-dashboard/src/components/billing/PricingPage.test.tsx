@@ -1,22 +1,55 @@
+import { useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { PricingPage } from './PricingPage'
 import { plans } from '../../mocks/billingMockAdapter'
+import type { BillingInterval } from '../../types/billing'
 
-test('renders plans and interval toggle', () => {
-  const onIntervalChange = vi.fn()
-  const onCheckout = vi.fn()
+function PricingHarness({ isBillingConfigured = true }: { isBillingConfigured?: boolean }) {
+  const [interval, setInterval] = useState<BillingInterval>('MONTHLY')
 
-  render(
-    <PricingPage plans={plans} interval="MONTHLY" onIntervalChange={onIntervalChange} onCheckout={onCheckout} />,
+  return (
+    <PricingPage
+      plans={plans}
+      interval={interval}
+      onIntervalChange={setInterval}
+      onCheckout={vi.fn()}
+      isBillingConfigured={isBillingConfigured}
+      missingStripeVars={isBillingConfigured ? [] : ['VITE_STRIPE_PUBLISHABLE_KEY', 'VITE_STRIPE_PRICE_TEAM']}
+    />
   )
+}
 
-  expect(screen.getByText('Pricing')).toBeInTheDocument()
-  expect(screen.getByText('Team')).toBeInTheDocument()
-  expect(screen.getByText('Recommended')).toBeInTheDocument()
+test('toggles monthly/yearly pricing state on interval switch', () => {
+  render(<PricingHarness />)
+
+  // Team card starts monthly.
+  expect(screen.getByText('$99')).toBeInTheDocument()
+  expect(screen.getAllByText('per month').length).toBeGreaterThan(0)
 
   fireEvent.click(screen.getByText('Yearly'))
-  expect(onIntervalChange).toHaveBeenCalledWith('YEARLY')
 
-  fireEvent.click(screen.getAllByText('Start Plan')[0])
-  expect(onCheckout).toHaveBeenCalled()
+  expect(screen.getByText('$990')).toBeInTheDocument()
+  expect(screen.getAllByText('per year').length).toBeGreaterThan(0)
+})
+
+test('renders Team as recommended', () => {
+  render(<PricingHarness />)
+
+  const teamHeading = screen.getByRole('heading', { name: 'Team' })
+  expect(teamHeading).toBeInTheDocument()
+  expect(screen.getByText('Recommended')).toBeInTheDocument()
+})
+
+test('shows non-breaking fallback UI and disables checkout when Stripe config is missing', () => {
+  render(<PricingHarness isBillingConfigured={false} />)
+
+  expect(screen.getByRole('alert')).toHaveTextContent('Stripe checkout is not configured')
+
+  const planButtons = screen.getAllByRole('button', { name: 'Start Plan' })
+  expect(planButtons.length).toBeGreaterThan(0)
+  for (const button of planButtons) {
+    expect(button).toBeDisabled()
+  }
+
+  expect(screen.getByRole('button', { name: 'Contact Sales' })).toBeEnabled()
 })

@@ -74,3 +74,41 @@ Backend-only values (must remain server-side, not committed):
 - End-to-end entitlement enforcement from subscription state.
 - Production invoice links/download actions and pagination.
 - Security hardening: passkey/device trust integration and full audit event coverage.
+
+## Hardening Updates (PR #2 follow-up)
+
+### Billing Safety and API Contract Handling
+
+- Added runtime-safe subscription status normalization with an explicit fallback tone/label for unknown status values.
+- Updated billing dashboard badge rendering to handle all known statuses (`trialing`, `active`, `past_due`, `canceled`) plus an `Unknown` fallback.
+- Guarded billing action paths so checkout/portal actions no-op safely when Stripe public config is incomplete.
+- Kept failure messages generic and key-only for env validation; no env values are surfaced in errors.
+
+### UX Hardening
+
+- Added non-breaking Stripe configuration warning in pricing and billing views when env vars are missing.
+- Disabled billing action buttons while billing is loading or Stripe config is incomplete.
+- Added invoice loading skeleton, error alert, and empty state messaging in billing dashboard.
+
+### Test Hardening Added
+
+- `src/components/billing/PricingPage.test.tsx`
+  - monthly/yearly toggle behavior with controlled state
+  - Team recommended card presence
+  - missing Stripe config fallback (warning + checkout buttons disabled)
+- `src/components/billing/BillingDashboard.test.tsx`
+  - status badge rendering for `trialing`, `active`, `past_due`, `canceled`, and unknown fallback
+  - invoice loading state
+  - invoice error state
+  - invoice empty state
+  - billing action buttons disabled when config is missing
+- `src/config/stripe.test.ts`
+  - deterministic missing env key detection
+  - missing required env throws without exposing env values
+
+### Remaining Risks For Phase 4
+
+- Backend enforcement still required: entitlement and access checks must be server-authoritative for subscription state transitions.
+- Billing API response validation is still compile-time only; add runtime schema validation (server and client) before production.
+- Checkout/portal success and cancellation flows need full end-to-end integration with authenticated backend endpoints.
+- Invoice pagination/download links and timezone-safe formatting need product-level acceptance criteria.

@@ -25,6 +25,13 @@ function App() {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('MONTHLY')
   const [billingSummary, setBillingSummary] = useState<BillingSummaryResponse | null>(null)
   const [billingInvoices, setBillingInvoices] = useState<Invoice[]>([])
+  const [isBillingSummaryLoading, setIsBillingSummaryLoading] = useState(false)
+  const [isBillingInvoicesLoading, setIsBillingInvoicesLoading] = useState(false)
+  const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null)
+  const [billingInvoicesError, setBillingInvoicesError] = useState<string | null>(null)
+
+  const missingStripeVars = getStripeMissingEnvVars()
+  const isBillingConfigured = missingStripeVars.length === 0
 
   useEffect(() => {
     jobsApi.listJobs().then((items) => {
@@ -42,8 +49,52 @@ function App() {
   }, [jobsApi, selectedJobId])
 
   useEffect(() => {
-    billingApi.fetchSubscriptionSummary().then(setBillingSummary)
-    billingApi.fetchInvoices().then((response) => setBillingInvoices(response.invoices))
+    let isCancelled = false
+
+    const loadBilling = async () => {
+      setIsBillingSummaryLoading(true)
+      setIsBillingInvoicesLoading(true)
+      setBillingSummaryError(null)
+      setBillingInvoicesError(null)
+
+      try {
+        const summary = await billingApi.getSubscriptionSummary()
+        if (!isCancelled) {
+          setBillingSummary(summary)
+        }
+      } catch {
+        if (!isCancelled) {
+          setBillingSummary(null)
+          setBillingSummaryError('Unable to load subscription summary. Try again shortly.')
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsBillingSummaryLoading(false)
+        }
+      }
+
+      try {
+        const response = await billingApi.getInvoices()
+        if (!isCancelled) {
+          setBillingInvoices(response.invoices)
+        }
+      } catch {
+        if (!isCancelled) {
+          setBillingInvoices([])
+          setBillingInvoicesError('Unable to load invoices right now. Try again shortly.')
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsBillingInvoicesLoading(false)
+        }
+      }
+    }
+
+    void loadBilling()
+
+    return () => {
+      isCancelled = true
+    }
   }, [billingApi])
 
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null
@@ -60,18 +111,28 @@ function App() {
   }
 
   const handleCheckout = async (planCode: PlanCode) => {
-    if (planCode === 'ENTERPRISE') {
+    if (planCode === 'ENTERPRISE' || !isBillingConfigured) {
       return
     }
 
-    await billingApi.createCheckoutSession(planCode, billingInterval)
+    try {
+      await billingApi.createCheckoutSession(planCode, billingInterval)
+    } catch {
+      setBillingSummaryError('Unable to start checkout right now. Try again shortly.')
+    }
   }
 
   const handleManageBilling = async () => {
-    await billingApi.createBillingPortalSession()
-  }
+    if (!isBillingConfigured) {
+      return
+    }
 
-  const missingStripeVars = getStripeMissingEnvVars()
+    try {
+      await billingApi.createBillingPortalSession()
+    } catch {
+      setBillingSummaryError('Unable to open billing management right now. Try again shortly.')
+    }
+  }
 
   return (
     <main className="app-shell">
@@ -143,6 +204,8 @@ function App() {
             interval={billingInterval}
             onIntervalChange={setBillingInterval}
             onCheckout={handleCheckout}
+            isBillingConfigured={isBillingConfigured}
+            missingStripeVars={missingStripeVars}
           />
         )}
 
@@ -150,6 +213,11 @@ function App() {
           <BillingDashboard
             summary={billingSummary}
             invoices={billingInvoices}
+            isSummaryLoading={isBillingSummaryLoading}
+            isInvoicesLoading={isBillingInvoicesLoading}
+            summaryError={billingSummaryError}
+            invoicesError={billingInvoicesError}
+            isBillingConfigured={isBillingConfigured}
             onManage={handleManageBilling}
             onUpgrade={() => setView('pricing')}
           />
@@ -159,7 +227,8 @@ function App() {
       <aside className="right-config panel" aria-label="Config panel">
         <h3>Billing Config</h3>
         <p className="muted">Stripe environment status</p>
-        <p>{missingStripeVars.length === 0 ? 'Configured' : `${missingStripeVars.length} vars missing`}</p>
+        <p>{isBillingConfigured ? 'Configured' : `${missingStripeVars.length} vars missing`}</p>
+        {!isBillingConfigured && <p className="muted">Billing actions run in safe stub mode until Stripe config is complete.</p>}
         <ul className="env-list">
           {missingStripeVars.slice(0, 4).map((key) => (
             <li key={key}>{key}</li>

@@ -5,6 +5,8 @@ interface PricingPageProps {
   interval: BillingInterval
   onIntervalChange: (interval: BillingInterval) => void
   onCheckout: (planCode: PlanCode) => void
+  isBillingConfigured: boolean
+  missingStripeVars: string[]
 }
 
 function formatPrice(priceUsd: number | null): string {
@@ -15,7 +17,14 @@ function formatPrice(priceUsd: number | null): string {
   return `$${priceUsd}`
 }
 
-export function PricingPage({ plans, interval, onIntervalChange, onCheckout }: PricingPageProps) {
+export function PricingPage({
+  plans,
+  interval,
+  onIntervalChange,
+  onCheckout,
+  isBillingConfigured,
+  missingStripeVars,
+}: PricingPageProps) {
   return (
     <section className="panel pricing-page">
       <header className="pricing-header">
@@ -41,6 +50,13 @@ export function PricingPage({ plans, interval, onIntervalChange, onCheckout }: P
         </div>
       </header>
 
+      {!isBillingConfigured && (
+        <div className="billing-warning" role="alert">
+          <p>Stripe checkout is not configured. Add missing billing environment variables to enable plan actions.</p>
+          {missingStripeVars.length > 0 && <p className="muted">Missing: {missingStripeVars.slice(0, 4).join(', ')}</p>}
+        </div>
+      )}
+
       <div className="plans-grid">
         {plans.map((plan) => {
           const price = interval === 'MONTHLY' ? plan.monthlyPriceUsd : plan.yearlyPriceUsd
@@ -61,7 +77,12 @@ export function PricingPage({ plans, interval, onIntervalChange, onCheckout }: P
                 ))}
               </ul>
 
-              <button type="button" className="primary-button" onClick={() => onCheckout(plan.code)}>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!isBillingConfigured && plan.code !== 'ENTERPRISE'}
+                onClick={() => onCheckout(plan.code)}
+              >
                 {plan.code === 'ENTERPRISE' ? 'Contact Sales' : 'Start Plan'}
               </button>
             </article>

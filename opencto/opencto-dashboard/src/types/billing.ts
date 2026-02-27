@@ -1,6 +1,8 @@
 export type PlanCode = 'STARTER' | 'DEVELOPER' | 'TEAM' | 'PRO' | 'ENTERPRISE'
 export type BillingInterval = 'MONTHLY' | 'YEARLY'
-export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled'
+export type KnownSubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled'
+export type SubscriptionStatus = KnownSubscriptionStatus | (string & {})
+export type SubscriptionStatusTone = KnownSubscriptionStatus | 'unknown'
 
 export interface Plan {
   code: PlanCode
@@ -63,4 +65,30 @@ export interface BillingSummaryResponse {
 
 export interface InvoicesResponse {
   invoices: Invoice[]
+}
+
+const knownSubscriptionStatuses: ReadonlySet<KnownSubscriptionStatus> = new Set([
+  'trialing',
+  'active',
+  'past_due',
+  'canceled',
+])
+
+export function toSubscriptionStatusTone(status: string | null | undefined): SubscriptionStatusTone {
+  if (!status) {
+    return 'unknown'
+  }
+
+  return knownSubscriptionStatuses.has(status as KnownSubscriptionStatus)
+    ? (status as KnownSubscriptionStatus)
+    : 'unknown'
+}
+
+export function toSubscriptionStatusLabel(status: string | null | undefined): string {
+  const tone = toSubscriptionStatusTone(status)
+  if (tone === 'unknown') {
+    return 'Unknown'
+  }
+
+  return tone.replace('_', ' ')
 }

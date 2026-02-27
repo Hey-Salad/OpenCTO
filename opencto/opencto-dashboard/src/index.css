@@ -178,6 +178,13 @@ p { margin: 0; }
   border-color: var(--brand-primary);
 }
 
+.primary-button:disabled,
+.secondary-button:disabled,
+.ghost-danger-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .filter-pills {
   display: flex;
   flex-wrap: wrap;
@@ -487,6 +494,11 @@ p { margin: 0; }
   color: var(--status-error);
 }
 
+.status-unknown {
+  border: 1px solid rgba(136, 136, 136, 0.5);
+  color: var(--text-muted);
+}
+
 .usage-grid {
   margin-top: 12px;
   display: grid;
@@ -527,6 +539,41 @@ p { margin: 0; }
 .invoice-table th {
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.billing-warning {
+  margin-top: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.billing-error {
+  margin-top: 12px;
+  border: 1px solid rgba(237, 76, 76, 0.45);
+  background: rgba(237, 76, 76, 0.08);
+  border-radius: 10px;
+  padding: 10px;
+  color: var(--brand-secondary);
+  font-size: 13px;
+}
+
+.invoice-skeleton {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #151515;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.invoice-skeleton-row {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #242424 0%, #2f2f2f 50%, #242424 100%);
 }
 
 @media (max-width: 1100px) {
