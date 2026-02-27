@@ -55,3 +55,8 @@ Thumbs.db
 *.wasm
 *.dll
 
+
+# Environment files with secrets
+.env
+.env.*
+\!.env.example

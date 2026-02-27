@@ -73,7 +73,7 @@ CHERI_ML_API_KEY=cheri-ml-2026-heysalad
 CHERI_ML_BASE_URL=https://cheri-ml.heysalad.app
 
 # Google Gemini / Vertex AI
-GEMINI_API_KEY=[REDACTED_API_KEY]
+GEMINI_API_KEY=[REDACTED_GOOGLE_API_KEY]
 
 # Default model configuration
 DEFAULT_PRIMARY_MODEL=cheri-ml

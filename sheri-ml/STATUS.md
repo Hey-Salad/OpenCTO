@@ -20,7 +20,7 @@
 
 ### ✅ API Key Configured
 ```bash
-export GEMINI_API_KEY="[REDACTED_API_KEY]"
+export GEMINI_API_KEY="[REDACTED_GOOGLE_API_KEY]"
 ```
 
 ### ✅ Infrastructure
@@ -78,7 +78,7 @@ cd ~/sheri-ml/codex-rs
 cargo build --release
 
 # Use Gemini
-export GEMINI_API_KEY="[REDACTED_API_KEY]"
+export GEMINI_API_KEY="[REDACTED_GOOGLE_API_KEY]"
 ./target/release/codex -c model_provider="gemini" -m gemini-2.5-flash-lite "Write a Rust function"
 ```
 
@@ -174,7 +174,7 @@ This would:
 
 ```bash
 # Required for Gemini
-export GEMINI_API_KEY="[REDACTED_API_KEY]"
+export GEMINI_API_KEY="[REDACTED_GOOGLE_API_KEY]"
 
 # Alternative names (for compatibility)
 export GOOGLE_API_KEY="..."  # Falls back to this if GEMINI_API_KEY not set

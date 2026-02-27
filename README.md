@@ -8,45 +8,47 @@
 
 ## 📊 Overview
 
-This repository consolidates the complete **HeySalad CTO ecosystem** into one unified system:
+This repository consolidates a complete **autonomous CTO ecosystem**:
 
 ### 🤖 Components
 
-| Component | Purpose | Status | Location |
-|-----------|---------|--------|----------|
-| **Cheri-ML** | Production ML inference server (1.3B model) | ✅ Running | `cheri-ml/` |
-| **Sheri-ML** | OpenAI Codex CLI (Rust, Gemini-powered) | ✅ Built | `sheri-ml/` |
-| **OpenCTO** | Multi-agent autonomous CTO system | ⚙️ Development | `opencto/` |
+| Component | Purpose | Status |
+|-----------|---------|--------|
+| **Cheri-ML** | Production ML inference server (1.3B model) | ✅ Open Source |
+| **Sheri-ML** | OpenAI Codex CLI (Rust, Gemini-powered) | ✅ Open Source |
+| **OpenCTO** | Multi-agent autonomous CTO system | ⚙️ Development |
 
 ---
 
 ## 🚀 Quick Start
 
 ### Cheri-ML (Inference Server)
-```bash
+\`\`\`bash
 cd cheri-ml
+pip install vllm fastapi uvicorn
 python serve_model.py
 # API: http://localhost:8000
-```
+\`\`\`
 
 ### Sheri-ML (Codex CLI)
-```bash
+\`\`\`bash
 cd sheri-ml/codex-rs
 cargo build --release
 ./target/release/codex "Write a Rust web server"
-```
+\`\`\`
 
 ### OpenCTO (Multi-Agent System)
-```bash
-cd opencto/Sheri-ML
-./start-opencto-swarm.sh
-```
+\`\`\`bash
+cd opencto/Sheri-ML/sheri-ml-cli
+npm install
+npm start
+\`\`\`
 
 ---
 
 ## 📁 Repository Structure
 
-```
+\`\`\`
 CTO/
 ├── README.md                    # This file
 ├── CLAUDE.md                    # Claude Code integration
@@ -55,26 +57,19 @@ CTO/
 │
 ├── cheri-ml/                    # ML Inference Server
 │   ├── serve_model.py           # FastAPI + vLLM server
-│   ├── api.py                   # API definitions
-│   └── README.md
+│   └── api.py                   # API definitions
 │
 ├── sheri-ml/                    # Codex CLI (Gemini-powered)
 │   ├── codex-rs/                # Rust source
-│   ├── README.md                # OpenAI Codex fork docs
-│   └── docs/                    # Documentation
+│   └── README.md                # OpenAI Codex fork docs
 │
 ├── opencto/                     # Multi-Agent System
 │   ├── Sheri-ML/                # Agent CLI
 │   ├── opencto-dashboard/       # Dashboard UI
-│   ├── VISION.md
-│   ├── MQTT-ARCHITECTURE.md
-│   └── README.md
+│   └── VISION.md
 │
 └── docs/                        # Consolidated documentation
-    ├── architecture/
-    ├── guides/
-    └── status/
-```
+\`\`\`
 
 ---
 
@@ -108,11 +103,15 @@ Scale from **1 CTO** to **100 autonomous AI CTOs** working in parallel.
 
 ---
 
-## 🏢 HeySalad OÜ
+## 🤝 Contributing
 
-**Private Repository**  
-Cloudflare Account: `67a17ada4efeee4480283035cc0c5f90`  
-GCP Project: `heysalad-finance`
+This is an open-source project. Contributions welcome\!
+
+---
+
+## 📄 License
+
+See [LICENSE](LICENSE) file for details.
 
 ---
 

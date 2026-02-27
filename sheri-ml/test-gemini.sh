@@ -3,7 +3,7 @@
 
 set -e
 
-API_KEY="[REDACTED_API_KEY]"
+API_KEY="[REDACTED_GOOGLE_API_KEY]"
 export GEMINI_API_KEY="$API_KEY"
 
 echo "==================================="

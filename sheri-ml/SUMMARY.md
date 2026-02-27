@@ -44,7 +44,7 @@ model = "gemini-2.5-pro"  # Best quality available
 ### 6. **API Key Configured**
 
 ```bash
-export GEMINI_API_KEY="[REDACTED_API_KEY]"
+export GEMINI_API_KEY="[REDACTED_GOOGLE_API_KEY]"
 ```
 
 ✅ Validated and working!
@@ -142,7 +142,7 @@ ps aux | grep cargo
 
 ```bash
 # Environment
-export GEMINI_API_KEY="[REDACTED_API_KEY]"
+export GEMINI_API_KEY="[REDACTED_GOOGLE_API_KEY]"
 
 # Default provider
 model_provider = "gemini"

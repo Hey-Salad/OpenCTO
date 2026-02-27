@@ -258,7 +258,7 @@ https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generat
 
 **Status**: ❌ **FAIL** - Authentication error (expected)
 **Root Cause**: API key is for Vertex AI, not standard Gemini API
-**API Key**: `[REDACTED_API_KEY]`
+**API Key**: `[REDACTED_GOOGLE_API_KEY]`
 **Error**: OAuth2 required (Vertex AI key)
 
 **Fix Required**:

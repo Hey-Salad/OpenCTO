@@ -1,31 +1,23 @@
-# Claude Code MCP Integration
+# Claude Code Integration
 
-## 🔗 MCP Gateway Connection
+> ⚠️ This is the open-source version. For internal HeySalad documentation with credentials, see the private CTO-AI repository.
 
-**Gateway URL**: https://heysalad-mcp-gateway.heysalad-o.workers.dev
-**API Key**: e53082f52f527185d29cae6df78384dda7f542f8cc0983f640687256a0a42361
+## 🔗 MCP Integration
 
-**Status**: ✅ Connected and operational
+This repository includes MCP (Model Context Protocol) server integrations for autonomous AI agents.
 
----
-
-## 🛠️ Available MCP Servers
-
-### 1. CheriML MCP Server (Port 5000)
-**Location**: Running on cheri-ml-gpu-01  
-**Endpoint**: http://34.133.133.219:5000/sse  
+### CheriML MCP Server
 **Purpose**: Code generation using Cheri-ML-1.3B model
 
 **Tools**:
-- `generate_code()` - Generate code completions
-- `complete_function()` - Complete function implementations
-- `explain_code()` - Explain code snippets
-- `refactor_code()` - Refactor code
-- `check_model_health()` - Check model server status
+- \`generate_code()\` - Generate code completions
+- \`complete_function()\` - Complete function implementations
+- \`explain_code()\` - Explain code snippets
+- \`refactor_code()\` - Refactor code
+- \`check_model_health()\` - Check model server status
 
-### 2. HeySalad MCP Server (Port 5001)
-**Endpoint**: http://34.133.133.219:5001/sse  
-**Purpose**: Access HeySalad MCP Gateway (8 domains, 30+ tools)
+### HeySalad MCP Server
+**Purpose**: Access to multi-domain AI tools
 
 **Domains**:
 1. Engineering - GitHub, postmortems, runbooks
@@ -43,20 +35,13 @@
 
 This repository consolidates three AI systems:
 
-```
+\`\`\`
 CTO/
-├── cheri-ml/         # ML Inference Server (production)
-│   └── serve_model.py
-│
+├── cheri-ml/         # ML Inference Server
 ├── sheri-ml/         # Codex CLI (Gemini-powered)
-│   └── codex-rs/
-│
 ├── opencto/          # Multi-Agent System
-│   ├── Sheri-ML/
-│   └── opencto-dashboard/
-│
-└── docs/
-```
+└── docs/             # Documentation
+\`\`\`
 
 ---
 
@@ -79,46 +64,14 @@ CTO/
 
 ---
 
-## 🔧 Quick Commands
+## 🔧 Setup Instructions
 
-### Ask Knowledge Base
-```bash
-curl -X POST -H "X-API-Key: e53082f52f527185d29cae6df78384dda7f542f8cc0983f640687256a0a42361" \
-  -H "Content-Type: application/json" \
-  -d query:YOUR_QUESTION \
-  https://heysalad-mcp-gateway.heysalad-o.workers.dev/mcp/ask
-```
-
-### Generate Code with Cheri-ML
-```bash
-curl -X POST http://localhost:8000/generate \
-  -H "Content-Type: application/json" \
-  -d prompt:def hello_world():
-```
+See individual component READMEs:
+- [cheri-ml/README.md](cheri-ml/README.md)
+- [sheri-ml/README.md](sheri-ml/README.md)
+- [opencto/README.md](opencto/README.md)
 
 ---
 
-## 📊 GCP Resources
-
-**Instance**: cheri-ml-gpu-01 (us-central1-a)  
-**GPU**: Tesla T4 (15GB VRAM)  
-**External IP**: 34.133.133.219  
-**Project**: heysalad-finance  
-**Account**: peter@heysalad.io
-
-### Services Running
-- Cheri-ML API (port 8000)
-- CheriML MCP (port 5000)
-- HeySalad MCP (port 5001)
-
----
-
-## 🎯 How Claude Code Uses This
-
-1. **Code Generation**: Uses CheriML MCP to generate code
-2. **RAG Queries**: Uses HeySalad MCP to query knowledge base
-3. **Multi-Agent Tasks**: Spawns OpenCTO agents for complex workflows
-
----
-
+**License**: See LICENSE file
 **Last Updated**: February 27, 2026

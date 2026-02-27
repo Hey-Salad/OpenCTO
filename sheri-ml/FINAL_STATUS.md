@@ -35,7 +35,7 @@ You now have a fully functional Google Gemini integration for Sheri ML (forked f
 ### Your API Key
 
 ```bash
-export GEMINI_API_KEY="[REDACTED_API_KEY]"
+export GEMINI_API_KEY="[REDACTED_GOOGLE_API_KEY]"
 ```
 
 ✅ **Validated** - Successfully generates code
@@ -500,7 +500,7 @@ cargo test -p codex-gemini
 ### Environment Variables
 
 ```bash
-export GEMINI_API_KEY="[REDACTED_API_KEY]"
+export GEMINI_API_KEY="[REDACTED_GOOGLE_API_KEY]"
 ```
 
 ---
