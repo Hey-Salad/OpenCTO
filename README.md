@@ -76,3 +76,18 @@ If your team wants business implementation support (deployment, integration, man
 [![GitHub repo size](https://img.shields.io/github/repo-size/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Hey-Salad/CTO-AI&type=Date)](https://star-history.com/#Hey-Salad/CTO-AI&Date)
+
+## Release and PR Process
+
+- Pull requests to `main` run quality checks via `.github/workflows/pr-quality.yml`.
+- Security and smoke checks run via `.github/workflows/ci-security.yml`.
+- Releases are created from tags like `v1.2.3` (or manual dispatch) via `.github/workflows/release.yml`.
+
+Example release flow:
+
+```bash
+git checkout main
+git pull
+git tag v1.0.0
+git push origin v1.0.0
+```
