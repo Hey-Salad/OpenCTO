@@ -75,7 +75,7 @@ If your team wants business implementation support (deployment, integration, man
 [![GitHub pull requests](https://img.shields.io/github/issues-pr/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI/pulls)
 [![GitHub repo size](https://img.shields.io/github/repo-size/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Hey-Salad/CTO-AI&type=Date)](https://star-history.com/#Hey-Salad/CTO-AI&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Hey-Salad%2FCTO-AI&type=Date)](https://star-history.com/#Hey-Salad/CTO-AI&Date)
 
 ## Release and PR Process
 
@@ -91,3 +91,10 @@ git pull
 git tag v1.0.0
 git push origin v1.0.0
 ```
+
+## Architecture Docs
+
+- OpenCTO docs index: [docs/opencto/README.md](docs/opencto/README.md)
+- Platform spec: [docs/opencto/OPENCTO_PLATFORM_SPEC.md](docs/opencto/OPENCTO_PLATFORM_SPEC.md)
+- Frontend, brand and monetisation spec: [docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md](docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md)
+- Implementation roadmap: [docs/opencto/IMPLEMENTATION_ROADMAP.md](docs/opencto/IMPLEMENTATION_ROADMAP.md)

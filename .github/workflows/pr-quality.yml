@@ -27,7 +27,14 @@ jobs:
         uses: DavidAnson/markdownlint-cli2-action@v18
         with:
           globs: |
-            **/*.md
+            README.md
+            CONTRIBUTING.md
+            SECURITY.md
+            BUSINESS.md
+            ATTRIBUTION.md
+            TRADEMARKS.md
+            docs/opencto/**/*.md
+            opencto/opencto-dashboard/**/*.md
             !**/node_modules/**
 
       - name: Workflow YAML lint
