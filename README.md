@@ -116,3 +116,10 @@ See [LICENSE](LICENSE) file for details.
 ---
 
 **Last Updated**: February 27, 2026
+
+## Legal
+
+- License: Apache-2.0 (LICENSE)
+- Attribution terms: NOTICE and ATTRIBUTION.md
+- Trademark policy: TRADEMARKS.md
+- HeySalad is a registered trademark of HeySalad Inc. (UK00004063403)
