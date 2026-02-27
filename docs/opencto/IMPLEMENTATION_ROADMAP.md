@@ -4,6 +4,12 @@ This roadmap maps your new spec onto the current `CTO` repository structure.
 
 ## Current Baseline
 
+## Status Snapshot
+
+- Phase 1: foundation delivered
+- Phase 2: job stream and approval foundations delivered
+- Phase 3: billing and monetisation foundations in progress on `feat/opencto-phase3-billing-monetisation`
+
 Existing top-level components:
 
 - `cheri-ml`
