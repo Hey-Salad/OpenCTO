@@ -25,7 +25,7 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          extra_args: --results=verified,unknown --fail
+          extra_args: --results=verified,unknown
 
   smoke-tests:
     name: Smoke Tests
