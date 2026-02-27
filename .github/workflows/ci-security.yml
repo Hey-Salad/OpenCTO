@@ -1,0 +1,49 @@
+name: CI Security and Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate repo layout
+        run: |
+          test -d cheri-ml
+          test -d sheri-ml
+          test -d opencto
+
+      - name: Python syntax smoke test
+        run: |
+          python3 -m py_compile cheri-ml/*.py
+
+      - name: Node smoke test
+        run: |
+          node --version
+          npm --version
