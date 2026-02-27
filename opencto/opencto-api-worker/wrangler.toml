@@ -1,0 +1,23 @@
+name = "opencto-api-worker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+workers_dev = true
+
+[env.production]
+name = "opencto-api"
+route = { pattern = "api.opencto.works/*", zone_name = "opencto.works" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "opencto-production"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Secrets (set via wrangler secret put):
+# - STRIPE_SECRET_KEY
+# - STRIPE_WEBHOOK_SECRET
+# - JWT_SECRET
+# - WEBAUTHN_RP_ID
+# - WEBAUTHN_RP_NAME
