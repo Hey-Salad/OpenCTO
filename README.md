@@ -1,125 +1,64 @@
-# 🍓 CTO - Autonomous Development System
+<img src="https://raw.githubusercontent.com/Hey-Salad/.github/refs/heads/main/HeySalad%20Logo%20%2B%20Tagline%20Black.svg" alt="HeySalad Logo" width="420"/>
 
-**The Future of Software Development: AI-Powered CTOs**
+# HeySalad CTO
 
-> "In the future, every project will have its own AI CTO. Traditional companies have 1 CTO. With OpenCTO, you can have 100."
+Build, run, and scale autonomous AI CTO workflows across coding, inference, and multi-agent operations.
 
----
+## Why This Exists
 
-## 📊 Overview
+HeySalad CTO is a unified control repo for three execution layers:
 
-This repository consolidates a complete **autonomous CTO ecosystem**:
+- `cheri-ml`: inference and model-serving runtime
+- `sheri-ml`: Codex-style coding workflows
+- `opencto`: multi-agent orchestration and operations
 
-### 🤖 Components
+The goal is simple: one operating system for AI engineering teams.
 
-| Component | Purpose | Status |
-|-----------|---------|--------|
-| **Cheri-ML** | Production ML inference server (1.3B model) | ✅ Open Source |
-| **Sheri-ML** | OpenAI Codex CLI (Rust, Gemini-powered) | ✅ Open Source |
-| **OpenCTO** | Multi-agent autonomous CTO system | ⚙️ Development |
+## Quick Start
 
----
-
-## 🚀 Quick Start
-
-### Cheri-ML (Inference Server)
-\`\`\`bash
+```bash
+# 1) Inference server
 cd cheri-ml
-pip install vllm fastapi uvicorn
 python serve_model.py
-# API: http://localhost:8000
-\`\`\`
 
-### Sheri-ML (Codex CLI)
-\`\`\`bash
-cd sheri-ml/codex-rs
+# 2) Codex workflows
+cd ../sheri-ml/codex-rs
 cargo build --release
-./target/release/codex "Write a Rust web server"
-\`\`\`
 
-### OpenCTO (Multi-Agent System)
-\`\`\`bash
-cd opencto/Sheri-ML/sheri-ml-cli
+# 3) Agent orchestration
+cd ../../opencto/Sheri-ML/sheri-ml-cli
 npm install
 npm start
-\`\`\`
+```
 
----
+## Repository Layout
 
-## 📁 Repository Structure
-
-\`\`\`
+```text
 CTO/
-├── README.md                    # This file
-├── CLAUDE.md                    # Claude Code integration
-├── AGENTS.md                    # Agent documentation
-├── VISION.md                    # System vision
-│
-├── cheri-ml/                    # ML Inference Server
-│   ├── serve_model.py           # FastAPI + vLLM server
-│   └── api.py                   # API definitions
-│
-├── sheri-ml/                    # Codex CLI (Gemini-powered)
-│   ├── codex-rs/                # Rust source
-│   └── README.md                # OpenAI Codex fork docs
-│
-├── opencto/                     # Multi-Agent System
-│   ├── Sheri-ML/                # Agent CLI
-│   ├── opencto-dashboard/       # Dashboard UI
-│   └── VISION.md
-│
-└── docs/                        # Consolidated documentation
-\`\`\`
+├── cheri-ml/      # inference server
+├── sheri-ml/      # coding/runtime tooling
+├── opencto/       # agent orchestration
+├── docs/          # architecture + guides
+├── AGENTS.md
+├── CLAUDE.md
+└── VISION.md
+```
 
----
+## Open Source + Commercial Use
 
-## 🎯 Vision
+This project is open source under Apache-2.0 and intended for broad adoption.
 
-**Autonomous CTOs managing every aspect of development:**
-
-- 🤖 **Cheri-ML**: Generates code using custom 1.3B model
-- 💻 **Sheri-ML**: CLI coding assistant (Gemini 2.5 Pro)
-- 🌐 **OpenCTO**: Multi-agent swarms for deployment, testing, security
-
-### Goal
-Scale from **1 CTO** to **100 autonomous AI CTOs** working in parallel.
-
----
-
-## 📚 Documentation
-
-- **[CLAUDE.md](CLAUDE.md)** - Integration with Claude Code
-- **[AGENTS.md](AGENTS.md)** - Agent roles and communication
-- **[VISION.md](VISION.md)** - Long-term vision and architecture
-
----
-
-## 🔧 Technology Stack
-
-- **ML**: PyTorch, vLLM, CUDA, BitsAndBytes
-- **Languages**: Python, Rust, TypeScript/Node.js
-- **Communication**: MQTT, SSE, REST APIs
-- **AI Providers**: Custom model (Cheri-ML), Google Gemini, OpenAI
-
----
-
-## 🤝 Contributing
-
-This is an open-source project. Contributions welcome\!
-
----
-
-## 📄 License
-
-See [LICENSE](LICENSE) file for details.
-
----
-
-**Last Updated**: February 27, 2026
+If your team wants business implementation support (deployment, integration, managed operations), see [BUSINESS.md](BUSINESS.md).
 
 ## Legal
 
-- License: Apache-2.0 (LICENSE)
-- Attribution terms: NOTICE and ATTRIBUTION.md
-- Trademark policy: TRADEMARKS.md
-- HeySalad is a registered trademark of HeySalad Inc. (UK00004063403)
+- License: [LICENSE](LICENSE) (Apache-2.0)
+- Attribution: [NOTICE](NOTICE) and [ATTRIBUTION.md](ATTRIBUTION.md)
+- Trademark policy: [TRADEMARKS.md](TRADEMARKS.md)
+- HeySalad is a registered trademark (UK00004063403)
+
+## Contact
+
+- Website: https://heysalad.io
+- Business implementation: investors@heysalad.io
+- Company: HeySalad Inc., 584 Castro St, Suite #4003, San Francisco, CA 94114, US

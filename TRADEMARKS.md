@@ -21,10 +21,13 @@ That license applies to code and documentation, but not to HeySalad trademarks.
 
 ## Required wording for derivatives and redistributions
 
-Include this statement in docs or about pages where practical:
-
-"This product includes software developed by HeySalad Inc. HeySalad is a registered trademark of HeySalad Inc. (UK00004063403). Use of the HeySalad name and logo is not granted by the software license."
+"This product includes software developed by HeySalad Inc. HeySalad is a
+registered trademark of HeySalad Inc. (UK00004063403). Use of the HeySalad
+name and logo is not granted by the software license."
 
 ## Contact
 
-For trademark permissions, contact HeySalad Inc.
+For trademark permissions and business implementation requests:
+- investors@heysalad.io
+- https://heysalad.io
+- HeySalad Inc., 584 Castro St, Suite #4003, San Francisco, CA 94114, US
