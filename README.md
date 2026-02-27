@@ -66,3 +66,10 @@ If your team wants business implementation support (deployment, integration, man
 - Website: https://heysalad.io
 - Business implementation: investors@heysalad.io
 - Company: HeySalad Inc., 584 Castro St, Suite #4003, San Francisco, CA 94114, US
+
+## Repository Stats
+
+[![GitHub stars](https://img.shields.io/github/stars/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI/network/members)
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Hey-Salad/CTO-AI&type=Date)](https://star-history.com/#Hey-Salad/CTO-AI&Date)
