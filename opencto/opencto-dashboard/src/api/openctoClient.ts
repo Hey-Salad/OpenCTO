@@ -1,3 +1,4 @@
+import { normalizeApiError, safeFetchJson } from '../lib/safeError'
 import type { Job, Step } from '../types/opencto'
 
 export interface OpenCtoApi {
@@ -9,56 +10,72 @@ export interface OpenCtoApi {
   denyStep: (stepId: string) => Promise<Step>
 }
 
-async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`OpenCTO API request failed: ${response.status}`)
-  }
-
-  return (await response.json()) as T
-}
-
 export class OpenCtoHttpClient implements OpenCtoApi {
   constructor(private readonly baseUrl = 'https://api.opencto.works/api/v1') {}
 
-  listJobs(): Promise<Job[]> {
-    return fetchJson<Job[]>(`${this.baseUrl}/jobs`)
+  async listJobs(): Promise<Job[]> {
+    try {
+      return await safeFetchJson<Job[]>(`${this.baseUrl}/jobs`, undefined, 'Failed to load jobs')
+    } catch (error) {
+      throw normalizeApiError(error, 'Failed to load jobs')
+    }
   }
 
-  getJob(jobId: string): Promise<Job> {
-    return fetchJson<Job>(`${this.baseUrl}/jobs/${jobId}`)
+  async getJob(jobId: string): Promise<Job> {
+    try {
+      return await safeFetchJson<Job>(`${this.baseUrl}/jobs/${jobId}`, undefined, 'Failed to load job')
+    } catch (error) {
+      throw normalizeApiError(error, 'Failed to load job')
+    }
   }
 
-  listSteps(jobId: string): Promise<Step[]> {
-    return fetchJson<Step[]>(`${this.baseUrl}/jobs/${jobId}/steps`)
+  async listSteps(jobId: string): Promise<Step[]> {
+    try {
+      return await safeFetchJson<Step[]>(`${this.baseUrl}/jobs/${jobId}/steps`, undefined, 'Failed to load steps')
+    } catch (error) {
+      throw normalizeApiError(error, 'Failed to load steps')
+    }
   }
 
-  getStep(stepId: string): Promise<Step> {
-    return fetchJson<Step>(`${this.baseUrl}/steps/${stepId}`)
+  async getStep(stepId: string): Promise<Step> {
+    try {
+      return await safeFetchJson<Step>(`${this.baseUrl}/steps/${stepId}`, undefined, 'Failed to load step')
+    } catch (error) {
+      throw normalizeApiError(error, 'Failed to load step')
+    }
   }
 
-  approveStep(stepId: string): Promise<Step> {
-    return fetchJson<Step>(`${this.baseUrl}/steps/${stepId}/approve`, {
-      method: 'POST',
-      headers: {
-        'x-idempotency-key': `${stepId}-approve-${Date.now()}`,
-      },
-    })
+  async approveStep(stepId: string): Promise<Step> {
+    try {
+      return await safeFetchJson<Step>(
+        `${this.baseUrl}/steps/${stepId}/approve`,
+        {
+          method: 'POST',
+          headers: {
+            'x-idempotency-key': `${stepId}-approve-${Date.now()}`,
+          },
+        },
+        'Failed to approve step',
+      )
+    } catch (error) {
+      throw normalizeApiError(error, 'Failed to approve step')
+    }
   }
 
-  denyStep(stepId: string): Promise<Step> {
-    return fetchJson<Step>(`${this.baseUrl}/steps/${stepId}/deny`, {
-      method: 'POST',
-      headers: {
-        'x-idempotency-key': `${stepId}-deny-${Date.now()}`,
-      },
-    })
+  async denyStep(stepId: string): Promise<Step> {
+    try {
+      return await safeFetchJson<Step>(
+        `${this.baseUrl}/steps/${stepId}/deny`,
+        {
+          method: 'POST',
+          headers: {
+            'x-idempotency-key': `${stepId}-deny-${Date.now()}`,
+          },
+        },
+        'Failed to deny step',
+      )
+    } catch (error) {
+      throw normalizeApiError(error, 'Failed to deny step')
+    }
   }
 }

@@ -73,6 +73,11 @@ Deliverables:
 
 ## Phase 4 - Platform Hardening
 
+Status:
+
+- Frontend foundation in progress on `feat/opencto-phase4-auth-compliance-hardening`
+- Auth guards, device/passkey settings skeleton, compliance evidence panel, and entitlement gating scaffold implemented
+
 Goals:
 
 - Device auth + passkeys in all surfaces
