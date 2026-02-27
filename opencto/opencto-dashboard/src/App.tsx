@@ -1,26 +1,55 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Job, Step } from './types/opencto'
-import type { BillingInterval, BillingSummaryResponse, Invoice, PlanCode } from './types/billing'
+import type { AuthSession, PasskeyCredential, TrustedDevice } from './types/auth'
+import type { ComplianceCheck } from './types/compliance'
+import type {
+  BillingInterval,
+  BillingSummaryResponse,
+  EntitlementContext,
+  Invoice,
+  PlanCode,
+} from './types/billing'
 import { JobsListScreen, type JobFilter } from './components/jobs/JobsListScreen'
 import { JobDetailStream } from './components/stream/JobDetailStream'
 import { PricingPage } from './components/billing/PricingPage'
 import { BillingDashboard } from './components/billing/BillingDashboard'
 import { MockOpenCtoAdapter } from './mocks/openctoMockAdapter'
 import { BillingMockAdapter, plans } from './mocks/billingMockAdapter'
+import { AuthMockAdapter } from './mocks/authMockAdapter'
+import { ComplianceMockAdapter } from './mocks/complianceMockAdapter'
 import { getStripeMissingEnvVars } from './config/stripe'
+import { normalizeApiError } from './lib/safeError'
+import { evaluateEntitlement } from './utils/entitlements'
+import { RouteGuard } from './components/auth/RouteGuard'
+import { RoleGuard } from './components/auth/RoleGuard'
+import { SecuritySettings } from './components/settings/SecuritySettings'
+import { ComplianceEvidencePanel } from './components/compliance/ComplianceEvidencePanel'
 import './index.css'
 
-type AppView = 'jobs' | 'pricing' | 'billing'
+type AppView = 'jobs' | 'pricing' | 'billing' | 'compliance' | 'settings'
 
 function App() {
   const jobsApi = useMemo(() => new MockOpenCtoAdapter(), [])
   const billingApi = useMemo(() => new BillingMockAdapter(), [])
+  const authApi = useMemo(() => new AuthMockAdapter(), [])
+  const complianceApi = useMemo(() => new ComplianceMockAdapter(), [])
 
   const [view, setView] = useState<AppView>('jobs')
+
   const [jobs, setJobs] = useState<Job[]>([])
   const [steps, setSteps] = useState<Step[]>([])
   const [activeFilter, setActiveFilter] = useState<JobFilter>('ALL')
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+
+  const [session, setSession] = useState<AuthSession | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [devices, setDevices] = useState<TrustedDevice[]>([])
+  const [devicesLoading, setDevicesLoading] = useState(false)
+  const [passkeys, setPasskeys] = useState<PasskeyCredential[]>([])
+  const [passkeysLoading, setPasskeysLoading] = useState(false)
+
+  const [checks, setChecks] = useState<ComplianceCheck[]>([])
+  const [checksLoading, setChecksLoading] = useState(false)
 
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('MONTHLY')
   const [billingSummary, setBillingSummary] = useState<BillingSummaryResponse | null>(null)
@@ -30,8 +59,36 @@ function App() {
   const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null)
   const [billingInvoicesError, setBillingInvoicesError] = useState<string | null>(null)
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
   const missingStripeVars = getStripeMissingEnvVars()
   const isBillingConfigured = missingStripeVars.length === 0
+
+  const entitlementContext: EntitlementContext = {
+    planCode: billingSummary?.subscription.planCode ?? 'DEVELOPER',
+    usage: {
+      jobsUsed: billingSummary?.usage.jobsUsed ?? 44,
+      jobsLimit: billingSummary?.usage.jobsLimit ?? 50,
+      workersUsed: billingSummary?.usage.workersUsed ?? 2,
+      workersLimit: billingSummary?.usage.workersLimit ?? 2,
+      usersUsed: billingSummary?.usage.usersUsed ?? 1,
+      usersLimit: billingSummary?.usage.usersLimit ?? 1,
+    },
+  }
+
+  const createJobDecision = evaluateEntitlement(entitlementContext, 'CREATE_JOB')
+  const dangerousApprovalDecision = evaluateEntitlement(entitlementContext, 'APPROVE_DANGEROUS_STEP')
+  const evidenceExportDecision = evaluateEntitlement(entitlementContext, 'EXPORT_EVIDENCE_PACKAGE')
+
+  useEffect(() => {
+    authApi
+      .getSession()
+      .then(setSession)
+      .catch((error) => {
+        setErrorMessage(normalizeApiError(error, 'Failed to load session').message)
+      })
+      .finally(() => setAuthLoading(false))
+  }, [authApi])
 
   useEffect(() => {
     jobsApi.listJobs().then((items) => {
@@ -49,11 +106,43 @@ function App() {
   }, [jobsApi, selectedJobId])
 
   useEffect(() => {
+    if (view !== 'settings') {
+      return
+    }
+
+    authApi
+      .getTrustedDevices()
+      .then(setDevices)
+      .catch((error) => setErrorMessage(normalizeApiError(error, 'Failed to load devices').message))
+      .finally(() => setDevicesLoading(false))
+
+    authApi
+      .listPasskeys()
+      .then(setPasskeys)
+      .catch((error) => setErrorMessage(normalizeApiError(error, 'Failed to load passkeys').message))
+      .finally(() => setPasskeysLoading(false))
+  }, [authApi, view])
+
+  useEffect(() => {
+    if (view !== 'compliance') {
+      return
+    }
+
+    complianceApi
+      .getComplianceChecks(selectedJobId ?? undefined)
+      .then(setChecks)
+      .catch((error) => setErrorMessage(normalizeApiError(error, 'Failed to load compliance checks').message))
+      .finally(() => setChecksLoading(false))
+  }, [complianceApi, view, selectedJobId])
+
+  useEffect(() => {
+    if (view !== 'billing') {
+      return
+    }
+
     let isCancelled = false
 
     const loadBilling = async () => {
-      setIsBillingSummaryLoading(true)
-      setIsBillingInvoicesLoading(true)
       setBillingSummaryError(null)
       setBillingInvoicesError(null)
 
@@ -95,10 +184,35 @@ function App() {
     return () => {
       isCancelled = true
     }
-  }, [billingApi])
+  }, [billingApi, view])
 
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null
   const visibleSteps = selectedJobId ? steps : []
+
+  const openJobsView = () => {
+    setView('jobs')
+  }
+
+  const openPricingView = () => {
+    setView('pricing')
+  }
+
+  const openBillingView = () => {
+    setIsBillingSummaryLoading(true)
+    setIsBillingInvoicesLoading(true)
+    setView('billing')
+  }
+
+  const openComplianceView = () => {
+    setChecksLoading(true)
+    setView('compliance')
+  }
+
+  const openSettingsView = () => {
+    setDevicesLoading(true)
+    setPasskeysLoading(true)
+    setView('settings')
+  }
 
   const handleApprove = async (stepId: string) => {
     const updated = await jobsApi.approveStep(stepId)
@@ -134,108 +248,196 @@ function App() {
     }
   }
 
+  const handleEnrollPasskey = async () => {
+    try {
+      await authApi.startPasskeyEnrollment()
+      await authApi.completePasskeyEnrollment('mock-browser-response')
+      const refreshed = await authApi.listPasskeys()
+      setPasskeys(refreshed)
+    } catch (error) {
+      setErrorMessage(normalizeApiError(error, 'Passkey enrollment failed').message)
+    }
+  }
+
+  const handleRevokeDevice = async (deviceId: string) => {
+    try {
+      const updated = await authApi.revokeDevice(deviceId)
+      setDevices((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+    } catch (error) {
+      setErrorMessage(normalizeApiError(error, 'Failed to revoke device').message)
+    }
+  }
+
+  const handleExportEvidence = async (jobId: string) => {
+    try {
+      await complianceApi.exportEvidencePackage(jobId)
+    } catch (error) {
+      setErrorMessage(normalizeApiError(error, 'Failed to export evidence package').message)
+    }
+  }
+
   return (
-    <main className="app-shell">
-      <header className="top-bar panel">
-        <h1>OpenCTO</h1>
-        <div className="top-bar-meta">
-          <span>BILLING AND EXECUTION CONTROLS</span>
-          <button type="button" className="primary-button">
-            New Job
+    <RouteGuard
+      session={session}
+      isLoading={authLoading}
+      fallback={
+        <main className="app-shell unauth-shell">
+          <section className="panel">
+            <h2>Authentication Required</h2>
+            <p className="muted">Sign in with a trusted device to access OpenCTO.</p>
+          </section>
+        </main>
+      }
+    >
+      <main className="app-shell">
+        <header className="top-bar panel">
+          <h1>OpenCTO</h1>
+          <div className="top-bar-meta">
+            <span>BILLING AND EXECUTION CONTROLS</span>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!createJobDecision.allowed}
+              title={createJobDecision.reason ?? undefined}
+            >
+              New Job
+            </button>
+          </div>
+        </header>
+
+        <aside className="left-sidebar panel" aria-label="Main navigation">
+          <button type="button" className={`nav-item ${view === 'jobs' ? 'nav-item-active' : ''}`} onClick={openJobsView}>
+            <span className="nav-icon" />
+            Jobs
           </button>
-        </div>
-      </header>
+          <button type="button" className={`nav-item ${view === 'pricing' ? 'nav-item-active' : ''}`} onClick={openPricingView}>
+            <span className="nav-icon" />
+            Pricing
+          </button>
+          <button type="button" className={`nav-item ${view === 'billing' ? 'nav-item-active' : ''}`} onClick={openBillingView}>
+            <span className="nav-icon" />
+            Billing
+          </button>
+          <button type="button" className={`nav-item ${view === 'compliance' ? 'nav-item-active' : ''}`} onClick={openComplianceView}>
+            <span className="nav-icon" />
+            Compliance
+          </button>
+          <button type="button" className={`nav-item ${view === 'settings' ? 'nav-item-active' : ''}`} onClick={openSettingsView}>
+            <span className="nav-icon" />
+            Settings
+          </button>
+        </aside>
 
-      <aside className="left-sidebar panel" aria-label="Main navigation">
-        <button type="button" className={`nav-item ${view === 'jobs' ? 'nav-item-active' : ''}`} onClick={() => setView('jobs')}>
-          <span className="nav-icon" />
-          Jobs
-        </button>
-        <button
-          type="button"
-          className={`nav-item ${view === 'pricing' ? 'nav-item-active' : ''}`}
-          onClick={() => setView('pricing')}
-        >
-          <span className="nav-icon" />
-          Pricing
-        </button>
-        <button
-          type="button"
-          className={`nav-item ${view === 'billing' ? 'nav-item-active' : ''}`}
-          onClick={() => setView('billing')}
-        >
-          <span className="nav-icon" />
-          Billing
-        </button>
-        <button type="button" className="nav-item" disabled>
-          <span className="nav-icon" />
-          Compliance
-        </button>
-        <button type="button" className="nav-item" disabled>
-          <span className="nav-icon" />
-          Metrics
-        </button>
-      </aside>
-
-      <section className="center-column">
-        {view === 'jobs' && (
-          <>
-            <JobsListScreen
-              jobs={jobs}
-              activeFilter={activeFilter}
-              activeJobId={selectedJobId}
-              onFilterChange={setActiveFilter}
-              onSelectJob={setSelectedJobId}
-            />
-
-            <section className="details-column">
-              <header className="panel selected-job-header">
-                <h2>{selectedJob?.title ?? 'Select a job'}</h2>
-                <p className="muted">{selectedJob?.metadata ?? 'No active session selected.'}</p>
-              </header>
-              <JobDetailStream steps={visibleSteps} onApprove={handleApprove} onDeny={handleDeny} />
+        <section className="center-column">
+          {(createJobDecision.warning || dangerousApprovalDecision.warning || evidenceExportDecision.warning) && (
+            <section className="panel usage-warning" aria-label="Usage warning">
+              <p className="warning-text">Usage Warning</p>
+              <p>{createJobDecision.warning ?? dangerousApprovalDecision.warning ?? evidenceExportDecision.warning}</p>
             </section>
-          </>
-        )}
+          )}
 
-        {view === 'pricing' && (
-          <PricingPage
-            plans={plans}
-            interval={billingInterval}
-            onIntervalChange={setBillingInterval}
-            onCheckout={handleCheckout}
-            isBillingConfigured={isBillingConfigured}
-            missingStripeVars={missingStripeVars}
-          />
-        )}
+          {errorMessage && (
+            <section className="panel">
+              <p className="billing-error">{errorMessage}</p>
+            </section>
+          )}
 
-        {view === 'billing' && (
-          <BillingDashboard
-            summary={billingSummary}
-            invoices={billingInvoices}
-            isSummaryLoading={isBillingSummaryLoading}
-            isInvoicesLoading={isBillingInvoicesLoading}
-            summaryError={billingSummaryError}
-            invoicesError={billingInvoicesError}
-            isBillingConfigured={isBillingConfigured}
-            onManage={handleManageBilling}
-            onUpgrade={() => setView('pricing')}
-          />
-        )}
-      </section>
+          {view === 'jobs' && (
+            <>
+              <JobsListScreen
+                jobs={jobs}
+                activeFilter={activeFilter}
+                activeJobId={selectedJobId}
+                onFilterChange={setActiveFilter}
+                onSelectJob={setSelectedJobId}
+              />
 
-      <aside className="right-config panel" aria-label="Config panel">
-        <h3>Billing Config</h3>
-        <p className="muted">Stripe environment status</p>
-        <p>{isBillingConfigured ? 'Configured' : `${missingStripeVars.length} vars missing`}</p>
-        {!isBillingConfigured && <p className="muted">Billing actions run in safe stub mode until Stripe config is complete.</p>}
-        <ul className="env-list">
-          {missingStripeVars.slice(0, 4).map((key) => (
-            <li key={key}>{key}</li>
-          ))}
-        </ul>
-      </aside>
-    </main>
+              <section className="details-column">
+                <header className="panel selected-job-header">
+                  <h2>{selectedJob?.title ?? 'Select a job'}</h2>
+                  <p className="muted">{selectedJob?.metadata ?? 'No active session selected.'}</p>
+                </header>
+                <JobDetailStream
+                  steps={visibleSteps}
+                  onApprove={handleApprove}
+                  onDeny={handleDeny}
+                  approvalDisabledReason={dangerousApprovalDecision.allowed ? null : dangerousApprovalDecision.reason}
+                />
+              </section>
+            </>
+          )}
+
+          {view === 'pricing' && (
+            <PricingPage
+              plans={plans}
+              interval={billingInterval}
+              onIntervalChange={setBillingInterval}
+              onCheckout={handleCheckout}
+              isBillingConfigured={isBillingConfigured}
+              missingStripeVars={missingStripeVars}
+            />
+          )}
+
+          {view === 'billing' && (
+            <BillingDashboard
+              summary={billingSummary}
+              invoices={billingInvoices}
+              isSummaryLoading={isBillingSummaryLoading}
+              isInvoicesLoading={isBillingInvoicesLoading}
+              summaryError={billingSummaryError}
+              invoicesError={billingInvoicesError}
+              isBillingConfigured={isBillingConfigured}
+              onManage={handleManageBilling}
+              onUpgrade={openPricingView}
+            />
+          )}
+
+          {view === 'compliance' && (
+            <ComplianceEvidencePanel
+              checks={checks}
+              loading={checksLoading}
+              error={null}
+              exportDisabledReason={evidenceExportDecision.allowed ? null : evidenceExportDecision.reason}
+              onExportEvidence={handleExportEvidence}
+            />
+          )}
+
+          {view === 'settings' && (
+            <RoleGuard
+              role={session?.user?.role ?? null}
+              allowedRoles={['owner', 'cto', 'developer']}
+              fallback={
+                <section className="panel">
+                  <p className="muted">Security settings are limited to elevated roles.</p>
+                </section>
+              }
+            >
+              <SecuritySettings
+                passkeys={passkeys}
+                devices={devices}
+                onEnrollPasskey={handleEnrollPasskey}
+                onRevokeDevice={handleRevokeDevice}
+                passkeysLoading={passkeysLoading}
+                devicesLoading={devicesLoading}
+                errorMessage={null}
+              />
+            </RoleGuard>
+          )}
+        </section>
+
+        <aside className="right-config panel" aria-label="Config panel">
+          <h3>Billing Config</h3>
+          <p className="muted">Stripe environment status</p>
+          <p>{isBillingConfigured ? 'Configured' : `${missingStripeVars.length} vars missing`}</p>
+          {!isBillingConfigured && <p className="muted">Billing actions run in safe stub mode until Stripe config is complete.</p>}
+          <ul className="env-list">
+            {missingStripeVars.slice(0, 4).map((key) => (
+              <li key={key}>{key}</li>
+            ))}
+          </ul>
+        </aside>
+      </main>
+    </RouteGuard>
   )
 }
 

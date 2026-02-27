@@ -7,9 +7,15 @@ interface JobDetailStreamProps {
   steps: Step[]
   onApprove: (stepId: string) => void
   onDeny: (stepId: string) => void
+  approvalDisabledReason?: string | null
 }
 
-export function JobDetailStream({ steps, onApprove, onDeny }: JobDetailStreamProps) {
+export function JobDetailStream({
+  steps,
+  onApprove,
+  onDeny,
+  approvalDisabledReason = null,
+}: JobDetailStreamProps) {
   return (
     <section className="panel">
       <header className="stream-header">
@@ -30,6 +36,7 @@ export function JobDetailStream({ steps, onApprove, onDeny }: JobDetailStreamPro
                 onViewDiff={() => undefined}
                 onDeny={onDeny}
                 onApprove={onApprove}
+                approvalDisabledReason={approvalDisabledReason}
               />
             )
           }

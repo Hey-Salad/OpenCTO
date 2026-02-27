@@ -5,9 +5,16 @@ interface HumanApprovalCardProps {
   onViewDiff: (stepId: string) => void
   onApprove: (stepId: string) => void
   onDeny: (stepId: string) => void
+  approvalDisabledReason?: string | null
 }
 
-export function HumanApprovalCard({ step, onViewDiff, onApprove, onDeny }: HumanApprovalCardProps) {
+export function HumanApprovalCard({
+  step,
+  onViewDiff,
+  onApprove,
+  onDeny,
+  approvalDisabledReason = null,
+}: HumanApprovalCardProps) {
   return (
     <article className="approval-card approval-dangerous" aria-label="Human approval required">
       <div className="approval-header">
@@ -38,14 +45,26 @@ export function HumanApprovalCard({ step, onViewDiff, onApprove, onDeny }: Human
         <p>{step.compliance?.summary ?? 'Manual approval is required.'}</p>
       </section>
 
+      {approvalDisabledReason && <p className="muted">{approvalDisabledReason}</p>}
+
       <div className="approval-actions">
         <button type="button" className="secondary-button" onClick={() => onViewDiff(step.id)}>
           View Diff
         </button>
-        <button type="button" className="ghost-danger-button" onClick={() => onDeny(step.id)}>
+        <button
+          type="button"
+          className="ghost-danger-button"
+          onClick={() => onDeny(step.id)}
+          disabled={Boolean(approvalDisabledReason)}
+        >
           Deny
         </button>
-        <button type="button" className="primary-button" onClick={() => onApprove(step.id)}>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => onApprove(step.id)}
+          disabled={Boolean(approvalDisabledReason)}
+        >
           Approve
         </button>
       </div>
