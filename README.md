@@ -98,3 +98,11 @@ git push origin v1.0.0
 - Platform spec: [docs/opencto/OPENCTO_PLATFORM_SPEC.md](docs/opencto/OPENCTO_PLATFORM_SPEC.md)
 - Frontend, brand and monetisation spec: [docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md](docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md)
 - Implementation roadmap: [docs/opencto/IMPLEMENTATION_ROADMAP.md](docs/opencto/IMPLEMENTATION_ROADMAP.md)
+
+## Product Roadmap and Community Feedback
+
+- Public roadmap: [ROADMAP.md](ROADMAP.md)
+- iOS app roadmap: [docs/opencto/IOS_APP_ROADMAP.md](docs/opencto/IOS_APP_ROADMAP.md)
+- Open source sync playbook: [docs/opencto/OSS_SYNC_PLAYBOOK.md](docs/opencto/OSS_SYNC_PLAYBOOK.md)
+- Request a feature: https://github.com/Hey-Salad/CTO-AI/issues/new?template=feature_request.yml
+- Report a bug: https://github.com/Hey-Salad/CTO-AI/issues/new?template=bug_report.yml
