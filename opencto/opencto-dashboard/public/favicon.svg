@@ -1,5 +1,8 @@
-<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <rect width="64" height="64" rx="16" fill="#111111" />
-  <path d="M20 32c0-6.63 5.37-12 12-12s12 5.37 12 12-5.37 12-12 12c-4.74 0-8.9-2.7-11-6.7" stroke="#ed4c4c" stroke-width="4" fill="none" stroke-linecap="round" />
-  <path d="M25 28l9-4 9 4m-18 12l9 4 9-4" stroke="#faa09a" stroke-width="3" fill="none" stroke-linecap="round" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" fill="none">
+  <rect width="28" height="28" rx="6" fill="#ed4c4c"/>
+  <path d="M 6,21 A 9.5 9.5 0 1 1 22,13" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="6" cy="21" r="1.5" fill="#ffd0cd"/>
+  <circle cx="22" cy="13" r="1.5" fill="#ffd0cd"/>
+  <polyline points="9,14 13,17 9,20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="12,15.5 16,18.5 12,21.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

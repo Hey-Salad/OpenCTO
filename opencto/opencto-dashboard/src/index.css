@@ -53,6 +53,24 @@ p { margin: 0; }
   padding: 14px 18px;
 }
 
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark svg {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.brand-mark h1,
+.brand-mark h2 {
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
 .top-bar-meta {
   display: flex;
   align-items: center;
@@ -603,6 +621,10 @@ p { margin: 0; }
   grid-template-areas: 'center';
   justify-content: center;
   align-content: center;
+}
+
+.unauth-shell .panel h3 {
+  margin-top: 12px;
 }
 
 button:disabled {
