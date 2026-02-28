@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Job, Step } from './types/opencto'
-import type { AuthSession, PasskeyCredential, TrustedDevice } from './types/auth'
+import type { AuthSession, OAuthProvider, PasskeyCredential, TrustedDevice } from './types/auth'
 import type { ComplianceCheck } from './types/compliance'
 import type {
   BillingInterval,
@@ -24,6 +24,7 @@ import { normalizeApiError } from './lib/safeError'
 import { evaluateEntitlement } from './utils/entitlements'
 import { RouteGuard } from './components/auth/RouteGuard'
 import { RoleGuard } from './components/auth/RoleGuard'
+import { AuthLoginPanel } from './components/auth/AuthLoginPanel'
 import { SecuritySettings } from './components/settings/SecuritySettings'
 import { ComplianceEvidencePanel } from './components/compliance/ComplianceEvidencePanel'
 import './index.css'
@@ -160,6 +161,7 @@ function App() {
 
   const [session, setSession] = useState<AuthSession | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [authProviderLoading, setAuthProviderLoading] = useState<OAuthProvider | null>(null)
   const [devices, setDevices] = useState<TrustedDevice[]>([])
   const [devicesLoading, setDevicesLoading] = useState(false)
   const [passkeys, setPasskeys] = useState<PasskeyCredential[]>([])
@@ -436,6 +438,18 @@ function App() {
     }
   }
 
+  const handleProviderLogin = async (provider: OAuthProvider) => {
+    try {
+      setAuthProviderLoading(provider)
+      const nextSession = await authApi.signInWithProvider(provider)
+      setSession(nextSession)
+    } catch (error) {
+      setErrorMessage(normalizeApiError(error, 'Sign-in failed').message)
+    } finally {
+      setAuthProviderLoading(null)
+    }
+  }
+
   const handleRevokeDevice = async (deviceId: string) => {
     try {
       const updated = await authApi.revokeDevice(deviceId)
@@ -459,7 +473,7 @@ function App() {
       isLoading={authLoading}
       fallback={
         <main className="app-shell unauth-shell">
-          <section className="panel">
+          <section className="panel auth-brand-panel">
             <div className="brand-mark">
               <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
                 <rect width="28" height="28" rx="6" fill="#ed4c4c" />
@@ -474,6 +488,7 @@ function App() {
             <h3>Authentication Required</h3>
             <p className="muted">Sign in with a trusted device to access OpenCTO.</p>
           </section>
+          <AuthLoginPanel onProviderLogin={handleProviderLogin} loadingProvider={authProviderLoading} />
         </main>
       }
     >
@@ -491,6 +506,8 @@ function App() {
             <h1>OpenCTO</h1>
           </div>
           <div className="top-bar-meta">
+            {session?.user?.isSuperAdmin ? <span>SUPER ADMIN</span> : null}
+            {session?.user?.authProvider ? <span>{session.user.authProvider.toUpperCase()}</span> : null}
             <span>BILLING AND EXECUTION CONTROLS</span>
             <button
               type="button"

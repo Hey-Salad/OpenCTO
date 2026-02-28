@@ -1,6 +1,7 @@
 import { normalizeApiError, safeFetchJson } from '../lib/safeError'
 import type {
   AuthSession,
+  OAuthProvider,
   PasskeyCredential,
   PasskeyEnrollmentComplete,
   PasskeyEnrollmentStart,
@@ -9,6 +10,7 @@ import type {
 
 export interface AuthApi {
   getSession: () => Promise<AuthSession>
+  signInWithProvider: (provider: OAuthProvider) => Promise<AuthSession>
   getTrustedDevices: () => Promise<TrustedDevice[]>
   revokeDevice: (deviceId: string) => Promise<TrustedDevice>
   listPasskeys: () => Promise<PasskeyCredential[]>
@@ -24,6 +26,23 @@ export class AuthHttpClient implements AuthApi {
       return await safeFetchJson<AuthSession>(`${this.baseUrl}/auth/session`, undefined, 'Failed to load auth session')
     } catch (error) {
       throw normalizeApiError(error, 'Failed to load auth session')
+    }
+  }
+
+  async signInWithProvider(provider: OAuthProvider): Promise<AuthSession> {
+    try {
+      return await safeFetchJson<AuthSession>(
+        `${this.baseUrl}/auth/oauth/${provider}/start`,
+        {
+          method: 'POST',
+          headers: {
+            'x-idempotency-key': `oauth-start-${provider}-${Date.now()}`,
+          },
+        },
+        'Failed to start provider sign-in',
+      )
+    } catch (error) {
+      throw normalizeApiError(error, 'Failed to start provider sign-in')
     }
   }
 

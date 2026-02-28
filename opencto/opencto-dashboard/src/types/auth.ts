@@ -1,10 +1,13 @@
 export type UserRole = 'owner' | 'cto' | 'developer' | 'viewer' | 'auditor'
+export type OAuthProvider = 'google' | 'github' | 'cloudflare'
 
 export interface SessionUser {
   id: string
   email: string
   displayName: string
   role: UserRole
+  isSuperAdmin: boolean
+  authProvider?: OAuthProvider
 }
 
 export interface AuthSession {

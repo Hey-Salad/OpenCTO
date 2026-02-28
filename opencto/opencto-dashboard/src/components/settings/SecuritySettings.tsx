@@ -1,4 +1,5 @@
 import type { PasskeyCredential, TrustedDevice } from '../../types/auth'
+import { SUPER_ADMIN_DOMAIN } from '../../lib/authPolicy'
 
 interface SecuritySettingsProps {
   passkeys: PasskeyCredential[]
@@ -29,6 +30,7 @@ export function SecuritySettings({
       </header>
 
       {errorMessage && <p className="billing-error">{errorMessage}</p>}
+      <p className="muted">Domain policy: users with <code>@{SUPER_ADMIN_DOMAIN}</code> are treated as super-admins (owner role).</p>
 
       <div className="settings-grid">
         <article>

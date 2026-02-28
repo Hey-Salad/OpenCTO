@@ -642,9 +642,55 @@ p { margin: 0; }
   grid-template-areas: 'center';
   justify-content: center;
   align-content: center;
+  gap: 12px;
 }
 
 .unauth-shell .panel h3 {
+  margin-top: 12px;
+}
+
+.auth-brand-panel {
+  margin-bottom: 6px;
+}
+
+.auth-login-panel h3 {
+  margin-bottom: 6px;
+}
+
+.auth-provider-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.auth-provider-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface-2);
+  border-radius: 10px;
+  color: var(--text-body);
+  padding: 10px 12px;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.auth-provider-btn:hover:not(:disabled) {
+  border-color: var(--brand-secondary);
+  background: rgba(250, 160, 154, 0.08);
+}
+
+.auth-provider-btn small {
+  color: var(--text-muted);
+}
+
+.auth-provider-btn em {
+  color: var(--brand-secondary);
+  font-style: normal;
+  font-size: 12px;
+}
+
+.auth-policy-note {
   margin-top: 12px;
 }
 
