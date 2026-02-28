@@ -28,7 +28,7 @@ import { SecuritySettings } from './components/settings/SecuritySettings'
 import { ComplianceEvidencePanel } from './components/compliance/ComplianceEvidencePanel'
 import './index.css'
 
-type AppView = 'jobs' | 'audio' | 'pricing' | 'billing' | 'compliance' | 'settings'
+type AppView = 'jobs' | 'launchpad' | 'pricing' | 'billing' | 'compliance' | 'settings'
 
 const DEMO_AUDIO_MESSAGES: AudioMessage[] = [
   {
@@ -151,7 +151,7 @@ function App() {
   const authApi = useMemo(() => new AuthMockAdapter(), [])
   const complianceApi = useMemo(() => new ComplianceMockAdapter(), [])
 
-  const [view, setView] = useState<AppView>('jobs')
+  const [view, setView] = useState<AppView>('launchpad')
 
   const [jobs, setJobs] = useState<Job[]>([])
   const [steps, setSteps] = useState<Step[]>([])
@@ -366,8 +366,8 @@ function App() {
     setView('jobs')
   }
 
-  const openAudioView = () => {
-    setView('audio')
+  const openLaunchpadView = () => {
+    setView('launchpad')
   }
 
   const openPricingView = () => {
@@ -460,7 +460,18 @@ function App() {
       fallback={
         <main className="app-shell unauth-shell">
           <section className="panel">
-            <h2>Authentication Required</h2>
+            <div className="brand-mark">
+              <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                <rect width="28" height="28" rx="6" fill="#ed4c4c" />
+                <path d="M 6,21 A 9.5 9.5 0 1 1 22,13" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+                <circle cx="6" cy="21" r="1.5" fill="#ffd0cd" />
+                <circle cx="22" cy="13" r="1.5" fill="#ffd0cd" />
+                <polyline points="9,14 13,17 9,20" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="12,15.5 16,18.5 12,21.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <h2>OpenCTO</h2>
+            </div>
+            <h3>Authentication Required</h3>
             <p className="muted">Sign in with a trusted device to access OpenCTO.</p>
           </section>
         </main>
@@ -468,7 +479,17 @@ function App() {
     >
       <main className="app-shell">
         <header className="top-bar panel">
-          <h1>OpenCTO</h1>
+          <div className="brand-mark">
+            <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
+              <rect width="28" height="28" rx="6" fill="#ed4c4c" />
+              <path d="M 6,21 A 9.5 9.5 0 1 1 22,13" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+              <circle cx="6" cy="21" r="1.5" fill="#ffd0cd" />
+              <circle cx="22" cy="13" r="1.5" fill="#ffd0cd" />
+              <polyline points="9,14 13,17 9,20" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <polyline points="12,15.5 16,18.5 12,21.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <h1>OpenCTO</h1>
+          </div>
           <div className="top-bar-meta">
             <span>BILLING AND EXECUTION CONTROLS</span>
             <button
@@ -487,9 +508,9 @@ function App() {
             <span className="nav-icon" />
             Jobs
           </button>
-          <button type="button" className={`nav-item ${view === 'audio' ? 'nav-item-active' : ''}`} onClick={openAudioView}>
-            <span className="nav-icon" style={{ background: view === 'audio' ? '#ed4c4c' : undefined }} />
-            Audio
+          <button type="button" className={`nav-item ${view === 'launchpad' ? 'nav-item-active' : ''}`} onClick={openLaunchpadView}>
+            <span className="nav-icon" style={{ background: view === 'launchpad' ? '#ed4c4c' : undefined }} />
+            Launchpad
           </button>
           <button type="button" className={`nav-item ${view === 'pricing' ? 'nav-item-active' : ''}`} onClick={openPricingView}>
             <span className="nav-icon" />
@@ -548,7 +569,7 @@ function App() {
             </>
           )}
 
-          {view === 'audio' && (
+          {view === 'launchpad' && (
             <AudioRealtimeView
               messages={audioMessages}
               isPlaying={isAudioPlaying}
@@ -622,7 +643,7 @@ function App() {
           )}
         </section>
 
-        {view === 'audio' ? (
+        {view === 'launchpad' ? (
           <AudioConfigPanel config={audioConfig} onConfigChange={setAudioConfig} />
         ) : (
           <aside className="right-config panel" aria-label="Config panel">
