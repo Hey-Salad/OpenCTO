@@ -4,12 +4,13 @@
   --brand-primary: #ed4c4c;
   --brand-secondary: #faa09a;
   --brand-tertiary: #ffd0cd;
-  --bg-app: #111111;
-  --bg-surface: #1a1a1a;
-  --bg-surface-2: #222222;
-  --border-color: #2a2a2a;
-  --text-body: #f0f0f0;
-  --text-muted: #888888;
+  --bg-app: #0f0f12;
+  --bg-surface: #17171c;
+  --bg-surface-2: #1f1f26;
+  --border-color: #2f2f39;
+  --text-body: #f4f4f7;
+  --text-muted: #a3a3b2;
+  --shadow-soft: 0 12px 36px rgba(0, 0, 0, 0.35);
   --status-success: #22c55e;
   --status-warning: #f59e0b;
   --status-error: #ed4c4c;
@@ -21,7 +22,10 @@
 body {
   margin: 0;
   font-family: 'Figtree', sans-serif;
-  background: radial-gradient(circle at top right, #1f1414 0, #111111 45%);
+  background:
+    radial-gradient(900px 700px at 88% -15%, rgba(237, 76, 76, 0.22), transparent 55%),
+    radial-gradient(760px 640px at -10% 0%, rgba(250, 160, 154, 0.12), transparent 48%),
+    var(--bg-app);
   color: var(--text-body);
 }
 
@@ -41,8 +45,8 @@ p { margin: 0; }
   grid-template-areas:
     'top top top'
     'left center right';
-  gap: 16px;
-  padding: 16px;
+  gap: 14px;
+  padding: 14px;
 }
 
 .top-bar {
@@ -50,7 +54,7 @@ p { margin: 0; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 18px;
+  padding: 12px 16px;
 }
 
 .brand-mark {
@@ -79,8 +83,9 @@ p { margin: 0; }
 
 .top-bar-meta span {
   color: var(--text-muted);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .left-sidebar {
@@ -98,12 +103,16 @@ p { margin: 0; }
   color: var(--text-body);
   border: 1px solid var(--border-color);
   border-left: 3px solid transparent;
-  border-radius: 8px;
-  padding: 9px 10px;
+  border-radius: 10px;
+  padding: 10px 11px;
   cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
 }
 
-.nav-item:hover:not(:disabled) { background: rgba(255, 208, 205, 0.08); }
+.nav-item:hover:not(:disabled) {
+  background: rgba(255, 208, 205, 0.1);
+  border-color: rgba(250, 160, 154, 0.36);
+}
 
 .nav-item:disabled {
   opacity: 0.5;
@@ -112,7 +121,8 @@ p { margin: 0; }
 
 .nav-item-active {
   border-left-color: var(--brand-primary);
-  background: rgba(255, 208, 205, 0.12);
+  background: rgba(255, 208, 205, 0.14);
+  border-color: rgba(250, 160, 154, 0.45);
 }
 
 .nav-icon {
@@ -156,6 +166,7 @@ p { margin: 0; }
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
+  box-shadow: var(--shadow-soft);
 }
 
 .muted {
@@ -173,21 +184,28 @@ p { margin: 0; }
 .primary-button,
 .secondary-button,
 .ghost-danger-button {
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 8px 12px;
   border: 1px solid transparent;
   cursor: pointer;
+  transition: 0.18s ease;
 }
 
 .primary-button {
   background: var(--brand-primary);
   color: #ffffff;
 }
+.primary-button:hover:not(:disabled) {
+  background: #d94444;
+}
 
 .secondary-button {
   background: transparent;
   color: var(--brand-secondary);
   border-color: var(--brand-secondary);
+}
+.secondary-button:hover:not(:disabled) {
+  background: rgba(250, 160, 154, 0.08);
 }
 
 .ghost-danger-button {
@@ -233,17 +251,20 @@ p { margin: 0; }
   width: 100%;
   border: 1px solid var(--border-color);
   background: var(--bg-surface-2);
-  border-radius: 10px;
+  border-radius: 12px;
   color: var(--text-body);
   display: grid;
   grid-template-columns: 10px 1fr auto auto;
   gap: 10px;
-  padding: 10px;
+  padding: 11px 10px;
   align-items: center;
   text-align: left;
 }
 
-.job-row-active { border-color: var(--brand-primary); }
+.job-row-active {
+  border-color: var(--brand-primary);
+  box-shadow: inset 0 0 0 1px rgba(237, 76, 76, 0.24);
+}
 
 .job-status-dot {
   width: 8px;
@@ -564,7 +585,7 @@ p { margin: 0; }
   border: 1px solid rgba(245, 158, 11, 0.4);
   background: rgba(245, 158, 11, 0.08);
   border-radius: 10px;
-  padding: 10px;
+  padding: 12px;
   display: grid;
   gap: 6px;
 }
@@ -574,7 +595,7 @@ p { margin: 0; }
   border: 1px solid rgba(237, 76, 76, 0.45);
   background: rgba(237, 76, 76, 0.08);
   border-radius: 10px;
-  padding: 10px;
+  padding: 12px;
   color: var(--brand-secondary);
   font-size: 13px;
 }
