@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenCTO App</title>
+  <meta name="description" content="OpenCTO domain launch console with the arc and chevrons branding." />
+  <link rel="stylesheet" href="/assets/marketing.css" />
+</head>
+<body data-page="app">
+  <header class="site-header">
+    <a class="site-brand" href="/">
+      <span>OC</span>
+      <span>OpenCTO</span>
+    </a>
+    <nav class="primary-nav" id="main-menu">
+      <a href="/" data-page="landing">Landing</a>
+      <a href="/press" data-page="press">Press</a>
+      <a href="/blog" data-page="blog">Blog</a>
+      <a href="/app" data-page="app" class="pill-link">App</a>
+    </nav>
+    <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Open navigation">Menu</button>
+  </header>
+  <main class="container">
+    <section class="hero">
+      <div class="hero-grid">
+        <div>
+          <p class="section-title">App console</p>
+          <h1>The arc and chevrons command base</h1>
+          <p>Experience the OpenCTO launch console with the same dark mode, cherry-red accents, and arc-and-chevron iconography we ship everywhere.</p>
+          <div class="hero-actions">
+            <a class="launch-btn" href="/app">Launch App</a>
+            <span style="letter-spacing: 0.3em; font-size: 0.7rem;">Arc + chevrons</span>
+          </div>
+        </div>
+        <div class="hero-panel" style="text-align: center;">
+          <svg width="140" height="140" viewBox="0 0 140 140" aria-hidden="true" role="presentation">
+            <circle cx="70" cy="70" r="54" stroke="rgba(237,76,76,0.6)" stroke-width="10" fill="none" stroke-linecap="round" />
+            <path d="M60 40 L75 35 L90 40" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M50 55 L75 50 L100 55" stroke="#ffb6a5" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M55 75 L75 90 L95 75" stroke="#ffd0cd" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <p style="margin-top: 1rem; color: rgba(245, 245, 247, 0.7);">Icon built from the responsive arc motif and dual chevrons used across OpenCTO dashboards.</p>
+        </div>
+      </div>
+    </section>
+    <section>
+      <p class="section-title">Experience</p>
+      <h2 class="section-subtitle">Launch readiness on a single dashboard</h2>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <h4>Live route check</h4>
+          <p>Execute the landing, press, blog, and app routes with integrated HTTP/HTTPS verification before each cutover.</p>
+        </article>
+        <article class="feature-card">
+          <h4>DNS & TLS guardrails</h4>
+          <p>Cloudflare CNAMEs, Namecheap nameservers, TLS Full strict mode, and TXT verification placeholders are all logged here.</p>
+        </article>
+        <article class="feature-card">
+          <h4>Rollback cockpit</h4>
+          <p>Revert nameserver updates or disable the latest deploy with a single click, then restore the previous known-good revision.</p>
+        </article>
+      </div>
+    </section>
+    <section class="cta">
+      <div class="cta-text">
+        <p class="section-title">Launch support</p>
+        <h2 style="margin: 0.5rem 0;">Everything you need to validate DNS, TLS, and routes before exposing opencto.works.</h2>
+        <p style="margin: 0; color: rgba(245, 245, 247, 0.7);">The arc icon is intentional: one arc for observations, the chevrons for the forward launch vector.</p>
+      </div>
+      <a class="launch-btn" href="/app">Launch App</a>
+    </section>
+  </main>
+  <footer class="page-footer">OpenCTO app · Branding arc+chevrons · opencto.works</footer>
+  <script src="/assets/marketing.js"></script>
+</body>
+</html>

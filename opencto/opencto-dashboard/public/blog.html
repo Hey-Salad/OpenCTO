@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenCTO | Blog</title>
+  <meta name="description" content="Insights from OpenCTO on autonomous CI/CD, Raspberry Pi fleets, and Cloudflare launches." />
+  <link rel="stylesheet" href="/assets/marketing.css" />
+</head>
+<body data-page="blog">
+  <header class="site-header">
+    <a class="site-brand" href="/">
+      <span>OC</span>
+      <span>OpenCTO</span>
+    </a>
+    <nav class="primary-nav" id="main-menu">
+      <a href="/" data-page="landing">Landing</a>
+      <a href="/press" data-page="press">Press</a>
+      <a href="/blog" data-page="blog">Blog</a>
+      <a href="/app" data-page="app" class="pill-link">App</a>
+    </nav>
+    <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Open navigation">Menu</button>
+  </header>
+  <main class="container">
+    <section class="hero">
+      <div class="hero-grid">
+        <div>
+          <p class="section-title">Blog</p>
+          <h1>Dispatches from OpenCTO operations</h1>
+          <p>Notes about building autonomous agents, Raspberry Pi deployment handoffs, and domain-ready Cloudflare operations.</p>
+          <div class="hero-actions">
+            <a class="launch-btn" href="/app">Launch App</a>
+            <span style="letter-spacing: 0.3em; font-size: 0.8rem;">No emoji</span>
+          </div>
+        </div>
+        <div class="hero-panel">
+          <h3>Readers</h3>
+          <p>Engineers, operators, and analysts tracking the opencto.works launch schedule.</p>
+          <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1rem;">
+            <span style="font-size: 0.8rem; color: var(--peach);">Weekly research brief</span>
+            <span style="font-size: 0.8rem; color: var(--peach);">Guest posts from HeySalad leadership</span>
+            <span style="font-size: 0.8rem; color: var(--peach);">Deployment transparency logs</span>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section>
+      <p class="section-title">Recent posts</p>
+      <h2 class="section-subtitle">Runbooks, DNS plans, and rollout retrospectives.</h2>
+      <div class="blog-list">
+        <article class="blog-item">
+          <p class="blog-meta">01 · Feb 2026 · deployment</p>
+          <h3>How OpenCTO cut over opencto.works to Cloudflare with Raspberry Pi reliability</h3>
+          <p>Step-by-step notes covering Namecheap, Cloudflare DNS plan, SSL/TLS mode, and verification checks before the handoff.</p>
+        </article>
+        <article class="blog-item">
+          <p class="blog-meta">28 · Jan 2026 · automation</p>
+          <h3>Automating compliance checks inside the OpenCTO agent swarm</h3>
+          <p>Inside the policy engine that audits SOC2, PCI-DSS, and DORA controls before each release and rollback.</p>
+        </article>
+        <article class="blog-item">
+          <p class="blog-meta">15 · Jan 2026 · operations</p>
+          <h3>Edge deployment checklist for Raspberry Pi fleets</h3>
+          <p>Lessons learned from replicating the OpenCTO stack on Pi hardware with deterministic telemetry and remote debugging.</p>
+        </article>
+      </div>
+    </section>
+    <section class="cta">
+      <div class="cta-text">
+        <p class="section-title">Stay updated</p>
+        <h2 style="margin: 0.5rem 0;">Deploy the same agents you read about—opencto.works is the launchpad.</h2>
+        <p style="margin: 0; color: rgba(245, 245, 247, 0.7);">Visit the app to verify DNS propagation, TLS certificates, and route checks yourself.</p>
+      </div>
+      <a class="launch-btn" href="/app">Launch App</a>
+    </section>
+  </main>
+  <footer class="page-footer">OpenCTO blog · opencto.works</footer>
+  <script src="/assets/marketing.js"></script>
+</body>
+</html>
