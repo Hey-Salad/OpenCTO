@@ -1,21 +1,25 @@
 import type { AuthApi } from '../api/authClient'
 import type {
   AuthSession,
+  OAuthProvider,
   PasskeyCredential,
   PasskeyEnrollmentComplete,
   PasskeyEnrollmentStart,
   TrustedDevice,
 } from '../types/auth'
+import { isSuperAdminEmail, resolveRoleForEmail } from '../lib/authPolicy'
 
-const session: AuthSession = {
+let session: AuthSession = {
   isAuthenticated: true,
   trustedDevice: true,
   mfaRequired: false,
   user: {
     id: 'usr-1',
-    email: 'chilu.machona@icloud.com',
-    displayName: 'chilu18',
-    role: 'cto',
+    email: 'peter@heysalad.io',
+    displayName: 'OpenCTO Admin',
+    role: 'owner',
+    isSuperAdmin: true,
+    authProvider: 'google',
   },
 }
 
@@ -52,6 +56,31 @@ const passkeys: PasskeyCredential[] = [
 
 export class AuthMockAdapter implements AuthApi {
   async getSession(): Promise<AuthSession> {
+    return structuredClone(session)
+  }
+
+  async signInWithProvider(provider: OAuthProvider): Promise<AuthSession> {
+    const emailByProvider: Record<OAuthProvider, string> = {
+      google: 'peter@heysalad.io',
+      github: 'dev@heysalad.io',
+      cloudflare: 'ops@heysalad.io',
+    }
+
+    const email = emailByProvider[provider]
+
+    session = {
+      ...session,
+      isAuthenticated: true,
+      user: {
+        id: `usr-${provider}`,
+        email,
+        displayName: `${provider.toUpperCase()} User`,
+        role: resolveRoleForEmail(email),
+        isSuperAdmin: isSuperAdminEmail(email),
+        authProvider: provider,
+      },
+    }
+
     return structuredClone(session)
   }
 

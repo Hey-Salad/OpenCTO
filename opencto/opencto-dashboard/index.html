@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenCTO | Autonomous AI operations</title>
-  <meta name="description" content="OpenCTO orchestrates AI copilots for compliance, releases, and security so product teams can focus." />
+  <title>OpenCTO | Product Overview</title>
+  <meta name="description" content="OpenCTO dashboard prototype with Launchpad, jobs, billing, compliance, and settings views." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/assets/marketing.css" />
 </head>
@@ -22,99 +22,98 @@
       <span>OpenCTO</span>
     </a>
     <nav class="primary-nav" id="main-menu">
-      <a href="/" data-page="landing">Landing</a>
+      <a href="/" data-page="landing">Overview</a>
       <a href="/press" data-page="press">Press</a>
       <a href="/blog" data-page="blog">Blog</a>
-      <a href="/app" data-page="app" class="pill-link">App</a>
+      <a href="/app" data-page="app" class="pill-link">Launch App</a>
     </nav>
     <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Open navigation">Menu</button>
   </header>
+
   <main class="container">
     <section class="hero">
       <div class="hero-grid">
         <div>
-          <p class="section-title">OpenCTO works</p>
-          <h1>Autonomous AI operations for resilient engineering teams</h1>
+          <p class="section-title">Current State</p>
+          <h1>OpenCTO dashboard prototype</h1>
           <p>
-            OpenCTO coordinates deployment, compliance, and security workflows so your engineers can focus on
-            differentiation instead of firefighting. Run multi-agent orchestration and keep every release
-            traceable and auditable.
+            This repository currently ships a React dashboard and static marketing pages. The app includes
+            Launchpad, Jobs, Pricing, Billing, Compliance, and Settings views with mock adapters used for local testing.
           </p>
           <div class="hero-actions">
-            <a class="launch-btn" href="/app">Launch App</a>
-            <span style="letter-spacing: 0.4em; font-size: 0.8rem;">Open domain ready</span>
+            <a class="launch-btn" href="/app">Open Dashboard</a>
+            <span class="meta-chip">Prototype build</span>
           </div>
         </div>
         <div class="hero-panel">
-          <h3>Live today</h3>
-          <p>OpenCTO runs on Raspberry Pi edge clusters and cloud workloads, tied together by OpenCTO intelligence.</p>
-          <div style="display: grid; gap: 1rem; margin-top: 1.5rem;">
-            <div class="feature-card" style="padding: 1rem; border-radius: 0.9rem;">
-              <p style="margin: 0; font-size: 0.9rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--peach);">Autonomous runbooks</p>
-              <h4 style="margin: 0.5rem 0 0;">4.2x faster incident response</h4>
-              <p style="margin: 0; color: rgba(247, 247, 247, 0.7);">Policy-driven playbooks automate releases, audits, and rollbacks.</p>
-            </div>
-            <div class="feature-card" style="padding: 1rem; border-radius: 0.9rem;">
-              <p style="margin: 0; font-size: 0.9rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--peach);">Compliance</p>
-              <h4 style="margin: 0.5rem 0 0;">SOC2 · PCI · DORA</h4>
-              <p style="margin: 0; color: rgba(247, 247, 247, 0.7);">Evidence is signed and verified before every release.</p>
-            </div>
-          </div>
+          <h3>Included Routes</h3>
+          <ul class="stat-list">
+            <li><code>/</code> Overview page</li>
+            <li><code>/press</code> Press information</li>
+            <li><code>/blog</code> Development notes</li>
+            <li><code>/app</code> React dashboard</li>
+            <li><code>/playground</code> Alias to app route</li>
+          </ul>
         </div>
       </div>
     </section>
+
     <section>
-      <p class="section-title">Capabilities</p>
-      <h2 class="section-subtitle">The same agent crew handles launch, rollback, and compliance.</h2>
+      <p class="section-title">Implemented UI Areas</p>
+      <h2 class="section-subtitle">What you can verify in the current build</h2>
       <div class="feature-grid">
         <article class="feature-card">
-          <h4>Deployment intelligence</h4>
-          <p>Cloudflare DNS, GitHub Actions, and Raspberry Pi fleets share a consistent runtime that understands drift.</p>
+          <h4>Launchpad</h4>
+          <p>Voice-first interface with playback controls and right-side configuration panel.</p>
         </article>
         <article class="feature-card">
-          <h4>Compliance observability</h4>
-          <p>Every request, guardrail evaluation, and audit log is captured and tamper-proofed.</p>
+          <h4>Jobs + Stream</h4>
+          <p>Job list, stream view, and human approval card components rendered from typed mock data.</p>
         </article>
         <article class="feature-card">
-          <h4>Security automation</h4>
-          <p>Streaming vulnerability scans, secret detection, and remediation run in parallel with releases.</p>
+          <h4>Billing + Pricing</h4>
+          <p>Plan cards, billing summary, invoice table states, and Stripe config checks in frontend.</p>
         </article>
         <article class="feature-card">
-          <h4>Hybrid edge support</h4>
-          <p>Pi clusters and cloud nodes receive identical policies, letting the same agents manage both.</p>
+          <h4>Auth + Compliance</h4>
+          <p>Route/role guards, device/passkey settings skeleton, and compliance evidence panel.</p>
         </article>
       </div>
     </section>
+
     <section>
-      <p class="section-title">Vault of proof</p>
-      <h2 class="section-subtitle">Press-ready intelligence</h2>
+      <p class="section-title">Current Boundaries</p>
+      <h2 class="section-subtitle">What is still scaffolded</h2>
       <div class="press-grid">
         <article class="press-card">
-          <strong>NEWS · MIT TECH REVIEW</strong>
-          <p>“OpenCTO reimagines autonomous release management with Raspberry Pi integration that makes edge CI/CD possible.”</p>
+          <strong>Data source</strong>
+          <p>Most dashboard data is currently served by in-repo mock adapters rather than live backend services.</p>
         </article>
         <article class="press-card">
-          <strong>FEATURE · FORTUNE</strong>
-          <p>“AI copilots translate compliance requirements into guardrails, letting teams launch globally with confidence.”</p>
+          <strong>Billing execution</strong>
+          <p>Checkout and portal flows are stubbed until authenticated backend Stripe integration is connected.</p>
         </article>
         <article class="press-card">
-          <strong>SPOTLIGHT · WIRED</strong>
-          <p>“The OpenCTO arc motif is now synonymous with resilient launches, guided by multi-agent operations.”</p>
+          <strong>Compliance automation</strong>
+          <p>Compliance views are in place; evidence/export actions require backend integration for production use.</p>
         </article>
       </div>
     </section>
+
     <section class="cta">
       <div class="cta-text">
-        <p class="section-title">Launch readiness</p>
-        <h2 style="margin: 0.5rem 0;">Secure opencto.works with Cloudflare DNS and the OpenCTO launch crew.</h2>
-        <p style="margin: 0; color: rgba(247, 247, 247, 0.7);">Agents monitor DNS propagation, TLS certificates, and practice rollbacks before every deploy.</p>
+        <p class="section-title">Next Step</p>
+        <h2>Run the app locally and validate each route</h2>
+        <p>Use <code>npm run dev</code> in <code>opencto/opencto-dashboard</code> and test overview, press, blog, and dashboard views.</p>
       </div>
       <a class="launch-btn" href="/app">Launch App</a>
     </section>
   </main>
+
   <footer class="page-footer">
-    OpenCTO · Cherry Red (#ed4c4c) instincts for every launch · opencto.works
+    OpenCTO · Product prototype status page
   </footer>
+
   <script src="/assets/marketing.js"></script>
 </body>
 </html>

@@ -12,6 +12,8 @@ const session: AuthSession = {
     email: 'user@example.com',
     displayName: 'User',
     role: 'developer',
+    isSuperAdmin: false,
+    authProvider: 'github',
   },
 }
 

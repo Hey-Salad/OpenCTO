@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenCTO | Press</title>
-  <meta name="description" content="OpenCTO press releases, launches, and editorial coverage for opencto.works." />
+  <meta name="description" content="Press-ready factual notes about the current OpenCTO implementation." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/assets/marketing.css" />
 </head>
@@ -22,87 +22,79 @@
       <span>OpenCTO</span>
     </a>
     <nav class="primary-nav" id="main-menu">
-      <a href="/" data-page="landing">Landing</a>
+      <a href="/" data-page="landing">Overview</a>
       <a href="/press" data-page="press">Press</a>
       <a href="/blog" data-page="blog">Blog</a>
-      <a href="/app" data-page="app" class="pill-link">App</a>
+      <a href="/app" data-page="app" class="pill-link">Launch App</a>
     </nav>
     <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Open navigation">Menu</button>
   </header>
+
   <main class="container">
     <section class="hero">
       <div class="hero-grid">
         <div>
-          <p class="section-title">Press</p>
-          <h1>OpenCTO in the headlines</h1>
-          <p>The launch of opencto.works is supported with transparency for reporters, analysts, and investors.</p>
+          <p class="section-title">Press Facts</p>
+          <h1>OpenCTO implementation snapshot</h1>
+          <p>This page lists only verifiable facts from the current repository state.</p>
           <div class="hero-actions">
-            <a class="launch-btn" href="/app">Launch App</a>
-            <span style="letter-spacing: 0.3em; font-size: 0.8rem;">Verified statements</span>
+            <a class="launch-btn" href="/app">Open Dashboard</a>
+            <span class="meta-chip">No promotional claims</span>
           </div>
         </div>
         <div class="hero-panel">
-          <h3>Announcements</h3>
-          <p>Latest coverage highlights autonomous risk mitigation for safety-critical launches.</p>
-          <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1.2rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 0.8rem; letter-spacing: 0.2em; color: var(--muted);">Feb 2026</span>
-              <strong style="color: var(--peach);">Domain launch coverage</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 0.8rem; letter-spacing: 0.2em; color: var(--muted);">Jan 2026</span>
-              <strong style="color: var(--peach);">Edge release automation</strong>
-            </div>
-          </div>
+          <h3>Repository Facts</h3>
+          <ul class="stat-list">
+            <li>Frontend: React + TypeScript + Vite</li>
+            <li>Tests: Vitest component/unit suites</li>
+            <li>Marketing: static HTML + shared CSS</li>
+            <li>Brand: OpenCTO red/peach dark theme</li>
+          </ul>
         </div>
       </div>
     </section>
+
     <section>
-      <p class="section-title">Editorial coverage</p>
-      <h2 class="section-subtitle">Stories that describe how we operate with precision.</h2>
+      <p class="section-title">Verified Features</p>
+      <h2 class="section-subtitle">Available in the current app</h2>
       <div class="press-grid">
         <article class="press-card">
-          <strong>FEATURE · TECHCRUNCH</strong>
-          <p>“OpenCTO coordinates Cloudflare Workers and Pi clusters, letting teams centralize compliance evidence.”</p>
+          <strong>Launchpad UI</strong>
+          <p>Launchpad is integrated as a main dashboard view with sidebar navigation.</p>
         </article>
         <article class="press-card">
-          <strong>PROFILE · THE INFORMATION</strong>
-          <p>The engineering team balances governance with experimentation, shipping copilots that orchestrate code and legal operators.</p>
+          <strong>Route coverage</strong>
+          <p>Pretty routes are configured for overview, press, blog, app, and playground alias paths.</p>
         </article>
         <article class="press-card">
-          <strong>DEEP DIVE · A16Z OPENSOURCE</strong>
-          <p>“The Raspberry Pi-ready stack proves open source at scale, with policy-as-code and multi-agent choreography.”</p>
+          <strong>Brand alignment</strong>
+          <p>Shared icon, favicon, and typography are used across marketing and dashboard surfaces.</p>
         </article>
       </div>
     </section>
+
     <section>
-      <p class="section-title">Press kit</p>
-      <h2 class="section-subtitle">Assets and launch notes for your story</h2>
+      <p class="section-title">Known Gaps</p>
+      <h2 class="section-subtitle">Pending backend integrations</h2>
       <div class="feature-grid">
         <article class="feature-card">
-          <h4>Logo + palette</h4>
-          <p>Cherry Red #ed4c4c, Peach #faa09a, Light Peach #ffd0cd, and the dark UI #111111 keep the look cohesive.</p>
+          <h4>Live backend data</h4>
+          <p>Mock adapters are still used for jobs, billing, auth, and compliance in local mode.</p>
         </article>
         <article class="feature-card">
-          <h4>Launch notes</h4>
-          <p>Every release follows a checklist: DNS cutover, validation, TLS readiness, and route checks.</p>
+          <h4>Billing execution</h4>
+          <p>Stripe checkout and portal calls are scaffolded and require production API wiring.</p>
         </article>
         <article class="feature-card">
-          <h4>Contact</h4>
-          <p>Media inquiries: press@opencto.works · Response window under 2 hours.</p>
+          <h4>Evidence persistence</h4>
+          <p>Compliance evidence export UX exists; long-term storage and retrieval require backend completion.</p>
         </article>
       </div>
-    </section>
-    <section class="cta">
-      <div class="cta-text">
-        <p class="section-title">Spotlight</p>
-        <h2 style="margin: 0.5rem 0;">Secure opencto.works with Cloudflare DNS and the OpenCTO crew.</h2>
-        <p style="margin: 0; color: rgba(247, 247, 247, 0.7);">Launch App so press readers can experience the voice-first console right after the story.</p>
-      </div>
-      <a class="launch-btn" href="/app">Launch App</a>
     </section>
   </main>
-  <footer class="page-footer">OpenCTO press desk · opencto.works</footer>
+
+  <footer class="page-footer">OpenCTO press · factual implementation notes</footer>
+
   <script src="/assets/marketing.js"></script>
 </body>
 </html>

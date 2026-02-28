@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenCTO | Blog</title>
-  <meta name="description" content="Insights on autonomous CI/CD, Raspberry Pi fleets, and Cloudflare launches." />
+  <meta name="description" content="Development log and implementation updates for OpenCTO." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/assets/marketing.css" />
 </head>
@@ -22,67 +22,72 @@
       <span>OpenCTO</span>
     </a>
     <nav class="primary-nav" id="main-menu">
-      <a href="/" data-page="landing">Landing</a>
+      <a href="/" data-page="landing">Overview</a>
       <a href="/press" data-page="press">Press</a>
       <a href="/blog" data-page="blog">Blog</a>
-      <a href="/app" data-page="app" class="pill-link">App</a>
+      <a href="/app" data-page="app" class="pill-link">Launch App</a>
     </nav>
     <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Open navigation">Menu</button>
   </header>
+
   <main class="container">
     <section class="hero">
       <div class="hero-grid">
         <div>
-          <p class="section-title">Blog</p>
-          <h1>Dispatches from OpenCTO operations</h1>
-          <p>Notes about building autonomous agents, Raspberry Pi deployment handoffs, and Cloudflare operations.</p>
+          <p class="section-title">Engineering Log</p>
+          <h1>OpenCTO development updates</h1>
+          <p>Implementation notes for product, UI, routing, and integration milestones.</p>
           <div class="hero-actions">
-            <a class="launch-btn" href="/app">Launch App</a>
-            <span style="letter-spacing: 0.3em; font-size: 0.8rem;">Voice first</span>
+            <a class="launch-btn" href="/app">Open Dashboard</a>
+            <span class="meta-chip">Repository-backed updates</span>
           </div>
         </div>
         <div class="hero-panel">
-          <h3>Readers</h3>
-          <p>Engineers and operators tracking the opencto.works launch schedule.</p>
-          <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1rem;">
-            <span style="font-size: 0.8rem; color: var(--peach);">Weekly research brief</span>
-            <span style="font-size: 0.8rem; color: var(--peach);">Guest posts from ops leadership</span>
-            <span style="font-size: 0.8rem; color: var(--peach);">Deployment transparency logs</span>
-          </div>
+          <h3>Focus Areas</h3>
+          <ul class="stat-list">
+            <li>Dashboard UX and Launchpad</li>
+            <li>Route reliability and branding</li>
+            <li>Billing/compliance scaffolding</li>
+            <li>Backend integration readiness</li>
+          </ul>
         </div>
       </div>
     </section>
+
     <section>
-      <p class="section-title">Recent posts</p>
-      <h2 class="section-subtitle">Runbooks, DNS plans, and rollout retrospectives.</h2>
+      <p class="section-title">Recent Entries</p>
+      <h2 class="section-subtitle">Implementation-first changelog</h2>
       <div class="blog-list">
         <article class="blog-item">
-          <p class="blog-meta">01 · Feb 2026 · deployment</p>
-          <h3>Cutting over opencto.works to Cloudflare with Raspberry Pi reliability</h3>
-          <p>Notes covering Namecheap, Cloudflare DNS, SSL/TLS mode, and verification checks before the handoff.</p>
+          <p class="blog-meta">Entry 01 · UI</p>
+          <h3>Launchpad integrated into the main dashboard shell</h3>
+          <p>Navigation now exposes Launchpad as a core view in the same application frame as jobs, billing, and compliance.</p>
         </article>
         <article class="blog-item">
-          <p class="blog-meta">28 · Jan 2026 · automation</p>
-          <h3>Automating compliance checks inside the OpenCTO agent swarm</h3>
-          <p>Inside the policy engine that audits SOC2, PCI-DSS, and DORA controls before each release and rollback.</p>
+          <p class="blog-meta">Entry 02 · Routing</p>
+          <h3>Route handling aligned for overview, press, blog, app, and playground</h3>
+          <p>Vite route rewrites and redirects were updated so local behavior matches deployed static route behavior.</p>
         </article>
         <article class="blog-item">
-          <p class="blog-meta">15 · Jan 2026 · operations</p>
-          <h3>Edge deployment checklist for Raspberry Pi fleets</h3>
-          <p>Lessons learned from replicating the OpenCTO stack on Pi hardware with deterministic telemetry.</p>
+          <p class="blog-meta">Entry 03 · Branding</p>
+          <h3>Shared brand icon and favicon applied across marketing and dashboard pages</h3>
+          <p>Top-bar and auth fallback states were aligned with the OpenCTO icon and typography system.</p>
         </article>
       </div>
     </section>
+
     <section class="cta">
       <div class="cta-text">
-        <p class="section-title">Stay updated</p>
-        <h2 style="margin: 0.5rem 0;">Deploy the same agents you read about—opencto.works is the launchpad.</h2>
-        <p style="margin: 0; color: rgba(247, 247, 247, 0.7);">Visit the Launch App console to monitor DNS, TLS, and routes.</p>
+        <p class="section-title">Next Build Cycle</p>
+        <h2>Wire live backend endpoints into the existing frontend contracts</h2>
+        <p>Current UI contracts are in place for auth, billing, jobs, and compliance; remaining work is backend completion and entitlement enforcement.</p>
       </div>
       <a class="launch-btn" href="/app">Launch App</a>
     </section>
   </main>
-  <footer class="page-footer">OpenCTO blog · opencto.works</footer>
+
+  <footer class="page-footer">OpenCTO blog · implementation updates</footer>
+
   <script src="/assets/marketing.js"></script>
 </body>
 </html>
