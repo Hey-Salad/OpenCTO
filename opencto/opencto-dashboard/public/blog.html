@@ -1,41 +1,81 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenCTO | Blog</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Grandstander:wght@500;700;800;900&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    :root{--cherry:#ed4c4c;--peach:#faa09a;--white:#fff;--dark:#111;--surface:#1a1a1a;--border:#2a2a2a;--muted:#888;--body:#f0f0f0}
-    *{box-sizing:border-box;margin:0;padding:0}body{font-family:Figtree,sans-serif;background:var(--dark);color:var(--body);line-height:1.6}.container{width:min(1120px,92%);margin:0 auto}
-    .topbar{position:sticky;top:0;background:rgba(17,17,17,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}.topbar-inner{min-height:56px;display:flex;align-items:center;gap:24px;padding:10px 0}
-    .brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--white);font-family:Grandstander,sans-serif;font-weight:800;font-size:20px}.brand svg{width:28px;height:28px}
-    .top-links{margin-left:auto;display:inline-flex;gap:16px;align-items:center;flex-wrap:wrap}.top-links a{text-decoration:none;color:var(--muted);font-weight:500;font-size:14px}.top-links a:hover{color:var(--white)}
-    .hero{padding:72px 0 40px;border-bottom:1px solid var(--border)}.hero h1{font-family:Grandstander,sans-serif;font-size:clamp(40px,6vw,64px);margin-bottom:10px}.lead{color:var(--muted);max-width:760px}
-    .posts{padding:42px 0 72px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px}
-    .date{font-size:12px;color:var(--muted);margin-bottom:8px}.card h3{font-size:20px;font-family:Grandstander,sans-serif;margin-bottom:8px}.card p{font-size:14px;color:var(--muted);margin-bottom:14px}.read{color:var(--peach);text-decoration:none;font-weight:700}
-    .btn{display:inline-flex;align-items:center;padding:10px 14px;border-radius:10px;border:1px solid #d9d9d9;background:#fff;color:#111;text-decoration:none;font-weight:700;font-size:14px}
-    .btn:hover{background:var(--cherry);color:var(--white);border-color:var(--cherry)}
-    .bottom-cta{padding:52px 0;border-top:1px solid var(--border);text-align:center}
-    .bottom-cta h3{font-family:Grandstander,sans-serif;font-size:clamp(28px,4vw,40px);margin-bottom:10px}
-    .bottom-cta p{color:var(--muted);margin-bottom:16px}
-    .footer{padding:36px 0 52px;color:var(--muted);font-size:13px;text-align:center;border-top:1px solid var(--border)}
-    @media(max-width:980px){.grid{grid-template-columns:1fr}.topbar-inner{height:auto}.top-links{width:100%;margin-left:0;justify-content:flex-start;row-gap:8px;gap:12px}}
-  </style>
+  <meta name="description" content="Insights on autonomous CI/CD, Raspberry Pi fleets, and Cloudflare launches." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/assets/marketing.css" />
 </head>
-<body>
-  <header class="topbar"><div class="container topbar-inner"><a class="brand" href="/"><svg viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="6" fill="#ed4c4c"/><path d="M 6,21 A 9.5 9.5 0 1 1 22,13" stroke="white" stroke-width="2.5" stroke-linecap="round"/><circle cx="6" cy="21" r="1.5" fill="#ffd0cd"/><circle cx="22" cy="13" r="1.5" fill="#ffd0cd"/><polyline points="9,14 13,17 9,20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="12,15.5 16,18.5 12,21.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>OpenCTO</a><nav class="top-links"><a href="/">Home</a><a href="/press.html">Press</a><a href="https://github.com/Hey-Salad/CTO-AI" target="_blank" rel="noreferrer">GitHub</a><a class="btn" href="/app.html">Launch App</a></nav></div></header>
-  <main>
-    <section class="hero"><div class="container"><h1>OpenCTO Blog</h1><p class="lead">Product updates, architecture notes, security hardening decisions, and release milestones.</p></div></section>
-    <section class="posts"><div class="container"><div class="grid">
-      <article class="card"><div class="date">February 2026</div><h3>Phase 5 Delivered</h3><p>UI shell, auth experience, and dashboard foundations are now aligned with brand tokens and layout direction.</p><a class="read" href="#">Read post</a></article>
-      <article class="card"><div class="date">February 2026</div><h3>Billing and Monetisation</h3><p>Pricing, usage model contracts, and Stripe scaffolding moved into the frontend with typed APIs and tests.</p><a class="read" href="#">Read post</a></article>
-      <article class="card"><div class="date">February 2026</div><h3>Phase 6 Plan</h3><p>Production readiness track: CI hardening, policy enforcement, smoke tests, and deployment guardrails.</p><a class="read" href="#">Read post</a></article>
-    </div></div></section>
-    <section class="bottom-cta"><div class="container"><h3>Open The Product</h3><p>Try the latest dashboard changes in the app environment.</p><a class="btn" href="/app.html">Launch App</a></div></section>
+<body data-page="blog">
+  <header class="site-header">
+    <a class="site-brand" href="/">
+      <span>OC</span>
+      <span>OpenCTO</span>
+    </a>
+    <nav class="primary-nav" id="main-menu">
+      <a href="/" data-page="landing">Landing</a>
+      <a href="/press" data-page="press">Press</a>
+      <a href="/blog" data-page="blog">Blog</a>
+      <a href="/app" data-page="app" class="pill-link">App</a>
+    </nav>
+    <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Open navigation">Menu</button>
+  </header>
+  <main class="container">
+    <section class="hero">
+      <div class="hero-grid">
+        <div>
+          <p class="section-title">Blog</p>
+          <h1>Dispatches from OpenCTO operations</h1>
+          <p>Notes about building autonomous agents, Raspberry Pi deployment handoffs, and Cloudflare operations.</p>
+          <div class="hero-actions">
+            <a class="launch-btn" href="/app">Launch App</a>
+            <span style="letter-spacing: 0.3em; font-size: 0.8rem;">Voice first</span>
+          </div>
+        </div>
+        <div class="hero-panel">
+          <h3>Readers</h3>
+          <p>Engineers and operators tracking the opencto.works launch schedule.</p>
+          <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1rem;">
+            <span style="font-size: 0.8rem; color: var(--peach);">Weekly research brief</span>
+            <span style="font-size: 0.8rem; color: var(--peach);">Guest posts from ops leadership</span>
+            <span style="font-size: 0.8rem; color: var(--peach);">Deployment transparency logs</span>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section>
+      <p class="section-title">Recent posts</p>
+      <h2 class="section-subtitle">Runbooks, DNS plans, and rollout retrospectives.</h2>
+      <div class="blog-list">
+        <article class="blog-item">
+          <p class="blog-meta">01 · Feb 2026 · deployment</p>
+          <h3>Cutting over opencto.works to Cloudflare with Raspberry Pi reliability</h3>
+          <p>Notes covering Namecheap, Cloudflare DNS, SSL/TLS mode, and verification checks before the handoff.</p>
+        </article>
+        <article class="blog-item">
+          <p class="blog-meta">28 · Jan 2026 · automation</p>
+          <h3>Automating compliance checks inside the OpenCTO agent swarm</h3>
+          <p>Inside the policy engine that audits SOC2, PCI-DSS, and DORA controls before each release and rollback.</p>
+        </article>
+        <article class="blog-item">
+          <p class="blog-meta">15 · Jan 2026 · operations</p>
+          <h3>Edge deployment checklist for Raspberry Pi fleets</h3>
+          <p>Lessons learned from replicating the OpenCTO stack on Pi hardware with deterministic telemetry.</p>
+        </article>
+      </div>
+    </section>
+    <section class="cta">
+      <div class="cta-text">
+        <p class="section-title">Stay updated</p>
+        <h2 style="margin: 0.5rem 0;">Deploy the same agents you read about—opencto.works is the launchpad.</h2>
+        <p style="margin: 0; color: rgba(247, 247, 247, 0.7);">Visit the Launch App console to monitor DNS, TLS, and routes.</p>
+      </div>
+      <a class="launch-btn" href="/app">Launch App</a>
+    </section>
   </main>
-  <footer class="footer"><div class="container">OpenCTO Blog · Built by HeySalad</div></footer>
+  <footer class="page-footer">OpenCTO blog · opencto.works</footer>
+  <script src="/assets/marketing.js"></script>
 </body>
 </html>
