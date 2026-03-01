@@ -212,11 +212,6 @@ function App() {
           {view === 'launchpad' && (
             <AudioRealtimeView
               messages={[]}
-              isPlaying={false}
-              currentTimeMs={0}
-              totalDurationMs={0}
-              onTogglePlay={() => {}}
-              onSeek={() => {}}
               onGenerate={handleAudioGenerate}
               onMicToggle={handleAudioMicToggle}
               onStop={handleAudioStop}

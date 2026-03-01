@@ -1056,6 +1056,37 @@ button:disabled {
   background: rgba(237, 76, 76, 0.5);
 }
 
+/* Start session button */
+.audio-start-session-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto;
+  padding: 10px 28px;
+  background: var(--brand-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Figtree', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.audio-start-session-btn:hover {
+  background: #d43b3b;
+}
+
+/* Live controls (shown after session starts) */
+.audio-live-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
 /* Action buttons */
 .audio-playback-actions {
   display: flex;
