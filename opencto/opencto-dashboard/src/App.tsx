@@ -1,35 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Job, Step } from './types/opencto'
-import type { AuthSession, OAuthProvider, PasskeyCredential, TrustedDevice } from './types/auth'
-import type { ComplianceCheck } from './types/compliance'
-import type {
-  BillingInterval,
-  BillingSummaryResponse,
-  EntitlementContext,
-  Invoice,
-  PlanCode,
-} from './types/billing'
+import type { AuthSession, OAuthProvider } from './types/auth'
 import { JobsListScreen, type JobFilter } from './components/jobs/JobsListScreen'
 import { JobDetailStream } from './components/stream/JobDetailStream'
-import { PricingPage } from './components/billing/PricingPage'
-import { BillingDashboard } from './components/billing/BillingDashboard'
 import { AudioRealtimeView, type AudioMessage } from './components/audio/AudioRealtimeView'
 import { AudioConfigPanel, type AudioConfig } from './components/audio/AudioConfigPanel'
 import { MockOpenCtoAdapter } from './mocks/openctoMockAdapter'
-import { BillingMockAdapter, plans } from './mocks/billingMockAdapter'
 import { AuthMockAdapter } from './mocks/authMockAdapter'
-import { ComplianceMockAdapter } from './mocks/complianceMockAdapter'
-import { getStripeMissingEnvVars } from './config/stripe'
 import { normalizeApiError } from './lib/safeError'
-import { evaluateEntitlement } from './utils/entitlements'
 import { RouteGuard } from './components/auth/RouteGuard'
-import { RoleGuard } from './components/auth/RoleGuard'
 import { AuthLoginPanel } from './components/auth/AuthLoginPanel'
-import { SecuritySettings } from './components/settings/SecuritySettings'
-import { ComplianceEvidencePanel } from './components/compliance/ComplianceEvidencePanel'
 import './index.css'
 
-type AppView = 'jobs' | 'launchpad' | 'pricing' | 'billing' | 'compliance' | 'settings'
+type AppView = 'jobs' | 'launchpad'
 
 const DEMO_AUDIO_MESSAGES: AudioMessage[] = [
   {
@@ -148,9 +131,7 @@ const DEFAULT_AUDIO_CONFIG: AudioConfig = {
 
 function App() {
   const jobsApi = useMemo(() => new MockOpenCtoAdapter(), [])
-  const billingApi = useMemo(() => new BillingMockAdapter(), [])
   const authApi = useMemo(() => new AuthMockAdapter(), [])
-  const complianceApi = useMemo(() => new ComplianceMockAdapter(), [])
 
   const [view, setView] = useState<AppView>('launchpad')
 
@@ -162,21 +143,6 @@ function App() {
   const [session, setSession] = useState<AuthSession | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authProviderLoading, setAuthProviderLoading] = useState<OAuthProvider | null>(null)
-  const [devices, setDevices] = useState<TrustedDevice[]>([])
-  const [devicesLoading, setDevicesLoading] = useState(false)
-  const [passkeys, setPasskeys] = useState<PasskeyCredential[]>([])
-  const [passkeysLoading, setPasskeysLoading] = useState(false)
-
-  const [checks, setChecks] = useState<ComplianceCheck[]>([])
-  const [checksLoading, setChecksLoading] = useState(false)
-
-  const [billingInterval, setBillingInterval] = useState<BillingInterval>('MONTHLY')
-  const [billingSummary, setBillingSummary] = useState<BillingSummaryResponse | null>(null)
-  const [billingInvoices, setBillingInvoices] = useState<Invoice[]>([])
-  const [isBillingSummaryLoading, setIsBillingSummaryLoading] = useState(false)
-  const [isBillingInvoicesLoading, setIsBillingInvoicesLoading] = useState(false)
-  const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null)
-  const [billingInvoicesError, setBillingInvoicesError] = useState<string | null>(null)
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -236,25 +202,6 @@ function App() {
     setIsMicActive(false)
   }, [])
 
-  const missingStripeVars = getStripeMissingEnvVars()
-  const isBillingConfigured = missingStripeVars.length === 0
-
-  const entitlementContext: EntitlementContext = {
-    planCode: billingSummary?.subscription.planCode ?? 'DEVELOPER',
-    usage: {
-      jobsUsed: billingSummary?.usage.jobsUsed ?? 44,
-      jobsLimit: billingSummary?.usage.jobsLimit ?? 50,
-      workersUsed: billingSummary?.usage.workersUsed ?? 2,
-      workersLimit: billingSummary?.usage.workersLimit ?? 2,
-      usersUsed: billingSummary?.usage.usersUsed ?? 1,
-      usersLimit: billingSummary?.usage.usersLimit ?? 1,
-    },
-  }
-
-  const createJobDecision = evaluateEntitlement(entitlementContext, 'CREATE_JOB')
-  const dangerousApprovalDecision = evaluateEntitlement(entitlementContext, 'APPROVE_DANGEROUS_STEP')
-  const evidenceExportDecision = evaluateEntitlement(entitlementContext, 'EXPORT_EVIDENCE_PACKAGE')
-
   useEffect(() => {
     authApi
       .getSession()
@@ -280,118 +227,8 @@ function App() {
     }
   }, [jobsApi, selectedJobId])
 
-  useEffect(() => {
-    if (view !== 'settings') {
-      return
-    }
-
-    authApi
-      .getTrustedDevices()
-      .then(setDevices)
-      .catch((error) => setErrorMessage(normalizeApiError(error, 'Failed to load devices').message))
-      .finally(() => setDevicesLoading(false))
-
-    authApi
-      .listPasskeys()
-      .then(setPasskeys)
-      .catch((error) => setErrorMessage(normalizeApiError(error, 'Failed to load passkeys').message))
-      .finally(() => setPasskeysLoading(false))
-  }, [authApi, view])
-
-  useEffect(() => {
-    if (view !== 'compliance') {
-      return
-    }
-
-    complianceApi
-      .getComplianceChecks(selectedJobId ?? undefined)
-      .then(setChecks)
-      .catch((error) => setErrorMessage(normalizeApiError(error, 'Failed to load compliance checks').message))
-      .finally(() => setChecksLoading(false))
-  }, [complianceApi, view, selectedJobId])
-
-  useEffect(() => {
-    if (view !== 'billing') {
-      return
-    }
-
-    let isCancelled = false
-
-    const loadBilling = async () => {
-      setBillingSummaryError(null)
-      setBillingInvoicesError(null)
-
-      try {
-        const summary = await billingApi.getSubscriptionSummary()
-        if (!isCancelled) {
-          setBillingSummary(summary)
-        }
-      } catch {
-        if (!isCancelled) {
-          setBillingSummary(null)
-          setBillingSummaryError('Unable to load subscription summary. Try again shortly.')
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsBillingSummaryLoading(false)
-        }
-      }
-
-      try {
-        const response = await billingApi.getInvoices()
-        if (!isCancelled) {
-          setBillingInvoices(response.invoices)
-        }
-      } catch {
-        if (!isCancelled) {
-          setBillingInvoices([])
-          setBillingInvoicesError('Unable to load invoices right now. Try again shortly.')
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsBillingInvoicesLoading(false)
-        }
-      }
-    }
-
-    void loadBilling()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [billingApi, view])
-
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null
   const visibleSteps = selectedJobId ? steps : []
-
-  const openJobsView = () => {
-    setView('jobs')
-  }
-
-  const openLaunchpadView = () => {
-    setView('launchpad')
-  }
-
-  const openPricingView = () => {
-    setView('pricing')
-  }
-
-  const openBillingView = () => {
-    setIsBillingSummaryLoading(true)
-    setIsBillingInvoicesLoading(true)
-    setView('billing')
-  }
-
-  const openComplianceView = () => {
-    setChecksLoading(true)
-    setView('compliance')
-  }
-
-  const openSettingsView = () => {
-    setDevicesLoading(true)
-    setPasskeysLoading(true)
-    setView('settings')
-  }
 
   const handleApprove = async (stepId: string) => {
     const updated = await jobsApi.approveStep(stepId)
@@ -403,41 +240,6 @@ function App() {
     setSteps((current) => current.map((step) => (step.id === updated.id ? updated : step)))
   }
 
-  const handleCheckout = async (planCode: PlanCode) => {
-    if (planCode === 'ENTERPRISE' || !isBillingConfigured) {
-      return
-    }
-
-    try {
-      await billingApi.createCheckoutSession(planCode, billingInterval)
-    } catch {
-      setBillingSummaryError('Unable to start checkout right now. Try again shortly.')
-    }
-  }
-
-  const handleManageBilling = async () => {
-    if (!isBillingConfigured) {
-      return
-    }
-
-    try {
-      await billingApi.createBillingPortalSession()
-    } catch {
-      setBillingSummaryError('Unable to open billing management right now. Try again shortly.')
-    }
-  }
-
-  const handleEnrollPasskey = async () => {
-    try {
-      await authApi.startPasskeyEnrollment()
-      await authApi.completePasskeyEnrollment('mock-browser-response')
-      const refreshed = await authApi.listPasskeys()
-      setPasskeys(refreshed)
-    } catch (error) {
-      setErrorMessage(normalizeApiError(error, 'Passkey enrollment failed').message)
-    }
-  }
-
   const handleProviderLogin = async (provider: OAuthProvider) => {
     try {
       setAuthProviderLoading(provider)
@@ -447,23 +249,6 @@ function App() {
       setErrorMessage(normalizeApiError(error, 'Sign-in failed').message)
     } finally {
       setAuthProviderLoading(null)
-    }
-  }
-
-  const handleRevokeDevice = async (deviceId: string) => {
-    try {
-      const updated = await authApi.revokeDevice(deviceId)
-      setDevices((current) => current.map((item) => (item.id === updated.id ? updated : item)))
-    } catch (error) {
-      setErrorMessage(normalizeApiError(error, 'Failed to revoke device').message)
-    }
-  }
-
-  const handleExportEvidence = async (jobId: string) => {
-    try {
-      await complianceApi.exportEvidencePackage(jobId)
-    } catch (error) {
-      setErrorMessage(normalizeApiError(error, 'Failed to export evidence package').message)
     }
   }
 
@@ -508,53 +293,24 @@ function App() {
           <div className="top-bar-meta">
             {session?.user?.isSuperAdmin ? <span>SUPER ADMIN</span> : null}
             {session?.user?.authProvider ? <span>{session.user.authProvider.toUpperCase()}</span> : null}
-            <span>BILLING AND EXECUTION CONTROLS</span>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={!createJobDecision.allowed}
-              title={createJobDecision.reason ?? undefined}
-            >
+            <button type="button" className="primary-button">
               New Job
             </button>
           </div>
         </header>
 
         <aside className="left-sidebar panel" aria-label="Main navigation">
-          <button type="button" className={`nav-item ${view === 'jobs' ? 'nav-item-active' : ''}`} onClick={openJobsView}>
+          <button type="button" className={`nav-item ${view === 'jobs' ? 'nav-item-active' : ''}`} onClick={() => setView('jobs')}>
             <span className="nav-icon" />
             Jobs
           </button>
-          <button type="button" className={`nav-item ${view === 'launchpad' ? 'nav-item-active' : ''}`} onClick={openLaunchpadView}>
+          <button type="button" className={`nav-item ${view === 'launchpad' ? 'nav-item-active' : ''}`} onClick={() => setView('launchpad')}>
             <span className="nav-icon" style={{ background: view === 'launchpad' ? '#ed4c4c' : undefined }} />
             Launchpad
-          </button>
-          <button type="button" className={`nav-item ${view === 'pricing' ? 'nav-item-active' : ''}`} onClick={openPricingView}>
-            <span className="nav-icon" />
-            Pricing
-          </button>
-          <button type="button" className={`nav-item ${view === 'billing' ? 'nav-item-active' : ''}`} onClick={openBillingView}>
-            <span className="nav-icon" />
-            Billing
-          </button>
-          <button type="button" className={`nav-item ${view === 'compliance' ? 'nav-item-active' : ''}`} onClick={openComplianceView}>
-            <span className="nav-icon" />
-            Compliance
-          </button>
-          <button type="button" className={`nav-item ${view === 'settings' ? 'nav-item-active' : ''}`} onClick={openSettingsView}>
-            <span className="nav-icon" />
-            Settings
           </button>
         </aside>
 
         <section className="center-column">
-          {(createJobDecision.warning || dangerousApprovalDecision.warning || evidenceExportDecision.warning) && (
-            <section className="panel usage-warning" aria-label="Usage warning">
-              <p className="warning-text">Usage Warning</p>
-              <p>{createJobDecision.warning ?? dangerousApprovalDecision.warning ?? evidenceExportDecision.warning}</p>
-            </section>
-          )}
-
           {errorMessage && (
             <section className="panel">
               <p className="billing-error">{errorMessage}</p>
@@ -580,7 +336,7 @@ function App() {
                   steps={visibleSteps}
                   onApprove={handleApprove}
                   onDeny={handleDeny}
-                  approvalDisabledReason={dangerousApprovalDecision.allowed ? null : dangerousApprovalDecision.reason}
+                  approvalDisabledReason={null}
                 />
               </section>
             </>
@@ -601,79 +357,10 @@ function App() {
               isGenerating={isGenerating}
             />
           )}
-
-          {view === 'pricing' && (
-            <PricingPage
-              plans={plans}
-              interval={billingInterval}
-              onIntervalChange={setBillingInterval}
-              onCheckout={handleCheckout}
-              isBillingConfigured={isBillingConfigured}
-              missingStripeVars={missingStripeVars}
-            />
-          )}
-
-          {view === 'billing' && (
-            <BillingDashboard
-              summary={billingSummary}
-              invoices={billingInvoices}
-              isSummaryLoading={isBillingSummaryLoading}
-              isInvoicesLoading={isBillingInvoicesLoading}
-              summaryError={billingSummaryError}
-              invoicesError={billingInvoicesError}
-              isBillingConfigured={isBillingConfigured}
-              onManage={handleManageBilling}
-              onUpgrade={openPricingView}
-            />
-          )}
-
-          {view === 'compliance' && (
-            <ComplianceEvidencePanel
-              checks={checks}
-              loading={checksLoading}
-              error={null}
-              exportDisabledReason={evidenceExportDecision.allowed ? null : evidenceExportDecision.reason}
-              onExportEvidence={handleExportEvidence}
-            />
-          )}
-
-          {view === 'settings' && (
-            <RoleGuard
-              role={session?.user?.role ?? null}
-              allowedRoles={['owner', 'cto', 'developer']}
-              fallback={
-                <section className="panel">
-                  <p className="muted">Security settings are limited to elevated roles.</p>
-                </section>
-              }
-            >
-              <SecuritySettings
-                passkeys={passkeys}
-                devices={devices}
-                onEnrollPasskey={handleEnrollPasskey}
-                onRevokeDevice={handleRevokeDevice}
-                passkeysLoading={passkeysLoading}
-                devicesLoading={devicesLoading}
-                errorMessage={null}
-              />
-            </RoleGuard>
-          )}
         </section>
 
-        {view === 'launchpad' ? (
+        {view === 'launchpad' && (
           <AudioConfigPanel config={audioConfig} onConfigChange={setAudioConfig} />
-        ) : (
-          <aside className="right-config panel" aria-label="Config panel">
-            <h3>Billing Config</h3>
-            <p className="muted">Stripe environment status</p>
-            <p>{isBillingConfigured ? 'Configured' : `${missingStripeVars.length} vars missing`}</p>
-            {!isBillingConfigured && <p className="muted">Billing actions run in safe stub mode until Stripe config is complete.</p>}
-            <ul className="env-list">
-              {missingStripeVars.slice(0, 4).map((key) => (
-                <li key={key}>{key}</li>
-              ))}
-            </ul>
-          </aside>
         )}
       </main>
     </RouteGuard>

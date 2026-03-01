@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   // Ensure pretty routes work locally (Vite dev/preview) like production redirects.
-  // This prevents fallback to stale index content on /press, /blog, /app, /playground.
   plugins: [
     react(),
     {
@@ -12,8 +11,6 @@ export default defineConfig({
         server.middlewares.use((req, _res, next) => {
           if (!req.url) return next()
           const rewrites: Record<string, string> = {
-            '/press': '/press.html',
-            '/press/': '/press.html',
             '/blog': '/blog.html',
             '/blog/': '/blog.html',
             '/app': '/app.html',
@@ -31,8 +28,6 @@ export default defineConfig({
         server.middlewares.use((req, _res, next) => {
           if (!req.url) return next()
           const rewrites: Record<string, string> = {
-            '/press': '/press.html',
-            '/press/': '/press.html',
             '/blog': '/blog.html',
             '/blog/': '/blog.html',
             '/app': '/app.html',
