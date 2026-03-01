@@ -291,8 +291,6 @@ function App() {
             <h1>OpenCTO</h1>
           </div>
           <div className="top-bar-meta">
-            {session?.user?.isSuperAdmin ? <span>SUPER ADMIN</span> : null}
-            {session?.user?.authProvider ? <span>{session.user.authProvider.toUpperCase()}</span> : null}
             <button type="button" className="primary-button">
               New Job
             </button>
@@ -300,13 +298,23 @@ function App() {
         </header>
 
         <aside className="left-sidebar panel" aria-label="Main navigation">
-          <button type="button" className={`nav-item ${view === 'jobs' ? 'nav-item-active' : ''}`} onClick={() => setView('jobs')}>
-            <span className="nav-icon" />
-            Jobs
-          </button>
           <button type="button" className={`nav-item ${view === 'launchpad' ? 'nav-item-active' : ''}`} onClick={() => setView('launchpad')}>
-            <span className="nav-icon" style={{ background: view === 'launchpad' ? '#ed4c4c' : undefined }} />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 1.5C8 1.5 11.5 3.5 11.5 8C11.5 10.5 10 12.5 8 13.5C6 12.5 4.5 10.5 4.5 8C4.5 3.5 8 1.5 8 1.5Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round"/>
+              <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+              <path d="M8 13.5V15" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+              <path d="M5 14.5L6 12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+              <path d="M11 14.5L10 12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+            </svg>
             Launchpad
+          </button>
+          <button type="button" className={`nav-item ${view === 'jobs' ? 'nav-item-active' : ''}`} onClick={() => setView('jobs')}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.5" y="3.5" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.25"/>
+              <path d="M4.5 7H11.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+              <path d="M4.5 10H9" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+            </svg>
+            Jobs
           </button>
         </aside>
 
