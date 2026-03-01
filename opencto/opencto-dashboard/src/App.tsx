@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Job, Step } from './types/opencto'
 import type { AuthSession, OAuthProvider } from './types/auth'
 import { JobsListScreen, type JobFilter } from './components/jobs/JobsListScreen'
 import { JobDetailStream } from './components/stream/JobDetailStream'
-import { AudioRealtimeView, type AudioMessage } from './components/audio/AudioRealtimeView'
+import { AudioRealtimeView } from './components/audio/AudioRealtimeView'
 import { AudioConfigPanel, type AudioConfig } from './components/audio/AudioConfigPanel'
 import { MockOpenCtoAdapter } from './mocks/openctoMockAdapter'
 import { AuthMockAdapter } from './mocks/authMockAdapter'
@@ -14,117 +14,16 @@ import './index.css'
 
 type AppView = 'jobs' | 'launchpad'
 
-const DEMO_AUDIO_MESSAGES: AudioMessage[] = [
-  {
-    id: 'msg-1',
-    role: 'USER',
-    text: 'Hey, can you help me set up a CI/CD pipeline for our new microservice? We need SOC2 compliance baked in from the start.',
-    timestamp: '00:03',
-    startMs: 3000,
-    endMs: 12000,
-  },
-  {
-    id: 'msg-2',
-    role: 'ASSISTANT',
-    text: 'Absolutely. I\'ll scaffold a pipeline with compliance gates built in. First, let me check your current infrastructure setup and identify which SOC2 controls apply to your deployment flow.',
-    timestamp: '00:14',
-    startMs: 14000,
-    endMs: 26000,
-  },
-  {
-    id: 'msg-3',
-    role: 'USER',
-    text: 'We\'re using Kubernetes on AWS EKS, and we deploy through GitHub Actions. The service handles payment webhooks, so PCI-DSS is relevant too.',
-    timestamp: '00:28',
-    startMs: 28000,
-    endMs: 39000,
-  },
-  {
-    id: 'msg-4',
-    role: 'ASSISTANT',
-    text: 'Got it. For a payment-handling service on EKS with GitHub Actions, I\'ll configure the pipeline with: image scanning via Trivy, SAST analysis, dependency audit, secret detection in diffs, and a human approval gate before production deployment. The compliance mapping covers SOC2 CC8.1 and PCI-DSS Requirement 6.3.',
-    timestamp: '00:41',
-    startMs: 41000,
-    endMs: 62000,
-  },
-  {
-    id: 'msg-5',
-    role: 'USER',
-    text: 'Perfect. Can you also add automatic rollback if the health checks fail post-deploy? We had an incident last month where a bad deploy stayed up for twenty minutes.',
-    timestamp: '01:05',
-    startMs: 65000,
-    endMs: 78000,
-  },
-  {
-    id: 'msg-6',
-    role: 'ASSISTANT',
-    text: 'I\'ll add a progressive rollout with automated rollback. The deploy will use a canary strategy — 10% traffic first, then 50%, then full. If error rates exceed the threshold or health probes fail within 90 seconds, it auto-reverts to the previous stable revision. This also satisfies DORA Article 9 for operational resilience.',
-    timestamp: '01:20',
-    startMs: 80000,
-    endMs: 102000,
-  },
-  {
-    id: 'msg-7',
-    role: 'USER',
-    text: 'That sounds great. How long will it take to have a working draft I can review?',
-    timestamp: '01:44',
-    startMs: 104000,
-    endMs: 112000,
-  },
-  {
-    id: 'msg-8',
-    role: 'ASSISTANT',
-    text: 'I\'m generating the pipeline configuration now. You\'ll have the GitHub Actions workflow, the Kubernetes manifests with canary config, and the compliance evidence mapping ready for review in your OpenCTO dashboard. I\'ll flag anything that needs your input with an approval card.',
-    timestamp: '01:54',
-    startMs: 114000,
-    endMs: 132000,
-  },
-  {
-    id: 'msg-9',
-    role: 'USER',
-    text: 'One more thing — we need to make sure the container images are signed. Our security team just mandated Sigstore cosign for everything going to production.',
-    timestamp: '02:15',
-    startMs: 135000,
-    endMs: 148000,
-  },
-  {
-    id: 'msg-10',
-    role: 'ASSISTANT',
-    text: 'Adding cosign image signing to the pipeline now. The build step will sign each image with a keyless workflow through Fulcio, and the deployment controller will verify signatures before admitting any container. I\'ll also add a compliance check that blocks unsigned images — that covers PCI-DSS Req 6.5.3 for software supply chain integrity.',
-    timestamp: '02:30',
-    startMs: 150000,
-    endMs: 175000,
-  },
-  {
-    id: 'msg-11',
-    role: 'USER',
-    text: 'Excellent. Let me know when the draft is ready. I\'ll pull in our security lead for the review.',
-    timestamp: '02:58',
-    startMs: 178000,
-    endMs: 186000,
-  },
-  {
-    id: 'msg-12',
-    role: 'ASSISTANT',
-    text: 'Draft is ready. I\'ve created a job in your dashboard with full compliance evidence attached — 12 controls verified across SOC2, PCI-DSS, and DORA. The pipeline config is in a new branch called "ci/payment-webhook-pipeline". You and your security lead can review and approve the production deploy from the approval card.',
-    timestamp: '03:08',
-    startMs: 188000,
-    endMs: 214000,
-  },
-]
-
-const DEMO_TOTAL_DURATION_MS = 220000
-
 const DEFAULT_AUDIO_CONFIG: AudioConfig = {
-  systemInstructions: 'You are an OpenCTO AI engineering agent. Help users set up compliant CI/CD pipelines, review code, and deploy with SOC2, DORA, NIS2, and PCI-DSS compliance built in.',
+  systemInstructions: 'You are an OpenCTO AI engineering agent. Help users build, review, and deploy software.',
   voice: 'sage',
   turnDetection: true,
   threshold: 0.65,
   prefixPadding: 300,
   silenceDuration: 500,
   idleTimeout: true,
-  model: 'opencto-realtime-v1',
-  transcriptModel: 'cheri-ml-transcribe',
+  model: 'gpt-4o-realtime-preview',
+  transcriptModel: 'whisper-1',
   noiseReduction: true,
   maxTokens: 4096,
 }
@@ -146,46 +45,9 @@ function App() {
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // Audio state
-  const [audioMessages] = useState<AudioMessage[]>(DEMO_AUDIO_MESSAGES)
   const [audioConfig, setAudioConfig] = useState<AudioConfig>(DEFAULT_AUDIO_CONFIG)
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false)
-  const [audioCurrentTime, setAudioCurrentTime] = useState(0)
   const [isMicActive, setIsMicActive] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
-  const audioTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // Audio playback simulation
-  useEffect(() => {
-    if (isAudioPlaying) {
-      audioTimerRef.current = setInterval(() => {
-        setAudioCurrentTime((prev) => {
-          if (prev >= DEMO_TOTAL_DURATION_MS) {
-            setIsAudioPlaying(false)
-            return DEMO_TOTAL_DURATION_MS
-          }
-          return prev + 100
-        })
-      }, 100)
-    } else if (audioTimerRef.current) {
-      clearInterval(audioTimerRef.current)
-      audioTimerRef.current = null
-    }
-    return () => {
-      if (audioTimerRef.current) clearInterval(audioTimerRef.current)
-    }
-  }, [isAudioPlaying])
-
-  const handleAudioTogglePlay = useCallback(() => {
-    if (audioCurrentTime >= DEMO_TOTAL_DURATION_MS) {
-      setAudioCurrentTime(0)
-    }
-    setIsAudioPlaying((prev) => !prev)
-  }, [audioCurrentTime])
-
-  const handleAudioSeek = useCallback((ms: number) => {
-    setAudioCurrentTime(ms)
-  }, [])
 
   const handleAudioGenerate = useCallback(() => {
     setIsGenerating((prev) => !prev)
@@ -196,8 +58,6 @@ function App() {
   }, [])
 
   const handleAudioStop = useCallback(() => {
-    setIsAudioPlaying(false)
-    setAudioCurrentTime(0)
     setIsGenerating(false)
     setIsMicActive(false)
   }, [])
@@ -334,7 +194,6 @@ function App() {
                 onFilterChange={setActiveFilter}
                 onSelectJob={setSelectedJobId}
               />
-
               <section className="details-column">
                 <header className="panel selected-job-header">
                   <h2>{selectedJob?.title ?? 'Select a job'}</h2>
@@ -352,12 +211,12 @@ function App() {
 
           {view === 'launchpad' && (
             <AudioRealtimeView
-              messages={audioMessages}
-              isPlaying={isAudioPlaying}
-              currentTimeMs={audioCurrentTime}
-              totalDurationMs={DEMO_TOTAL_DURATION_MS}
-              onTogglePlay={handleAudioTogglePlay}
-              onSeek={handleAudioSeek}
+              messages={[]}
+              isPlaying={false}
+              currentTimeMs={0}
+              totalDurationMs={0}
+              onTogglePlay={() => {}}
+              onSeek={() => {}}
               onGenerate={handleAudioGenerate}
               onMicToggle={handleAudioMicToggle}
               onStop={handleAudioStop}
