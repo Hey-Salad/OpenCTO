@@ -1,132 +1,86 @@
-# 🤖 CTO Agent Architecture
+# AGENTS.md
 
-**Multi-Agent Autonomous Development System**
+This file defines how all coding agents (Codex, Claude, local bots) must work in this repository.
 
----
+## Scope
+- Applies to the full `CTO-AI` repository.
+- Primary product surface: `opencto/opencto-dashboard`.
+- Secondary surface: `opencto/opencto-api-worker`.
 
-## 🎯 Agent Roles
+## Non-Negotiables
+- Never commit secrets, API keys, tokens, or credentials.
+- Never push directly to `main`.
+- Never force-push shared branches.
+- Never rewrite other agents' work without explicit intent in the PR.
+- Never mix unrelated changes in one PR.
 
-### 1. Cheri-ML (Code Generation Agent)
-**Type**: ML Inference  
-**Model**: HeySalad/Cheri-ML-1.3B  
-**Status**: ✅ Running on GPU
+## Branch and PR Workflow
+1. Sync before starting:
+   - `git fetch --all --prune`
+   - `git checkout main && git pull`
+2. Create one feature branch per task:
+   - `feat/<scope>-<short-name>` or `fix/<scope>-<short-name>` or `docs/<scope>-<short-name>`
+3. Keep changes small and scoped to one objective.
+4. Run validation before commit.
+5. Open PR with a factual summary and test evidence.
+6. Merge only after checks pass and review is complete.
 
-**Capabilities**:
-- Code completion
-- Function implementation
-- Code explanation
-- Refactoring suggestions
+## Required Validation
+For dashboard changes (`opencto/opencto-dashboard`):
+- `npm run lint`
+- `npm run build`
+- `npm run test`
 
-**API**:
-- REST: http://localhost:8000
-- MCP: http://localhost:5000/sse
-- Public: https://cheri-ml.heysalad.app
+For API worker changes (`opencto/opencto-api-worker`):
+- `npm run lint`
+- `npm run build`
+- `npm test`
 
-**Use Cases**:
-- Quick code snippets
-- Python/TypeScript generation
-- Inline completions
+If a step fails, fix it before opening PR.
 
----
+## Commit Rules
+- Use conventional commit style:
+  - `feat: ...`
+  - `fix: ...`
+  - `docs: ...`
+  - `chore: ...`
+- Keep message factual and specific.
+- One logical change per commit where practical.
 
-### 2. Sheri-ML (Advanced Coding Agent)
-**Type**: CLI Assistant  
-**Model**: Google Gemini 2.5 Pro  
-**Status**: ✅ Built (Rust binary)
+## Coordination Across Multiple Agents
+- Assign each terminal one branch and one scope.
+- Do not let two agents edit the same files concurrently.
+- If overlap is unavoidable, stop and re-plan before coding.
+- Prefer sequential handoffs over parallel edits for shared files like:
+  - `opencto/opencto-dashboard/src/App.tsx`
+  - global styles/routes/config files
 
-**Capabilities**:
-- Complex code generation
-- Architecture planning
-- Code review
-- Debugging assistance
+## Definition of Done
+A task is done only when:
+- Code is implemented.
+- Tests/lint/build pass for affected surface.
+- PR is open with:
+  - changed files list
+  - validation output summary
+  - known risks/next steps
 
-**Binary**: `sheri-ml/codex-rs/target/release/codex`
+## Merge Policy
+- Prefer squash merge for feature branches.
+- Delete merged branches.
+- After merge: `git checkout main && git pull` before next task.
 
-**Use Cases**:
-- Full application scaffolding
-- Architectural decisions
-- Complex refactoring
+## Documentation Discipline
+- Update docs for behavior changes.
+- Keep docs factual and verifiable.
+- No placeholder claims about features not implemented.
 
----
+## Security and Compliance
+- Use `.env.example` only for placeholders.
+- Do not log sensitive values in UI, console, or error payloads.
+- Redact secrets in screenshots, test fixtures, and docs.
 
-### 3. OpenCTO Agent Swarm
-**Type**: Multi-Agent System  
-**Communication**: MQTT pub/sub  
-**Status**: ⚙️ Phase 1 Complete
-
-#### Agent Types:
-
-##### Deployment Agent
-- Monitors deployments
-- Handles rollbacks
-- Manages environments
-- Cloudflare Workers integration
-
-##### Testing Agent
-- Runs test suites
-- Generates test cases
-- Reports coverage
-- CI/CD integration
-
-##### Security Agent
-- Scans for vulnerabilities
-- Checks dependencies
-- Audit logs
-- Secret management
-
-##### Code Review Agent
-- Reviews pull requests
-- Suggests improvements
-- Enforces style guides
-- Quality metrics
-
----
-
-## 🔗 Agent Communication
-
-### MQTT Topics
-```
-cto/agents/+/status          # Agent health
-cto/tasks/pending             # Task queue
-cto/tasks/+/assigned          # Task assignment
-cto/tasks/+/completed         # Task completion
-cto/logs/+                    # Agent logs
-```
-
-### Message Format
-```json
-{
-  "agent_id": "deployment-01",
-  "task_id": "deploy-prod-123",
-  "status": "in_progress",
-  "progress": 75,
-  "logs": ["Building...", "Deploying..."]
-}
-```
-
----
-
-## 📊 Agent Registry
-
-**Location**: HeySalad MCP Gateway  
-**Tool**: `people_tool(register_agent, {...})`
-
-### Registered Agents
-| Agent ID | Role | Model | Status |
-|----------|------|-------|--------|
-| cheri-ml-01 | Code Gen | Cheri-ML-1.3B | ✅ Active |
-| sheri-ml-01 | Advanced Coding | Gemini 2.5 Pro | ✅ Ready |
-| deploy-01 | Deployment | GPT-4o | ⚙️ Dev |
-| test-01 | Testing | GPT-4o | ⚙️ Dev |
-| security-01 | Security | GPT-4o | ⚙️ Dev |
-
----
-
-## 🚀 Spawning Agents
-
-### Via HeySalad MCP
-```python
-# Register new agent
-people_tool(register_agent, {
-    agent_id: custom-agent-01,
-    role: Data
+## Escalation Rules
+Stop and ask for direction when:
+- Branch is dirty with unknown changes.
+- You detect potential secret exposure.
+- Requested change conflicts with existing architecture or active PRs.
