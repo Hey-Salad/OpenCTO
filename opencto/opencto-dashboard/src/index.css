@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Grandstander:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
 
 :root {
   --brand-primary: #ed4c4c;
@@ -31,7 +31,7 @@ body {
 
 h1, h2, h3, h4 {
   margin: 0;
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
 }
 
 button { font: inherit; }
@@ -786,7 +786,7 @@ button:disabled {
 }
 
 .audio-session-label {
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
   font-weight: 700;
   font-size: 15px;
   color: var(--text-body);
@@ -829,7 +829,7 @@ button:disabled {
 }
 
 .audio-empty-title {
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
   font-weight: 700;
   font-size: 18px;
   color: var(--text-body);
@@ -1054,6 +1054,37 @@ button:disabled {
 
 .audio-region-assistant {
   background: rgba(237, 76, 76, 0.5);
+}
+
+/* Start session button */
+.audio-start-session-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto;
+  padding: 10px 28px;
+  background: var(--brand-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Figtree', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.audio-start-session-btn:hover {
+  background: #d43b3b;
+}
+
+/* Live controls (shown after session starts) */
+.audio-live-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
 }
 
 /* Action buttons */

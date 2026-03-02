@@ -17,7 +17,7 @@ export const colors = {
 
 export const typography = {
   fonts: {
-    display: "'Grandstander', cursive",
+    display: "'Figtree', sans-serif",
     body: "'Figtree', sans-serif",
     code: "'JetBrains Mono', 'Courier New', monospace",
   },

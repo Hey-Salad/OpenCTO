@@ -198,11 +198,17 @@ describe('Webhook Handling', () => {
 function createMockEnv(): Env {
   return {
     DB: {} as D1Database, // Mock D1 database
+    OPENAI_API_KEY: 'sk-test-mock',
     STRIPE_SECRET_KEY: 'sk_test_mock',
     STRIPE_WEBHOOK_SECRET: 'whsec_test_mock',
     JWT_SECRET: 'jwt_secret_mock',
     WEBAUTHN_RP_ID: 'opencto.works',
     WEBAUTHN_RP_NAME: 'OpenCTO',
     ENVIRONMENT: 'test',
+    VERCEL_TOKEN: 'vercel-test-mock',
+    CF_API_TOKEN: 'cf-test-mock',
+    CF_ACCOUNT_ID: 'cf-account-mock',
+    GITHUB_TOKEN: 'github-test-mock',
+    OPENCTO_AGENT_BASE_URL: 'https://cloud-services-api.opencto.works',
   }
 }

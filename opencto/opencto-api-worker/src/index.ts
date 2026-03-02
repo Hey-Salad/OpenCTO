@@ -122,6 +122,11 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await compliance.exportEvidencePackage(body.jobId, ctx)
   }
 
+  // Realtime token endpoint — mints a short-lived ephemeral key for the browser WebSocket
+  if (path === '/api/v1/realtime/token' && method === 'POST') {
+    return await mintRealtimeToken(request, ctx)
+  }
+
   // Billing endpoints
   if (path === '/api/v1/billing/checkout/session' && method === 'POST') {
     const body = await request.json() as { planCode: string; interval: string }
@@ -140,6 +145,244 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await billing.getInvoices(ctx)
   }
 
+  // CTO agent proxy routes — forward to external APIs using server-side tokens
+
+  if (path === '/api/v1/cto/vercel/projects' && method === 'GET') {
+    return await proxyVercel('/v9/projects?limit=20', ctx.env)
+  }
+
+  if (path.match(/^\/api\/v1\/cto\/vercel\/projects\/([^/]+)\/deployments$/) && method === 'GET') {
+    const projectId = path.split('/')[6] ?? ''
+    return await proxyVercel(`/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=10`, ctx.env)
+  }
+
+  if (path.match(/^\/api\/v1\/cto\/vercel\/deployments\/([^/]+)$/) && method === 'GET') {
+    const deploymentId = path.split('/')[6] ?? ''
+    return await proxyVercel(`/v13/deployments/${encodeURIComponent(deploymentId)}`, ctx.env)
+  }
+
+  if (path === '/api/v1/cto/cloudflare/workers' && method === 'GET') {
+    return await proxyCF(`/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/workers/scripts`, ctx.env)
+  }
+
+  if (path === '/api/v1/cto/cloudflare/pages' && method === 'GET') {
+    return await proxyCF(`/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/pages/projects`, ctx.env)
+  }
+
+  if (path.match(/^\/api\/v1\/cto\/cloudflare\/workers\/([^/]+)\/usage$/) && method === 'GET') {
+    const scriptName = path.split('/')[6] ?? ''
+    const now = new Date()
+    const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    return await proxyCF(
+      `/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/workers/scripts/${encodeURIComponent(scriptName)}/analytics/aggregate?since=${since}`,
+      ctx.env,
+    )
+  }
+
+  if (path === '/api/v1/cto/openai/models' && method === 'GET') {
+    return await proxyOpenAI('/v1/models', ctx.env)
+  }
+
+  if (path === '/api/v1/cto/openai/usage' && method === 'GET') {
+    const url = new URL(request.url)
+    const start = url.searchParams.get('start') ?? ''
+    const end = url.searchParams.get('end') ?? ''
+    return await proxyOpenAI(`/v1/usage?start_time=${start}&end_time=${end}`, ctx.env)
+  }
+
+  if (path === '/api/v1/cto/github/chat/completions' && method === 'POST') {
+    return await proxyGitHubChatCompletions(request, ctx.env)
+  }
+
+  if (path === '/api/v1/agent/respond' && method === 'POST') {
+    return await proxySupervisorResponse(request, ctx.env)
+  }
+
   // 404 Not Found
   return jsonResponse({ error: 'Not found', code: 'NOT_FOUND' }, 404)
+}
+
+// ---------------------------------------------------------------------------
+// CTO agent proxy helpers — keep external API tokens server-side
+// ---------------------------------------------------------------------------
+
+async function proxyVercel(apiPath: string, env: Env): Promise<Response> {
+  if (!env.VERCEL_TOKEN) {
+    return jsonResponse({ error: 'VERCEL_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+  const res = await fetch(`https://api.vercel.com${apiPath}`, {
+    headers: { Authorization: `Bearer ${env.VERCEL_TOKEN}` },
+  })
+  const body = await res.text()
+  return new Response(body, {
+    status: res.status,
+    headers: {
+      'Content-Type': res.headers.get('Content-Type') ?? 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+  })
+}
+
+async function proxyCF(apiPath: string, env: Env): Promise<Response> {
+  if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) {
+    return jsonResponse({ error: 'CF_API_TOKEN or CF_ACCOUNT_ID is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+  const res = await fetch(`https://api.cloudflare.com${apiPath}`, {
+    headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` },
+  })
+  const body = await res.text()
+  return new Response(body, {
+    status: res.status,
+    headers: {
+      'Content-Type': res.headers.get('Content-Type') ?? 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+  })
+}
+
+async function proxyOpenAI(apiPath: string, env: Env): Promise<Response> {
+  if (!env.OPENAI_API_KEY) {
+    return jsonResponse({ error: 'OPENAI_API_KEY is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+  const res = await fetch(`https://api.openai.com${apiPath}`, {
+    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+  })
+  const body = await res.text()
+  return new Response(body, {
+    status: res.status,
+    headers: {
+      'Content-Type': res.headers.get('Content-Type') ?? 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+  })
+}
+
+async function proxyGitHubChatCompletions(request: Request, env: Env): Promise<Response> {
+  if (!env.GITHUB_TOKEN) {
+    return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+
+  const body = await request.json().catch(() => ({})) as {
+    model?: string
+    messages?: Array<{ role: string; content: string }>
+    max_tokens?: number
+    temperature?: number
+  }
+
+  if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) {
+    return jsonResponse(
+      { error: 'model and messages are required', code: 'BAD_REQUEST' },
+      400,
+    )
+  }
+
+  const payload = {
+    model: body.model,
+    messages: body.messages,
+    max_tokens: body.max_tokens ?? 1024,
+    temperature: body.temperature ?? 0.2,
+  }
+
+  const res = await fetch('https://models.github.ai/inference/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const raw = await res.text()
+  return new Response(raw, {
+    status: res.status,
+    headers: {
+      'Content-Type': res.headers.get('Content-Type') ?? 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+  })
+}
+
+async function proxySupervisorResponse(request: Request, env: Env): Promise<Response> {
+  if (!env.OPENCTO_AGENT_BASE_URL) {
+    return jsonResponse({ error: 'OPENCTO_AGENT_BASE_URL is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+
+  const body = await request.text()
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 20_000)
+
+  try {
+    const res = await fetch(`${env.OPENCTO_AGENT_BASE_URL}/v1/respond`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body,
+      signal: controller.signal,
+    })
+
+    const raw = await res.text()
+    return new Response(raw, {
+      status: res.status,
+      headers: {
+        'Content-Type': res.headers.get('Content-Type') ?? 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    })
+  } catch (error) {
+    return jsonResponse(
+      { error: 'Supervisor endpoint unavailable', code: 'UPSTREAM_ERROR', detail: String(error) },
+      502,
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function mintRealtimeToken(_request: Request, ctx: RequestContext): Promise<Response> {
+  if (!ctx.env.OPENAI_API_KEY) {
+    return jsonResponse({ error: 'OPENAI_API_KEY secret is not configured on this Worker', code: 'CONFIG_ERROR' }, 500)
+  }
+
+  let rawBody: string
+  try {
+    // Realtime GA requires client secrets minted from this endpoint.
+    const body = await _request.json().catch(() => ({})) as { model?: string }
+    const requestedModel = body.model ?? 'gpt-realtime-1.5'
+    const res = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${ctx.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        expires_after: { anchor: 'created_at', seconds: 600 },
+        session: {
+          type: 'realtime',
+          model: requestedModel,
+        },
+      }),
+    })
+    rawBody = await res.text()
+
+    if (!res.ok) {
+      return jsonResponse({ error: 'OpenAI rejected the request', code: 'OPENAI_ERROR', details: rawBody }, res.status)
+    }
+
+    const data = JSON.parse(rawBody) as {
+      value?: string
+      expires_at?: number
+      client_secret?: { value?: string; expires_at?: number }
+    }
+    const secret = data.value ?? data.client_secret?.value
+    const expiresAt = data.expires_at ?? data.client_secret?.expires_at
+
+    if (!secret) {
+      return jsonResponse({ error: 'Unexpected response shape from OpenAI', raw: data }, 502)
+    }
+
+    return jsonResponse({ clientSecret: secret, expiresAt })
+  } catch (err) {
+    return jsonResponse({ error: 'Fetch to OpenAI failed', detail: String(err) }, 502)
+  }
 }

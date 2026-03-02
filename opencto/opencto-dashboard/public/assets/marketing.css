@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Grandstander:wght@500;700;800;900&family=Figtree:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap');
 
 :root {
   --brand-red: #ed4c4c;
@@ -59,7 +59,7 @@ code {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
   font-size: 1.2rem;
   font-weight: 800;
 }
@@ -121,7 +121,7 @@ section { padding: 4.25rem 0; }
 
 .hero h1 {
   margin: 0.65rem 0 1rem;
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
   font-size: clamp(2.2rem, 5vw, 3.65rem);
   line-height: 1.06;
 }
@@ -165,7 +165,7 @@ section { padding: 4.25rem 0; }
 }
 .hero-panel h3 {
   margin: 0;
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
   font-size: 1.05rem;
   letter-spacing: 0.06em;
 }
@@ -187,7 +187,7 @@ section { padding: 4.25rem 0; }
 
 .section-subtitle {
   margin: 0.55rem 0 1.6rem;
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
   font-size: clamp(1.55rem, 3vw, 2.25rem);
 }
 
@@ -206,7 +206,7 @@ section { padding: 4.25rem 0; }
 .feature-card h4,
 .press-card strong {
   margin: 0;
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
   font-size: 1.02rem;
 }
 .feature-card p,
@@ -229,7 +229,7 @@ section { padding: 4.25rem 0; }
 }
 .blog-item h3 {
   margin: 0.3rem 0 0;
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
   font-size: 1.1rem;
 }
 .blog-item p {
@@ -257,7 +257,7 @@ section { padding: 4.25rem 0; }
 .cta-text { max-width: 65ch; }
 .cta h2 {
   margin: 0.45rem 0;
-  font-family: 'Grandstander', cursive;
+  font-family: 'Figtree', sans-serif;
 }
 .cta p {
   margin: 0;
