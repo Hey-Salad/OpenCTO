@@ -50,6 +50,20 @@ export class ConflictException extends ApiException {
   }
 }
 
+export class TooManyRequestsException extends ApiException {
+  constructor(message = 'Too many requests', details?: Record<string, unknown>) {
+    super(429, 'QUOTA_EXCEEDED', message, details)
+    this.name = 'TooManyRequestsException'
+  }
+}
+
+export class NotImplementedException extends ApiException {
+  constructor(message = 'Not implemented', details?: Record<string, unknown>) {
+    super(501, 'NOT_IMPLEMENTED', message, details)
+    this.name = 'NotImplementedException'
+  }
+}
+
 export class InternalServerException extends ApiException {
   constructor(message = 'Internal server error', details?: Record<string, unknown>) {
     super(500, 'INTERNAL_SERVER_ERROR', message, details)

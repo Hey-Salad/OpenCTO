@@ -36,6 +36,7 @@
     "wrangler": "^4.69.0"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.0.24",
     "@simplewebauthn/server": "^10.0.0",
     "stripe": "^15.5.0"
   }
