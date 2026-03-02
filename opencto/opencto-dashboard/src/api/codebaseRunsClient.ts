@@ -2,28 +2,28 @@ import { getApiBaseUrl } from '../config/apiBase'
 import { getAuthHeaders } from '../lib/authToken'
 import { normalizeApiError, safeFetchJson } from '../lib/safeError'
 import type {
-  CodebaseRunCreateResponse,
-  CodebaseRunEventsResponse,
-  CodebaseRunResponse,
+  CreateCodebaseRunResponse,
+  GetCodebaseRunEventsResponse,
+  GetCodebaseRunResponse,
 } from '../types/codebaseRuns'
 
-const API_BASE = `${getApiBaseUrl()}/api/v1`
+const API_BASE = `${getApiBaseUrl()}/api/v1/codebase/runs`
 
-export interface CreateCodebaseRunInput {
+export async function createCodebaseRun(payload: {
   repoUrl: string
+  repoFullName?: string
+  baseBranch?: string
+  targetBranch?: string
   commands: string[]
-  executionMode?: 'stub' | 'container'
   timeoutSeconds?: number
-}
-
-export async function createCodebaseRun(input: CreateCodebaseRunInput): Promise<CodebaseRunCreateResponse> {
+}): Promise<CreateCodebaseRunResponse> {
   try {
-    return await safeFetchJson<CodebaseRunCreateResponse>(
-      `${API_BASE}/codebase/runs`,
+    return await safeFetchJson<CreateCodebaseRunResponse>(
+      API_BASE,
       {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(input),
+        body: JSON.stringify(payload),
       },
       'Failed to create codebase run',
     )
@@ -32,10 +32,10 @@ export async function createCodebaseRun(input: CreateCodebaseRunInput): Promise<
   }
 }
 
-export async function getCodebaseRun(runId: string): Promise<CodebaseRunResponse> {
+export async function getCodebaseRun(runId: string): Promise<GetCodebaseRunResponse> {
   try {
-    return await safeFetchJson<CodebaseRunResponse>(
-      `${API_BASE}/codebase/runs/${encodeURIComponent(runId)}`,
+    return await safeFetchJson<GetCodebaseRunResponse>(
+      `${API_BASE}/${encodeURIComponent(runId)}`,
       { headers: getAuthHeaders() },
       'Failed to load codebase run',
     )
@@ -44,26 +44,29 @@ export async function getCodebaseRun(runId: string): Promise<CodebaseRunResponse
   }
 }
 
-export async function getCodebaseRunEvents(runId: string, afterSeq = 0, limit = 100): Promise<CodebaseRunEventsResponse> {
-  const url = new URL(`${API_BASE}/codebase/runs/${encodeURIComponent(runId)}/events`)
-  url.searchParams.set('afterSeq', String(afterSeq))
-  url.searchParams.set('limit', String(limit))
+export async function getCodebaseRunEvents(
+  runId: string,
+  options?: { afterSeq?: number; limit?: number },
+): Promise<GetCodebaseRunEventsResponse> {
+  const url = new URL(`${API_BASE}/${encodeURIComponent(runId)}/events`)
+  if (typeof options?.afterSeq === 'number') url.searchParams.set('afterSeq', String(options.afterSeq))
+  if (typeof options?.limit === 'number') url.searchParams.set('limit', String(options.limit))
 
   try {
-    return await safeFetchJson<CodebaseRunEventsResponse>(
+    return await safeFetchJson<GetCodebaseRunEventsResponse>(
       url.toString(),
       { headers: getAuthHeaders() },
-      'Failed to load codebase run events',
+      'Failed to load run events',
     )
   } catch (error) {
-    throw normalizeApiError(error, 'Failed to load codebase run events')
+    throw normalizeApiError(error, 'Failed to load run events')
   }
 }
 
-export async function cancelCodebaseRun(runId: string): Promise<CodebaseRunResponse> {
+export async function cancelCodebaseRun(runId: string): Promise<GetCodebaseRunResponse> {
   try {
-    return await safeFetchJson<CodebaseRunResponse>(
-      `${API_BASE}/codebase/runs/${encodeURIComponent(runId)}/cancel`,
+    return await safeFetchJson<GetCodebaseRunResponse>(
+      `${API_BASE}/${encodeURIComponent(runId)}/cancel`,
       {
         method: 'POST',
         headers: getAuthHeaders(),

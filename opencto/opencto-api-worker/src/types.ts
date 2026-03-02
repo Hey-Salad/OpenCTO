@@ -19,6 +19,13 @@ export interface Env {
   API_BASE_URL: string
   OPENCTO_AGENT_BASE_URL: string
   APP_BASE_URL: string
+  CODEBASE_EXECUTOR?: DurableObjectNamespace
+  CODEBASE_EXECUTION_MODE?: 'stub' | 'container'
+  CODEBASE_MAX_CONCURRENT_RUNS?: string
+  CODEBASE_DAILY_RUN_LIMIT?: string
+  CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS?: string
+  CODEBASE_RUN_MIN_TIMEOUT_SECONDS?: string
+  CODEBASE_RUN_MAX_TIMEOUT_SECONDS?: string
 }
 
 export type UserRole = 'owner' | 'cto' | 'developer' | 'viewer' | 'auditor'
@@ -179,4 +186,48 @@ export interface ChatSessionRecord {
   messages: ChatMessageRecord[]
   createdAt: string
   updatedAt: string
+}
+
+export type CodebaseRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
+export type CodebaseRunEventLevel = 'system' | 'info' | 'warn' | 'error'
+
+export interface CodebaseRun {
+  id: string
+  userId: string
+  repoUrl: string
+  repoFullName: string | null
+  baseBranch: string
+  targetBranch: string
+  status: CodebaseRunStatus
+  requestedCommands: string[]
+  commandAllowlistVersion: string
+  timeoutSeconds: number
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
+  canceledAt: string | null
+  errorMessage: string | null
+}
+
+export interface CodebaseRunEvent {
+  id: string
+  runId: string
+  seq: number
+  level: CodebaseRunEventLevel
+  eventType: string
+  message: string
+  payload: Record<string, unknown> | null
+  createdAt: string
+}
+
+export interface CodebaseRunArtifact {
+  id: string
+  runId: string
+  kind: string
+  path: string
+  sizeBytes: number | null
+  sha256: string | null
+  url: string | null
+  expiresAt: string | null
+  createdAt: string
 }

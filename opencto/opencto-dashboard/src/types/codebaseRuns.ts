@@ -1,46 +1,51 @@
-export type CodebaseExecutionMode = 'stub' | 'container'
-
-export type CodebaseRunStatus =
-  | 'queued'
-  | 'running'
-  | 'succeeded'
-  | 'failed'
-  | 'cancelled'
-  | 'timed_out'
+export type CodebaseRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
+export type CodebaseRunEventLevel = 'system' | 'info' | 'warn' | 'error'
 
 export interface CodebaseRun {
   id: string
-  userId?: string
+  userId: string
   repoUrl: string
-  requestedCommands: string[]
+  repoFullName: string | null
+  baseBranch: string
+  targetBranch: string
   status: CodebaseRunStatus
-  executionMode: CodebaseExecutionMode
-  timeoutSeconds?: number
+  requestedCommands: string[]
+  commandAllowlistVersion: string
+  timeoutSeconds: number
   createdAt: string
-  updatedAt: string
-  startedAt?: string | null
-  completedAt?: string | null
-  errorMessage?: string | null
+  startedAt: string | null
+  completedAt: string | null
+  canceledAt: string | null
+  errorMessage: string | null
 }
 
 export interface CodebaseRunEvent {
+  id: string
   runId: string
   seq: number
-  type: string
+  level: CodebaseRunEventLevel
+  eventType: string
   message: string
-  timestamp: string
-  metadata?: Record<string, unknown> | null
+  payload: Record<string, unknown> | null
+  createdAt: string
 }
 
-export interface CodebaseRunCreateResponse {
+export interface CreateCodebaseRunResponse {
   run: CodebaseRun
+  allowlist: string[]
 }
 
-export interface CodebaseRunResponse {
+export interface GetCodebaseRunResponse {
   run: CodebaseRun
+  metrics: {
+    eventCount: number
+    artifactCount: number
+  }
 }
 
-export interface CodebaseRunEventsResponse {
+export interface GetCodebaseRunEventsResponse {
+  runId: string
   events: CodebaseRunEvent[]
-  nextAfterSeq: number
+  lastSeq: number
+  pollAfterMs: number
 }
