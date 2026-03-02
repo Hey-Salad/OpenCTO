@@ -1,18 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { Job, Step } from './types/opencto'
 import type { AuthSession, OAuthProvider } from './types/auth'
-import { JobsListScreen, type JobFilter } from './components/jobs/JobsListScreen'
-import { JobDetailStream } from './components/stream/JobDetailStream'
-import { AudioRealtimeView } from './components/audio/AudioRealtimeView'
+import { AudioRealtimeView, type AudioMessage } from './components/audio/AudioRealtimeView'
 import { AudioConfigPanel, type AudioConfig } from './components/audio/AudioConfigPanel'
-import { MockOpenCtoAdapter } from './mocks/openctoMockAdapter'
 import { AuthMockAdapter } from './mocks/authMockAdapter'
 import { normalizeApiError } from './lib/safeError'
 import { RouteGuard } from './components/auth/RouteGuard'
 import { AuthLoginPanel } from './components/auth/AuthLoginPanel'
 import './index.css'
-
-type AppView = 'jobs' | 'launchpad'
 
 const DEFAULT_AUDIO_CONFIG: AudioConfig = {
   systemInstructions: 'You are an OpenCTO AI engineering agent. Help users build, review, and deploy software.',
@@ -22,22 +16,15 @@ const DEFAULT_AUDIO_CONFIG: AudioConfig = {
   prefixPadding: 300,
   silenceDuration: 500,
   idleTimeout: true,
-  model: 'gpt-4o-realtime-preview',
-  transcriptModel: 'whisper-1',
+  voiceModel: 'gpt-realtime-1.5',
+  reasoningModel: 'github/openai/gpt-5-mini',
+  transcriptModel: 'gpt-4o-mini-transcribe',
   noiseReduction: true,
   maxTokens: 4096,
 }
 
 function App() {
-  const jobsApi = useMemo(() => new MockOpenCtoAdapter(), [])
   const authApi = useMemo(() => new AuthMockAdapter(), [])
-
-  const [view, setView] = useState<AppView>('launchpad')
-
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [steps, setSteps] = useState<Step[]>([])
-  const [activeFilter, setActiveFilter] = useState<JobFilter>('ALL')
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
   const [session, setSession] = useState<AuthSession | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -46,20 +33,10 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const [audioConfig, setAudioConfig] = useState<AudioConfig>(DEFAULT_AUDIO_CONFIG)
-  const [isMicActive, setIsMicActive] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [audioMessages, setAudioMessages] = useState<AudioMessage[]>([])
 
-  const handleAudioGenerate = useCallback(() => {
-    setIsGenerating((prev) => !prev)
-  }, [])
-
-  const handleAudioMicToggle = useCallback(() => {
-    setIsMicActive((prev) => !prev)
-  }, [])
-
-  const handleAudioStop = useCallback(() => {
-    setIsGenerating(false)
-    setIsMicActive(false)
+  const handleAddMessage = useCallback((msg: AudioMessage) => {
+    setAudioMessages((prev) => [...prev, msg])
   }, [])
 
   useEffect(() => {
@@ -71,34 +48,6 @@ function App() {
       })
       .finally(() => setAuthLoading(false))
   }, [authApi])
-
-  useEffect(() => {
-    jobsApi.listJobs().then((items) => {
-      setJobs(items)
-      if (items.length > 0) {
-        setSelectedJobId(items[0].id)
-      }
-    })
-  }, [jobsApi])
-
-  useEffect(() => {
-    if (selectedJobId) {
-      jobsApi.listSteps(selectedJobId).then(setSteps)
-    }
-  }, [jobsApi, selectedJobId])
-
-  const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null
-  const visibleSteps = selectedJobId ? steps : []
-
-  const handleApprove = async (stepId: string) => {
-    const updated = await jobsApi.approveStep(stepId)
-    setSteps((current) => current.map((step) => (step.id === updated.id ? updated : step)))
-  }
-
-  const handleDeny = async (stepId: string) => {
-    const updated = await jobsApi.denyStep(stepId)
-    setSteps((current) => current.map((step) => (step.id === updated.id ? updated : step)))
-  }
 
   const handleProviderLogin = async (provider: OAuthProvider) => {
     try {
@@ -150,15 +99,11 @@ function App() {
             </svg>
             <h1>OpenCTO</h1>
           </div>
-          <div className="top-bar-meta">
-            <button type="button" className="primary-button">
-              New Job
-            </button>
-          </div>
+          <div className="top-bar-meta" />
         </header>
 
         <aside className="left-sidebar panel" aria-label="Main navigation">
-          <button type="button" className={`nav-item ${view === 'launchpad' ? 'nav-item-active' : ''}`} onClick={() => setView('launchpad')}>
+          <button type="button" className="nav-item nav-item-active">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 1.5C8 1.5 11.5 3.5 11.5 8C11.5 10.5 10 12.5 8 13.5C6 12.5 4.5 10.5 4.5 8C4.5 3.5 8 1.5 8 1.5Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round"/>
               <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
@@ -167,14 +112,6 @@ function App() {
               <path d="M11 14.5L10 12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
             </svg>
             Launchpad
-          </button>
-          <button type="button" className={`nav-item ${view === 'jobs' ? 'nav-item-active' : ''}`} onClick={() => setView('jobs')}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="1.5" y="3.5" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.25"/>
-              <path d="M4.5 7H11.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
-              <path d="M4.5 10H9" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
-            </svg>
-            Jobs
           </button>
         </aside>
 
@@ -185,45 +122,14 @@ function App() {
             </section>
           )}
 
-          {view === 'jobs' && (
-            <>
-              <JobsListScreen
-                jobs={jobs}
-                activeFilter={activeFilter}
-                activeJobId={selectedJobId}
-                onFilterChange={setActiveFilter}
-                onSelectJob={setSelectedJobId}
-              />
-              <section className="details-column">
-                <header className="panel selected-job-header">
-                  <h2>{selectedJob?.title ?? 'Select a job'}</h2>
-                  <p className="muted">{selectedJob?.metadata ?? 'No active session selected.'}</p>
-                </header>
-                <JobDetailStream
-                  steps={visibleSteps}
-                  onApprove={handleApprove}
-                  onDeny={handleDeny}
-                  approvalDisabledReason={null}
-                />
-              </section>
-            </>
-          )}
-
-          {view === 'launchpad' && (
-            <AudioRealtimeView
-              messages={[]}
-              onGenerate={handleAudioGenerate}
-              onMicToggle={handleAudioMicToggle}
-              onStop={handleAudioStop}
-              isMicActive={isMicActive}
-              isGenerating={isGenerating}
-            />
-          )}
+          <AudioRealtimeView
+            messages={audioMessages}
+            onAddMessage={handleAddMessage}
+            audioConfig={audioConfig}
+          />
         </section>
 
-        {view === 'launchpad' && (
-          <AudioConfigPanel config={audioConfig} onConfigChange={setAudioConfig} />
-        )}
+        <AudioConfigPanel config={audioConfig} onConfigChange={setAudioConfig} />
       </main>
     </RouteGuard>
   )

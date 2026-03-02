@@ -7,17 +7,25 @@ workers_dev = true
 name = "opencto-api"
 route = { pattern = "api.opencto.works/*", zone_name = "opencto.works" }
 
-[[d1_databases]]
-binding = "DB"
-database_name = "opencto-production"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+# D1 database — uncomment and set database_id when ready
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "opencto-production"
+# database_id = "YOUR_D1_DATABASE_ID"
 
 [vars]
 ENVIRONMENT = "production"
+OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works"
 
 # Secrets (set via wrangler secret put):
+# - OPENAI_API_KEY
 # - STRIPE_SECRET_KEY
 # - STRIPE_WEBHOOK_SECRET
 # - JWT_SECRET
 # - WEBAUTHN_RP_ID
 # - WEBAUTHN_RP_NAME
+# CTO agent external API keys:
+# - VERCEL_TOKEN           (Vercel personal/team access token)
+# - CF_API_TOKEN           (Cloudflare API token with Workers + Pages read permissions)
+# - CF_ACCOUNT_ID          (Cloudflare account ID — visible in dashboard URL)
+# - GITHUB_TOKEN           (GitHub Models PAT, if using GitHub inference proxy)

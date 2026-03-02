@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isGeminiLiveModel } from '../../lib/realtime/shared'
 
 export interface AudioConfig {
   systemInstructions: string
@@ -8,7 +9,8 @@ export interface AudioConfig {
   prefixPadding: number
   silenceDuration: number
   idleTimeout: boolean
-  model: string
+  voiceModel: string
+  reasoningModel: string
   transcriptModel: string
   noiseReduction: boolean
   maxTokens: number
@@ -30,84 +32,74 @@ const VOICE_OPTIONS = [
   { value: 'verse', label: 'Verse' },
 ]
 
-const MODEL_GROUPS = [
+const VOICE_MODEL_GROUPS = [
   {
-    label: 'OpenAI',
+    label: 'Voice (Realtime) · OpenAI',
     models: [
       { value: 'gpt-4o-realtime-preview', label: 'GPT-4o Realtime' },
       { value: 'gpt-4o-mini-realtime-preview', label: 'GPT-4o Mini Realtime' },
-      { value: 'gpt-4o', label: 'GPT-4o' },
-      { value: 'gpt-4.1', label: 'GPT-4.1' },
-      { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-      { value: 'o3', label: 'o3' },
-      { value: 'o4-mini', label: 'o4 Mini' },
+      { value: 'gpt-realtime-1.5', label: 'GPT Realtime 1.5' },
     ],
   },
   {
-    label: 'Anthropic',
+    label: 'Voice (Realtime) · Google',
     models: [
-      { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-      { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
-    ],
-  },
-  {
-    label: 'Google',
-    models: [
-      { value: 'gemini-2.5-pro-preview', label: 'Gemini 2.5 Pro Preview' },
-      { value: 'gemini-2.5-flash-preview', label: 'Gemini 2.5 Flash Preview' },
-      { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash Exp' },
+      { value: 'gemini-2.5-flash-native-audio-preview-12-2025', label: 'Gemini 2.5 Flash Native Audio' },
+      { value: 'gemini-2.0-flash-live-001', label: 'Gemini 2.0 Flash Live' },
       { value: 'gemini-live-2.0-flash-exp', label: 'Gemini Live 2.0 Flash' },
-    ],
-  },
-  {
-    label: 'Qwen',
-    models: [
-      { value: 'qwen2.5-omni-7b', label: 'Qwen2.5 Omni 7B' },
-      { value: 'qwen2.5-72b-instruct', label: 'Qwen2.5 72B Instruct' },
-      { value: 'qwen2-audio-7b-instruct', label: 'Qwen2 Audio 7B' },
-      { value: 'qwq-32b', label: 'QwQ 32B' },
-    ],
-  },
-  {
-    label: 'Meta',
-    models: [
-      { value: 'meta-llama/llama-4-scout', label: 'Llama 4 Scout' },
-      { value: 'meta-llama/llama-4-maverick', label: 'Llama 4 Maverick' },
-      { value: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
-    ],
-  },
-  {
-    label: 'Mistral',
-    models: [
-      { value: 'mistral-large-latest', label: 'Mistral Large' },
-      { value: 'mistral-small-latest', label: 'Mistral Small' },
-      { value: 'codestral-latest', label: 'Codestral' },
-    ],
-  },
-  {
-    label: 'DeepSeek',
-    models: [
-      { value: 'deepseek-chat', label: 'DeepSeek V3' },
-      { value: 'deepseek-reasoner', label: 'DeepSeek R1' },
-    ],
-  },
-  {
-    label: 'HeySalad',
-    models: [
-      { value: 'opencto-realtime-v1', label: 'OpenCTO Realtime v1' },
-      { value: 'cheri-ml-1.3b-rt', label: 'Cheri ML 1.3B RT' },
     ],
   },
 ]
 
-const TRANSCRIPT_MODEL_OPTIONS = [
-  { value: 'whisper-1', label: 'Whisper 1' },
-  { value: 'whisper-large-v3', label: 'Whisper Large v3' },
-  { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe' },
-  { value: 'gpt-4o-mini-transcribe', label: 'GPT-4o Mini Transcribe' },
-  { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash' },
-  { value: 'cheri-ml-transcribe', label: 'Cheri ML Transcribe' },
+const REASONING_MODEL_GROUPS = [
+  {
+    label: 'Reasoning Models · GitHub Models',
+    models: [
+      { value: 'github/ai21-labs/ai21-jamba-1.5-large', label: 'AI21 Jamba 1.5 Large' },
+      { value: 'github/microsoft/phi-4-reasoning', label: 'Phi-4-reasoning' },
+      { value: 'github/microsoft/phi-4-multimodal-instruct', label: 'Phi-4-multimodal-instruct' },
+      { value: 'github/microsoft/phi-4-mini-reasoning', label: 'Phi-4-mini-reasoning' },
+      { value: 'github/microsoft/phi-4-mini-instruct', label: 'Phi-4-mini-instruct' },
+      { value: 'github/microsoft/phi-4', label: 'Phi-4' },
+      { value: 'github/microsoft/mai-ds-r1', label: 'MAI-DS-R1' },
+      { value: 'github/openai/gpt-4.1', label: 'GPT-4.1' },
+      { value: 'github/openai/gpt-4.1-mini', label: 'GPT-4.1-mini' },
+      { value: 'github/openai/gpt-4.1-nano', label: 'GPT-4.1-nano' },
+      { value: 'github/openai/gpt-4o', label: 'GPT-4o' },
+      { value: 'github/openai/gpt-4o-mini', label: 'GPT-4o mini' },
+      { value: 'github/openai/gpt-5-preview', label: 'GPT-5 (preview)' },
+      { value: 'github/openai/gpt-5-mini', label: 'GPT-5-mini' },
+      { value: 'github/openai/gpt-5-nano', label: 'GPT-5-nano' },
+      { value: 'github/openai/gpt-5-chat-preview', label: 'GPT-5-chat (preview)' },
+      { value: 'github/openai/o1', label: 'o1' },
+      { value: 'github/openai/o1-mini', label: 'o1-mini' },
+      { value: 'github/openai/o1-preview', label: 'o1-preview' },
+      { value: 'github/openai/o3', label: 'o3' },
+      { value: 'github/openai/o3-mini', label: 'o3-mini' },
+      { value: 'github/openai/o4-mini', label: 'o4-mini' },
+      { value: 'github/openai/text-embedding-3-small', label: 'Text Embedding 3 (small)' },
+      { value: 'github/openai/text-embedding-3-large', label: 'Text Embedding 3 (large)' },
+      { value: 'github/meta/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B 16E Instruct' },
+      { value: 'github/meta/llama-4-maverick-17b-128e-instruct-fp8', label: 'Llama 4 Maverick 17B 128E Instruct FP8' },
+      { value: 'github/meta/llama-3.3-70b-instruct', label: 'Llama-3.3-70B-Instruct' },
+      { value: 'github/meta/llama-3.2-90b-vision-instruct', label: 'Llama-3.2-90B-Vision-Instruct' },
+      { value: 'github/meta/llama-3.2-11b-vision-instruct', label: 'Llama-3.2-11B-Vision-Instruct' },
+      { value: 'github/meta/meta-llama-3.1-405b-instruct', label: 'Meta-Llama-3.1-405B-Instruct' },
+      { value: 'github/meta/meta-llama-3.1-8b-instruct', label: 'Meta-Llama-3.1-8B-Instruct' },
+      { value: 'github/mistralai/mistral-medium-3', label: 'Mistral Medium 3 (25.05)' },
+      { value: 'github/mistralai/mistral-small-3.1', label: 'Mistral Small 3.1' },
+      { value: 'github/mistralai/ministral-3b', label: 'Ministral 3B' },
+      { value: 'github/mistralai/codestral-25.01', label: 'Codestral 25.01' },
+      { value: 'github/deepseek-ai/deepseek-v3-0324', label: 'DeepSeek-V3-0324' },
+      { value: 'github/deepseek-ai/deepseek-r1-0528', label: 'DeepSeek-R1-0528' },
+      { value: 'github/deepseek-ai/deepseek-r1', label: 'DeepSeek-R1' },
+      { value: 'github/cohere/command-a', label: 'Command A' },
+      { value: 'github/cohere/command-r-plus-08-2024', label: 'Command R+ 08-2024' },
+      { value: 'github/cohere/command-r-08-2024', label: 'Command R 08-2024' },
+      { value: 'github/xai/grok-3', label: 'Grok 3' },
+      { value: 'github/xai/grok-3-mini', label: 'Grok 3 Mini' },
+    ],
+  },
 ]
 
 export function AudioConfigPanel({ config, onConfigChange }: AudioConfigPanelProps) {
@@ -124,6 +116,12 @@ export function AudioConfigPanel({ config, onConfigChange }: AudioConfigPanelPro
   }
 
   const update = <K extends keyof AudioConfig>(key: K, value: AudioConfig[K]) => {
+    if (key === 'voiceModel') {
+      const nextVoiceModel = String(value)
+      const autoTranscriptModel = isGeminiLiveModel(nextVoiceModel) ? 'gemini-2.0-flash-exp' : 'gpt-4o-mini-transcribe'
+      onConfigChange({ ...config, voiceModel: nextVoiceModel, transcriptModel: autoTranscriptModel })
+      return
+    }
     onConfigChange({ ...config, [key]: value })
   }
 
@@ -163,7 +161,7 @@ export function AudioConfigPanel({ config, onConfigChange }: AudioConfigPanelPro
           className="audio-config-section-header"
           onClick={() => toggleSection('model')}
         >
-          <span className="audio-config-section-title">Model</span>
+          <span className="audio-config-section-title">Models</span>
           <span className={`audio-config-chevron ${expandedSections.model ? 'open' : ''}`}>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
               <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
@@ -172,12 +170,13 @@ export function AudioConfigPanel({ config, onConfigChange }: AudioConfigPanelPro
         </button>
         {expandedSections.model && (
           <div className="audio-config-section-body">
+            <div className="audio-config-sub-label">Voice model</div>
             <select
               className="audio-config-select"
-              value={config.model}
-              onChange={(e) => update('model', e.target.value)}
+              value={config.voiceModel}
+              onChange={(e) => update('voiceModel', e.target.value)}
             >
-              {MODEL_GROUPS.map((group) => (
+              {VOICE_MODEL_GROUPS.map((group) => (
                 <optgroup key={group.label} label={group.label}>
                   {group.models.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -188,18 +187,26 @@ export function AudioConfigPanel({ config, onConfigChange }: AudioConfigPanelPro
               ))}
             </select>
 
-            <div className="audio-config-sub-label">Transcript model</div>
+            <div className="audio-config-sub-label">Reasoning model</div>
             <select
               className="audio-config-select"
-              value={config.transcriptModel}
-              onChange={(e) => update('transcriptModel', e.target.value)}
+              value={config.reasoningModel}
+              onChange={(e) => update('reasoningModel', e.target.value)}
             >
-              {TRANSCRIPT_MODEL_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
+              {REASONING_MODEL_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.models.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
+
+            <div className="audio-config-sub-label">
+              Transcription: automatic for selected Voice model
+            </div>
 
             <div className="audio-config-toggle-row">
               <span className="audio-config-label">Noise reduction</span>

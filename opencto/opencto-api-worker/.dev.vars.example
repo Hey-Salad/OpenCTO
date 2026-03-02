@@ -1,0 +1,10 @@
+# Local development secrets for `wrangler dev`
+# Copy this file to .dev.vars and fill in your actual values.
+# .dev.vars is gitignored — never commit real keys.
+OPENAI_API_KEY=sk-proj-...
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+JWT_SECRET=local-dev-jwt-secret
+WEBAUTHN_RP_ID=localhost
+WEBAUTHN_RP_NAME=OpenCTO Dev
+OPENCTO_AGENT_BASE_URL=https://cloud-services-api.opencto.works

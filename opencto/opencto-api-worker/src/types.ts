@@ -2,12 +2,19 @@
 
 export interface Env {
   DB: D1Database
+  OPENAI_API_KEY: string
   STRIPE_SECRET_KEY: string
   STRIPE_WEBHOOK_SECRET: string
   JWT_SECRET: string
   WEBAUTHN_RP_ID: string
   WEBAUTHN_RP_NAME: string
   ENVIRONMENT: string
+  // CTO agent external API keys (set via: wrangler secret put <NAME>)
+  VERCEL_TOKEN: string
+  CF_API_TOKEN: string
+  CF_ACCOUNT_ID: string
+  GITHUB_TOKEN: string
+  OPENCTO_AGENT_BASE_URL: string
 }
 
 export type UserRole = 'owner' | 'cto' | 'developer' | 'viewer' | 'auditor'
