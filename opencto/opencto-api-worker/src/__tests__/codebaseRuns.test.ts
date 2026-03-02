@@ -291,6 +291,43 @@ describe('Codebase run endpoints', () => {
     expect(res.status).toBe(401)
   })
 
+  it('POST /api/v1/codebase/runs returns quota error when concurrent cap is exceeded', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({ CODEBASE_MAX_CONCURRENT_RUNS: '1' }, db)
+    await createRun(env)
+
+    const res = await createRun(env)
+    const body = await res.json() as { code?: string; status?: number; error?: string }
+
+    expect(res.status).toBe(429)
+    expect(body.code).toBe('QUOTA_EXCEEDED')
+    expect(body.status).toBe(429)
+    expect(body.error).toContain('Concurrent run quota')
+  })
+
+  it('POST /api/v1/codebase/runs rejects invalid timeout payloads', async () => {
+    const env = createMockEnv()
+
+    const res = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+      timeoutSeconds: 'invalid',
+    })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('POST /api/v1/codebase/runs returns NOT_IMPLEMENTED in container mode', async () => {
+    const env = createMockEnv({ CODEBASE_EXECUTION_MODE: 'container' })
+
+    const res = await createRun(env)
+    const body = await res.json() as { code?: string; status?: number }
+
+    expect(res.status).toBe(501)
+    expect(body.code).toBe('NOT_IMPLEMENTED')
+    expect(body.status).toBe(501)
+  })
+
   it('GET /api/v1/codebase/runs/:id returns run when found', async () => {
     const db = new MockD1Database()
     const env = createMockEnv({}, db)
