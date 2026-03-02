@@ -13,6 +13,11 @@ This draft defines how `opencto-api-worker` orchestrates codebase execution insi
    - `GET /api/v1/codebase/runs/:id`
    - `GET /api/v1/codebase/runs/:id/events`
 
+## Execution Mode Flag
+
+- `CODEBASE_EXECUTION_MODE=stub`: current MVP behavior with local orchestration records.
+- `CODEBASE_EXECUTION_MODE=container`: currently returns `NOT_IMPLEMENTED` until executor binding is wired.
+
 ## Required Runtime Controls
 
 - Per-user concurrent run limit (default: 1 running, 3 queued)

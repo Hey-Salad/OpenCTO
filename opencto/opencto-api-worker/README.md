@@ -127,6 +127,17 @@ This deploys the worker to Cloudflare Workers.
 - `GET /api/v1/codebase/runs/:id/events` - Poll run events/log lines
 - `POST /api/v1/codebase/runs/:id/cancel` - Cancel queued/running run
 
+Runtime controls:
+- Command normalization + allowlist template enforcement
+- Shell chaining guard (`&&`, `;`, `|`, backticks, `$(`)
+- Per-user concurrent and daily run quotas
+- Timeout clamp (`min/default/max`)
+- Redaction for common token/key patterns in persisted logs/events
+
+Execution mode:
+- `CODEBASE_EXECUTION_MODE=stub` (default): creates local stub runs/events
+- `CODEBASE_EXECUTION_MODE=container`: returns `NOT_IMPLEMENTED` until executor binding is wired
+
 ### Billing
 
 - `GET /api/v1/billing/subscription` - Get subscription summary

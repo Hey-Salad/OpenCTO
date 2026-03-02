@@ -19,6 +19,12 @@ export interface Env {
   API_BASE_URL: string
   OPENCTO_AGENT_BASE_URL: string
   APP_BASE_URL: string
+  CODEBASE_EXECUTION_MODE?: 'stub' | 'container'
+  CODEBASE_MAX_CONCURRENT_RUNS?: string
+  CODEBASE_DAILY_RUN_LIMIT?: string
+  CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS?: string
+  CODEBASE_RUN_MIN_TIMEOUT_SECONDS?: string
+  CODEBASE_RUN_MAX_TIMEOUT_SECONDS?: string
 }
 
 export type UserRole = 'owner' | 'cto' | 'developer' | 'viewer' | 'auditor'

@@ -1,16 +1,19 @@
 import type { RequestContext } from './types'
 import {
   BadRequestException,
-  ConflictException,
   InternalServerException,
   NotFoundException,
+  NotImplementedException,
+  TooManyRequestsException,
   jsonResponse,
 } from './errors'
+import { redactSecrets, redactUnknown } from './redaction'
 
 type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
 type EventLevel = 'system' | 'info' | 'warn' | 'error'
+type ExecutionMode = 'stub' | 'container'
 
-const ALLOWED_COMMANDS = [
+const ALLOWED_COMMAND_TEMPLATES = [
   'git clone',
   'git checkout -b',
   'npm install',
@@ -20,9 +23,17 @@ const ALLOWED_COMMANDS = [
   'git add',
   'git commit',
   'git push',
-]
+] as const
 
+const COMMAND_ALLOWLIST_VERSION = '2026-03-02'
+const DEFAULT_CONCURRENT_RUN_CAP = 2
+const DEFAULT_DAILY_RUN_CAP = 20
+const DEFAULT_TIMEOUT_SECONDS = 600
+const MIN_TIMEOUT_SECONDS = 60
+const MAX_TIMEOUT_SECONDS = 1800
 const TERMINAL_RUN_STATUSES = new Set<RunStatus>(['succeeded', 'failed', 'canceled', 'timed_out'])
+
+const BLOCKED_CHAINING_PATTERN = /(?:&&|;|\|\||\||`|\$\()/
 
 interface CodebaseRunRow {
   id: string
@@ -59,13 +70,93 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
+function parsePositiveInt(input: string | undefined, fallback: number): number {
+  if (!input) return fallback
+  const parsed = Number.parseInt(input, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return parsed
+}
+
+function getExecutionMode(ctx: RequestContext): ExecutionMode {
+  return ctx.env.CODEBASE_EXECUTION_MODE === 'container' ? 'container' : 'stub'
+}
+
+function getConcurrentRunCap(ctx: RequestContext): number {
+  return parsePositiveInt(ctx.env.CODEBASE_MAX_CONCURRENT_RUNS, DEFAULT_CONCURRENT_RUN_CAP)
+}
+
+function getDailyRunCap(ctx: RequestContext): number {
+  return parsePositiveInt(ctx.env.CODEBASE_DAILY_RUN_LIMIT, DEFAULT_DAILY_RUN_CAP)
+}
+
+function getTimeoutBounds(ctx: RequestContext): { defaultTimeout: number; minTimeout: number; maxTimeout: number } {
+  const minTimeout = parsePositiveInt(ctx.env.CODEBASE_RUN_MIN_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS)
+  const configuredMax = parsePositiveInt(ctx.env.CODEBASE_RUN_MAX_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS)
+  const maxTimeout = Math.max(minTimeout, configuredMax)
+  const configuredDefault = parsePositiveInt(ctx.env.CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
+  const defaultTimeout = Math.max(minTimeout, Math.min(maxTimeout, configuredDefault))
+  return { defaultTimeout, minTimeout, maxTimeout }
+}
+
+function normalizeCommand(command: string): string {
+  return command.replace(/\s+/g, ' ').trim()
+}
+
 function parseCommands(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
-  return raw.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean)
+  return raw
+    .filter((item): item is string => typeof item === 'string')
+    .map(normalizeCommand)
+    .filter(Boolean)
+}
+
+function isBlockedCommand(command: string): boolean {
+  return BLOCKED_CHAINING_PATTERN.test(command)
 }
 
 function isCommandAllowed(command: string): boolean {
-  return ALLOWED_COMMANDS.some((prefix) => command === prefix || command.startsWith(`${prefix} `))
+  return ALLOWED_COMMAND_TEMPLATES.some((template) => command === template || command.startsWith(`${template} `))
+}
+
+function normalizeAndValidateCommands(raw: unknown): string[] {
+  const commands = parseCommands(raw)
+  if (commands.length === 0) {
+    throw new BadRequestException('commands must include at least one command')
+  }
+
+  const blocked = commands.filter((command) => isBlockedCommand(command))
+  if (blocked.length > 0) {
+    throw new BadRequestException('Shell chaining is not allowed in commands', {
+      blocked,
+    })
+  }
+
+  const disallowed = commands.filter((command) => !isCommandAllowed(command))
+  if (disallowed.length > 0) {
+    throw new BadRequestException('One or more commands are not allowed', {
+      disallowed,
+      allowedTemplates: [...ALLOWED_COMMAND_TEMPLATES],
+    })
+  }
+
+  return commands
+}
+
+function normalizeTimeoutSeconds(input: unknown, bounds: { defaultTimeout: number; minTimeout: number; maxTimeout: number }): number {
+  if (input === null || typeof input === 'undefined') return bounds.defaultTimeout
+  const numeric = typeof input === 'number' ? input : Number(input)
+  if (!Number.isFinite(numeric)) {
+    throw new BadRequestException('timeoutSeconds must be a valid number', {
+      minTimeoutSeconds: bounds.minTimeout,
+      maxTimeoutSeconds: bounds.maxTimeout,
+    })
+  }
+
+  return Math.max(bounds.minTimeout, Math.min(bounds.maxTimeout, Math.trunc(numeric)))
+}
+
+function dayStartIsoUtc(reference: Date): string {
+  return new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth(), reference.getUTCDate(), 0, 0, 0, 0)).toISOString()
 }
 
 function mapRun(row: CodebaseRunRow) {
@@ -84,7 +175,7 @@ function mapRun(row: CodebaseRunRow) {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     canceledAt: row.canceled_at,
-    errorMessage: row.error_message,
+    errorMessage: row.error_message ? redactSecrets(row.error_message) : null,
   }
 }
 
@@ -95,8 +186,8 @@ function mapEvent(row: CodebaseRunEventRow) {
     seq: row.seq,
     level: row.level,
     eventType: row.event_type,
-    message: row.message,
-    payload: row.payload_json ? JSON.parse(row.payload_json) : null,
+    message: redactSecrets(row.message),
+    payload: row.payload_json ? redactUnknown(JSON.parse(row.payload_json)) : null,
     createdAt: row.created_at,
   }
 }
@@ -194,6 +285,9 @@ async function appendEvent(
   ctx: RequestContext,
 ): Promise<void> {
   const seq = await getNextSeq(runId, ctx)
+  const safeMessage = redactSecrets(event.message)
+  const safePayload = event.payload ? redactUnknown(event.payload) as Record<string, unknown> : null
+
   await ctx.env.DB.prepare(
     `INSERT INTO codebase_run_events (id, run_id, seq, level, event_type, message, payload_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -203,10 +297,37 @@ async function appendEvent(
     seq,
     event.level,
     event.eventType,
-    event.message,
-    event.payload ? JSON.stringify(event.payload) : null,
+    safeMessage,
+    safePayload ? JSON.stringify(safePayload) : null,
     nowIso(),
   ).run()
+}
+
+async function enforceRunLimits(ctx: RequestContext): Promise<void> {
+  const concurrentCap = getConcurrentRunCap(ctx)
+  const concurrent = await ctx.env.DB.prepare(
+    `SELECT COUNT(*) AS count FROM codebase_runs
+     WHERE user_id = ? AND status IN ('queued', 'running')`,
+  ).bind(ctx.userId).first<{ count: number }>()
+
+  if ((concurrent?.count ?? 0) >= concurrentCap) {
+    throw new TooManyRequestsException('Concurrent run quota exceeded', {
+      concurrentCap,
+    })
+  }
+
+  const dailyCap = getDailyRunCap(ctx)
+  const dayStart = dayStartIsoUtc(new Date())
+  const daily = await ctx.env.DB.prepare(
+    'SELECT COUNT(*) AS count FROM codebase_runs WHERE user_id = ? AND created_at >= ?',
+  ).bind(ctx.userId, dayStart).first<{ count: number }>()
+
+  if ((daily?.count ?? 0) >= dailyCap) {
+    throw new TooManyRequestsException('Daily run quota exceeded', {
+      dailyCap,
+      dayStart,
+    })
+  }
 }
 
 // POST /api/v1/codebase/runs
@@ -228,24 +349,22 @@ export async function createCodebaseRun(
     throw new BadRequestException('repoUrl is required')
   }
 
-  const commands = parseCommands(payload.commands)
-  if (commands.length === 0) {
-    throw new BadRequestException('commands must include at least one command')
-  }
+  const commands = normalizeAndValidateCommands(payload.commands)
+  const timeoutBounds = getTimeoutBounds(ctx)
+  const timeoutSeconds = normalizeTimeoutSeconds(payload.timeoutSeconds, timeoutBounds)
 
-  const disallowed = commands.filter((command) => !isCommandAllowed(command))
-  if (disallowed.length > 0) {
-    throw new BadRequestException('One or more commands are not allowed', {
-      disallowed,
-      allowedPrefixes: ALLOWED_COMMANDS,
+  if (getExecutionMode(ctx) === 'container') {
+    throw new NotImplementedException('Container mode is not wired yet', {
+      executionMode: 'container',
     })
   }
+
+  await enforceRunLimits(ctx)
 
   const createdAt = nowIso()
   const runId = crypto.randomUUID()
   const baseBranch = (payload.baseBranch ?? 'main').trim() || 'main'
   const targetBranch = (payload.targetBranch ?? `opencto/${runId.slice(0, 8)}`).trim() || `opencto/${runId.slice(0, 8)}`
-  const timeoutSeconds = Number.isFinite(payload.timeoutSeconds) ? Math.max(60, Math.min(1800, Number(payload.timeoutSeconds))) : 600
 
   await ctx.env.DB.prepare(
     `INSERT INTO codebase_runs (
@@ -261,7 +380,7 @@ export async function createCodebaseRun(
     targetBranch,
     'queued',
     JSON.stringify(commands),
-    '2026-03-02',
+    COMMAND_ALLOWLIST_VERSION,
     timeoutSeconds,
     createdAt,
   ).run()
@@ -272,7 +391,8 @@ export async function createCodebaseRun(
     message: 'Run queued for Cloudflare Container execution.',
     payload: {
       timeoutSeconds,
-      commandAllowlistVersion: '2026-03-02',
+      commandAllowlistVersion: COMMAND_ALLOWLIST_VERSION,
+      executionMode: 'stub',
     },
   }, ctx)
 
@@ -285,7 +405,7 @@ export async function createCodebaseRun(
   const row = await getRunRow(runId, ctx)
   return jsonResponse({
     run: mapRun(row),
-    allowlist: ALLOWED_COMMANDS,
+    allowlist: [...ALLOWED_COMMAND_TEMPLATES],
   }, 201)
 }
 
@@ -340,7 +460,7 @@ export async function cancelCodebaseRun(runId: string, ctx: RequestContext): Pro
   const row = await getRunRow(runId, ctx)
 
   if (TERMINAL_RUN_STATUSES.has(row.status)) {
-    throw new ConflictException(`Run is already ${row.status}`)
+    return jsonResponse({ run: mapRun(row) })
   }
 
   const canceledAt = nowIso()
