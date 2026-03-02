@@ -24,6 +24,9 @@ export function CodebasePanel({
   onConnect,
 }: CodebasePanelProps) {
   const isConnected = Boolean(status?.connected)
+  const connectedUpdated = status?.updatedAt
+    ? new Date(status.updatedAt).toLocaleString()
+    : 'Not synced yet'
 
   return (
     <section className="panel codebase-panel" aria-label="Codebase">
@@ -32,24 +35,33 @@ export function CodebasePanel({
           <h2>Codebase</h2>
           <p className="muted">Manage GitHub connections and select repositories for agent tasks.</p>
         </div>
-        {isConnected ? (
-          <button type="button" className="secondary-button" onClick={() => void onSync()} disabled={syncing}>
-            {syncing ? 'Syncing...' : 'Sync GitHub'}
-          </button>
-        ) : (
-          <button type="button" className="primary-button" onClick={() => void onConnect()}>
-            Connect GitHub
-          </button>
-        )}
+        <span className={`codebase-status-badge ${isConnected ? 'codebase-status-connected' : 'codebase-status-disconnected'}`}>
+          {isConnected ? 'GitHub Connected' : 'GitHub Not Connected'}
+        </span>
       </header>
 
       <div className="codebase-connection-card">
-        <p>
-          <strong>Connection:</strong> {isConnected ? `Connected as ${status?.login ?? 'GitHub user'}` : 'Not connected'}
-        </p>
-        {!isConnected ? (
-          <p className="muted">Connect your GitHub account to import organizations, repositories, PRs, and CI runs.</p>
-        ) : null}
+        {isConnected ? (
+          <>
+            <p>
+              <strong>Connected as:</strong> {status?.login ?? 'GitHub user'}
+            </p>
+            <p className="muted">Last connection update: {connectedUpdated}</p>
+            <button type="button" className="secondary-button codebase-connect-cta" onClick={() => void onSync()} disabled={syncing}>
+              {syncing ? 'Syncing GitHub...' : 'Sync GitHub Data'}
+            </button>
+          </>
+        ) : (
+          <>
+            <p>
+              <strong>Connection:</strong> Not connected
+            </p>
+            <p className="muted">Connect your GitHub account to import organizations, repositories, pull requests, and CI status.</p>
+            <button type="button" className="primary-button codebase-connect-cta" onClick={() => void onConnect()}>
+              Connect GitHub
+            </button>
+          </>
+        )}
         {syncMessage ? <p className="muted">{syncMessage}</p> : null}
       </div>
 
