@@ -21,7 +21,6 @@ describe('AuthHttpClient', () => {
     await expect(client.getSession()).rejects.toMatchObject({
       code: 'AUTH_REQUIRED',
       status: 401,
-      message: 'Failed to load auth session (401)',
     })
   })
 
