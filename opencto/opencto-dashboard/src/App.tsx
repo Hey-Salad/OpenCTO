@@ -442,7 +442,7 @@ function App() {
           />
         </main>
       ) : (
-      <main className="app-shell">
+      <main className={`app-shell ${activeSection === 'codebase' ? 'app-shell-codebase' : ''}`}>
         <header className="top-bar panel">
           <div className="brand-mark">
             <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
@@ -471,25 +471,34 @@ function App() {
                     <path d="M4 16c.7-2.5 2.9-4 6-4s5.3 1.5 6 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                   </svg>
                 </button>
-                <div className="user-chip-meta">
-                  <strong>{session.user.displayName || 'OpenCTO User'}</strong>
-                  <span>{session.user.email}</span>
-                </div>
-                <svg
-                  className={`user-chip-chevron ${accountMenuOpen ? 'user-chip-chevron-open' : ''}`}
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  aria-hidden="true"
+                <button
+                  type="button"
+                  className="user-chip-toggle"
+                  aria-label="Open account menu"
+                  aria-haspopup="menu"
+                  aria-expanded={accountMenuOpen}
+                  onClick={() => setAccountMenuOpen((prev) => !prev)}
                 >
-                  <path d="M4 6.5L8 10L12 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                  <div className="user-chip-meta">
+                    <strong>{session.user.displayName || 'OpenCTO User'}</strong>
+                    <span>{session.user.email}</span>
+                  </div>
+                  <svg
+                    className={`user-chip-chevron ${accountMenuOpen ? 'user-chip-chevron-open' : ''}`}
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 6.5L8 10L12 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
                 {accountMenuOpen && (
                   <div className="account-menu panel" role="menu">
                     <button type="button" role="menuitem" onClick={() => { setActiveSection('settings'); setAccountMenuOpen(false) }}>
                       <span className="account-menu-item-content">
                         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                          <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.25" />
-                          <path d="M8 1.8v1.4M8 12.8v1.4M12.2 8h1.4M2.4 8H3.8M11.9 4.1l1 1M3.1 11.9l1 1M11.9 11.9l1-1M3.1 4.1l1 1" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" />
+                          <path d="M9.5 1.8L10 3.1c.4.1.8.3 1.1.5l1.3-.5 1 1.8-1 .9c.1.4.1.8 0 1.2l1 .9-1 1.8-1.3-.5c-.3.2-.7.4-1.1.5l-.5 1.3h-2l-.5-1.3c-.4-.1-.8-.3-1.1-.5l-1.3.5-1-1.8 1-.9a3.7 3.7 0 010-1.2l-1-.9 1-1.8 1.3.5c.3-.2.7-.4 1.1-.5l.5-1.3h2Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+                          <circle cx="8" cy="8" r="1.9" stroke="currentColor" strokeWidth="1.15" />
                         </svg>
                         <span>Settings</span>
                       </span>
@@ -611,9 +620,9 @@ function App() {
 
         {activeSection === 'launchpad' ? (
           <AudioConfigPanel config={audioConfig} onConfigChange={setAudioConfig} />
-        ) : (
+        ) : activeSection === 'codebase' ? null : (
           <aside className="right-config panel">
-            <p className="muted">Use the sidebar to switch between Launchpad and Codebase.</p>
+            <p className="muted">Workspace settings and billing controls appear here.</p>
           </aside>
         )}
       </main>
