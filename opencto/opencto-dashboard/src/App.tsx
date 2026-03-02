@@ -14,12 +14,6 @@ import {
   type GitHubOrgSummary,
   type GitHubRepoSummary,
 } from './api/githubClient'
-import {
-  cancelCodebaseRun,
-  createCodebaseRun,
-  getCodebaseRun,
-  getCodebaseRunEvents,
-} from './api/codebaseRunsClient'
 import { normalizeApiError } from './lib/safeError'
 import { RouteGuard } from './components/auth/RouteGuard'
 import { AuthLoginPanel } from './components/auth/AuthLoginPanel'
@@ -30,7 +24,6 @@ import { BillingDashboard } from './components/billing/BillingDashboard'
 import { getApiBaseUrl } from './config/apiBase'
 import type { OnboardingState } from './types/onboarding'
 import type { BillingSummaryResponse, Invoice } from './types/billing'
-import type { CodebaseRun, CodebaseRunEvent } from './types/codebaseRuns'
 import './index.css'
 
 const DEFAULT_AUDIO_CONFIG: AudioConfig = {
@@ -92,10 +85,6 @@ function App() {
   const [githubOrgs, setGitHubOrgs] = useState<GitHubOrgSummary[]>([])
   const [githubRepos, setGitHubRepos] = useState<GitHubRepoSummary[]>([])
   const [selectedOrg, setSelectedOrg] = useState('')
-  const [activeCodebaseRun, setActiveCodebaseRun] = useState<CodebaseRun | null>(null)
-  const [codebaseRunEvents, setCodebaseRunEvents] = useState<CodebaseRunEvent[]>([])
-  const [codebaseRunBusy, setCodebaseRunBusy] = useState(false)
-  const [codebaseRunError, setCodebaseRunError] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<'launchpad' | 'codebase' | 'settings' | 'billing'>('launchpad')
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
@@ -295,52 +284,6 @@ function App() {
     }
   }
 
-  const handleStartCodebaseRun = async (input: { repoUrl: string; commands: string[] }) => {
-    if (!session?.isAuthenticated) return
-    if (!input.repoUrl.trim()) {
-      setCodebaseRunError('Repository URL is required.')
-      return
-    }
-    if (input.commands.length === 0) {
-      setCodebaseRunError('Choose a command preset before starting a run.')
-      return
-    }
-    setCodebaseRunBusy(true)
-    setCodebaseRunError(null)
-    try {
-      const created = await createCodebaseRun({
-        repoUrl: input.repoUrl.trim(),
-        commands: input.commands,
-      })
-      setActiveCodebaseRun(created.run)
-      setCodebaseRunEvents([])
-    } catch (error) {
-      setCodebaseRunError(normalizeApiError(error, 'Failed to start codebase run').message)
-    } finally {
-      setCodebaseRunBusy(false)
-    }
-  }
-
-  const handleCancelCodebaseRun = async (runId: string) => {
-    setCodebaseRunBusy(true)
-    setCodebaseRunError(null)
-    try {
-      const cancelled = await cancelCodebaseRun(runId)
-      setActiveCodebaseRun(cancelled.run)
-    } catch (error) {
-      setCodebaseRunError(normalizeApiError(error, 'Failed to cancel codebase run').message)
-    } finally {
-      setCodebaseRunBusy(false)
-    }
-  }
-
-  const handleRetryCodebaseRun = async (run: CodebaseRun) => {
-    await handleStartCodebaseRun({
-      repoUrl: run.repoUrl,
-      commands: run.requestedCommands,
-    })
-  }
-
   useEffect(() => {
     if (!session?.isAuthenticated || !onboardingState?.completed) return
     let cancelled = false
@@ -363,43 +306,6 @@ function App() {
       cancelled = true
     }
   }, [onboardingState?.completed, selectedOrg, session?.isAuthenticated])
-
-  useEffect(() => {
-    if (activeSection !== 'codebase' || !activeCodebaseRun?.id) return
-    let cancelled = false
-    let tickTimer: number | null = null
-
-    const tick = async () => {
-      try {
-        const nextRun = await getCodebaseRun(activeCodebaseRun.id)
-        if (cancelled) return
-        setActiveCodebaseRun(nextRun.run)
-
-        const currentAfterSeq = codebaseRunEvents.length > 0
-          ? codebaseRunEvents[codebaseRunEvents.length - 1]!.seq
-          : 0
-        const nextEvents = await getCodebaseRunEvents(activeCodebaseRun.id, currentAfterSeq, 100)
-        if (cancelled) return
-        if (nextEvents.events.length > 0) {
-          setCodebaseRunEvents((prev) => [...prev, ...nextEvents.events])
-        }
-
-        if (['queued', 'running'].includes(nextRun.run.status)) {
-          tickTimer = window.setTimeout(() => void tick(), 2200)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setCodebaseRunError(normalizeApiError(error, 'Failed to refresh codebase run').message)
-        }
-      }
-    }
-
-    void tick()
-    return () => {
-      cancelled = true
-      if (tickTimer) window.clearTimeout(tickTimer)
-    }
-  }, [activeCodebaseRun?.id, activeSection, codebaseRunEvents, activeCodebaseRun?.status])
 
   useEffect(() => {
     if (activeSection !== 'billing' || !session?.isAuthenticated) return
@@ -667,14 +573,6 @@ function App() {
               onSelectOrg={setSelectedOrg}
               onSync={handleSyncGitHub}
               onConnect={handleConnectGitHub}
-              activeRun={activeCodebaseRun}
-              runEvents={codebaseRunEvents}
-              runBusy={codebaseRunBusy}
-              runError={codebaseRunError}
-              defaultRepoUrl={githubRepos[0]?.htmlUrl ?? 'https://github.com/owner/repo.git'}
-              onRunStart={handleStartCodebaseRun}
-              onRunCancel={handleCancelCodebaseRun}
-              onRunRetry={handleRetryCodebaseRun}
             />
           )}
           {activeSection === 'settings' && (
