@@ -151,7 +151,7 @@ function getWorkspaceId(userId: string): string {
 }
 
 function appUrl(env: RequestContext['env'], path: string): string {
-  const base = (env.APP_BASE_URL || 'https://app.opencto.works').replace(/\/+$/, '')
+  const base = safeAppBaseUrl(env.APP_BASE_URL || 'https://app.opencto.works').replace(/\/+$/, '')
   const suffix = path.startsWith('/') ? path : `/${path}`
   return `${base}${suffix}`
 }
@@ -163,6 +163,10 @@ export async function createCheckoutSession(
   ctx: RequestContext
 ): Promise<Response> {
   const { user, env } = ctx
+  if (interval !== 'MONTHLY' && interval !== 'YEARLY') {
+    throw new BadRequestException('Invalid billing interval')
+  }
+
   await ensureBillingSchema(env)
   const workspaceId = getWorkspaceId(user.id)
 
@@ -416,5 +420,15 @@ async function getWorkspaceUsage(
     usersLimit: limits?.usersLimit || null,
     codexCreditUsedUsd: result ? result.codex_credit_used_usd / 100 : 0,
     codexCreditLimitUsd: limits?.codexCreditLimitUsd || null,
+  }
+}
+
+function safeAppBaseUrl(raw: string): string {
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:') return 'https://app.opencto.works'
+    return url.origin
+  } catch {
+    return 'https://app.opencto.works'
   }
 }

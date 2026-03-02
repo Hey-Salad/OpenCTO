@@ -61,9 +61,18 @@ async function ensureWebhookSchema(env: Env): Promise<void> {
 
 // POST /api/v1/billing/webhooks/stripe
 export async function handleStripeWebhook(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) {
+    throw new InternalServerException('D1 database is not configured')
+  }
+
   // Get raw body for signature verification
   const body = await request.text()
   const signature = request.headers.get('stripe-signature')
+  const contentType = request.headers.get('content-type') ?? ''
+
+  if (!contentType.toLowerCase().startsWith('application/json')) {
+    throw new BadRequestException('Invalid content-type for Stripe webhook')
+  }
 
   if (!signature) {
     throw new BadRequestException('Missing stripe-signature header')
@@ -155,16 +164,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, _env: E
   // Extract metadata
   const userId = session.metadata?.userId
   const workspaceId = session.metadata?.workspaceId || (userId ? `ws-${userId}` : undefined)
-  const planCode = session.metadata?.planCode as PlanCode
-  const interval = session.metadata?.interval as BillingInterval
+  const planCode = parsePlanCode(session.metadata?.planCode)
+  const interval = parseBillingInterval(session.metadata?.interval)
 
   if (!workspaceId || !planCode || !interval) {
-    console.error('Missing metadata in checkout session:', session.id)
-    return
+    throw new BadRequestException('Missing or invalid metadata in checkout session')
   }
 
   const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
-  if (!customerId) return
+  if (!customerId) {
+    throw new BadRequestException('Missing customer in checkout session')
+  }
 
   await _env.DB.prepare(
     `INSERT INTO workspace_billing (workspace_id, stripe_customer_id, plan_code, interval, status, updated_at)
@@ -197,8 +207,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, env:
   }
 
   // Extract plan information from metadata
-  const planCode = (subscription.metadata?.planCode as PlanCode) || 'STARTER'
-  const interval = (subscription.metadata?.interval as BillingInterval) || 'MONTHLY'
+  const planCode = parsePlanCode(subscription.metadata?.planCode) || 'STARTER'
+  const interval = parseBillingInterval(subscription.metadata?.interval) || 'MONTHLY'
 
   await env.DB.prepare(
     `INSERT INTO workspace_billing (
@@ -337,4 +347,18 @@ async function getWorkspaceIdFromCustomer(customerId: string, env: Env): Promise
     .first<{ workspace_id: string }>()
 
   return result?.workspace_id || null
+}
+
+function parsePlanCode(value: string | undefined): PlanCode | null {
+  if (!value) return null
+  if (value === 'STARTER' || value === 'DEVELOPER' || value === 'TEAM' || value === 'PRO' || value === 'ENTERPRISE') {
+    return value
+  }
+  return null
+}
+
+function parseBillingInterval(value: string | undefined): BillingInterval | null {
+  if (!value) return null
+  if (value === 'MONTHLY' || value === 'YEARLY') return value
+  return null
 }

@@ -8,6 +8,9 @@ describe('Webhook Handling', () => {
     it('should reject webhooks without stripe-signature header', async () => {
       const request = new Request('https://api.opencto.works/api/v1/billing/webhooks/stripe', {
         method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
         body: JSON.stringify({ type: 'test.event' }),
       })
 
@@ -23,6 +26,7 @@ describe('Webhook Handling', () => {
       const request = new Request('https://api.opencto.works/api/v1/billing/webhooks/stripe', {
         method: 'POST',
         headers: {
+          'content-type': 'application/json',
           'stripe-signature': 'invalid-signature',
         },
         body: JSON.stringify({ type: 'test.event' }),

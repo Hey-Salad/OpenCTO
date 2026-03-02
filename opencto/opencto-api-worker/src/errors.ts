@@ -70,6 +70,7 @@ export function toJsonResponse(error: unknown): Response {
     const body: ApiError = {
       error: error.message,
       code: error.code,
+      status: error.statusCode,
       details: error.details,
     }
     return new Response(JSON.stringify(body), {
@@ -85,6 +86,10 @@ export function toJsonResponse(error: unknown): Response {
   const body: ApiError = {
     error: 'Internal server error',
     code: 'INTERNAL_SERVER_ERROR',
+    status: 500,
+    details: error instanceof Error
+      ? { message: sanitizeError(error) }
+      : { message: 'Unknown error' },
   }
   return new Response(JSON.stringify(body), {
     status: 500,
