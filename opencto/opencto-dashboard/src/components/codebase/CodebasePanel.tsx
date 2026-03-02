@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { cancelCodebaseRun, createCodebaseRun, getCodebaseRun, getCodebaseRunEvents } from '../../api/codebaseRunsClient'
 import type { GitHubConnectionStatus, GitHubOrgSummary, GitHubRepoSummary } from '../../api/githubClient'
 import type { CodebaseRun, CodebaseRunEvent } from '../../types/codebaseRuns'
@@ -16,6 +16,8 @@ interface CodebasePanelProps {
 }
 
 const TERMINAL_STATUSES = new Set<CodebaseRun['status']>(['succeeded', 'failed', 'canceled', 'timed_out'])
+const INITIAL_POLL_DELAY_MS = 1500
+const MAX_POLL_DELAY_MS = 12000
 
 function formatTime(value: string | null): string {
   if (!value) return '-'
@@ -28,6 +30,15 @@ function upsertRun(list: CodebaseRun[], nextRun: CodebaseRun): CodebaseRun[] {
   const updated = [...list]
   updated[existingIndex] = nextRun
   return updated
+}
+
+function runStatusClass(status: CodebaseRun['status']): string {
+  if (status === 'succeeded') return 'run-status-succeeded'
+  if (status === 'failed') return 'run-status-failed'
+  if (status === 'canceled') return 'run-status-canceled'
+  if (status === 'timed_out') return 'run-status-timed-out'
+  if (status === 'running') return 'run-status-running'
+  return 'run-status-queued'
 }
 
 export function CodebasePanel({
@@ -49,6 +60,7 @@ export function CodebasePanel({
   const [runBusy, setRunBusy] = useState(false)
   const [repoUrl, setRepoUrl] = useState('')
   const [commands, setCommands] = useState('git clone <repo-url>\nnpm install\nnpm test\nnpm run build')
+  const [pollDelayMs, setPollDelayMs] = useState(INITIAL_POLL_DELAY_MS)
 
   const isConnected = Boolean(status?.connected)
   const connectedUpdated = status?.updatedAt
@@ -61,6 +73,17 @@ export function CodebasePanel({
   )
 
   const selectedRunEvents = selectedRunId ? (eventsByRunId[selectedRunId] ?? []) : []
+
+  const loadSelectedRun = useCallback(async (runId: string) => {
+    const [{ run }, eventsResponse] = await Promise.all([
+      getCodebaseRun(runId),
+      getCodebaseRunEvents(runId, { afterSeq: 0, limit: 500 }),
+    ])
+
+    setRuns((prev) => upsertRun(prev, run))
+    setEventsByRunId((prev) => ({ ...prev, [runId]: eventsResponse.events }))
+    setLastSeqByRunId((prev) => ({ ...prev, [runId]: eventsResponse.lastSeq }))
+  }, [])
 
   const handleCreateRun = async () => {
     setRunBusy(true)
@@ -77,6 +100,7 @@ export function CodebasePanel({
       })
       setRuns((prev) => upsertRun(prev, response.run))
       setSelectedRunId(response.run.id)
+      setPollDelayMs(INITIAL_POLL_DELAY_MS)
     } catch (error) {
       setRunError(error instanceof Error ? error.message : 'Failed to create run')
     } finally {
@@ -101,63 +125,71 @@ export function CodebasePanel({
     if (!selectedRunId) return
     let canceled = false
 
-    const fetchSnapshot = async () => {
+    void (async () => {
       try {
-        const [{ run }, eventsResponse] = await Promise.all([
-          getCodebaseRun(selectedRunId),
-          getCodebaseRunEvents(selectedRunId, { afterSeq: 0, limit: 500 }),
-        ])
-
-        if (canceled) return
-        setRuns((prev) => upsertRun(prev, run))
-        setEventsByRunId((prev) => ({ ...prev, [selectedRunId]: eventsResponse.events }))
-        setLastSeqByRunId((prev) => ({ ...prev, [selectedRunId]: eventsResponse.lastSeq }))
+        await loadSelectedRun(selectedRunId)
       } catch {
         if (!canceled) setRunError('Failed to load run details')
       }
-    }
-
-    void fetchSnapshot()
+    })()
 
     return () => {
       canceled = true
     }
-  }, [selectedRunId])
+  }, [loadSelectedRun, selectedRunId])
 
   useEffect(() => {
     if (!selectedRunId || !selectedRun || TERMINAL_STATUSES.has(selectedRun.status)) return
 
     let canceled = false
-    const timer = window.setInterval(() => {
+    let timer: number | null = null
+
+    const poll = async () => {
+      if (canceled) return
       const afterSeq = lastSeqByRunId[selectedRunId] ?? 0
-      void (async () => {
-        try {
-          const [runResponse, eventsResponse] = await Promise.all([
-            getCodebaseRun(selectedRunId),
-            getCodebaseRunEvents(selectedRunId, { afterSeq, limit: 200 }),
-          ])
+      try {
+        const [runResponse, eventsResponse] = await Promise.all([
+          getCodebaseRun(selectedRunId),
+          getCodebaseRunEvents(selectedRunId, { afterSeq, limit: 200 }),
+        ])
 
-          if (canceled) return
+        if (canceled) return
 
-          setRuns((prev) => upsertRun(prev, runResponse.run))
-          if (eventsResponse.events.length > 0) {
-            setEventsByRunId((prev) => ({
-              ...prev,
-              [selectedRunId]: [...(prev[selectedRunId] ?? []), ...eventsResponse.events],
-            }))
-            setLastSeqByRunId((prev) => ({ ...prev, [selectedRunId]: eventsResponse.lastSeq }))
-          }
-        } catch {
-          if (!canceled) setRunError('Failed to poll run events')
+        setRuns((prev) => upsertRun(prev, runResponse.run))
+        if (eventsResponse.events.length > 0) {
+          setEventsByRunId((prev) => ({
+            ...prev,
+            [selectedRunId]: [...(prev[selectedRunId] ?? []), ...eventsResponse.events],
+          }))
+          setLastSeqByRunId((prev) => ({ ...prev, [selectedRunId]: eventsResponse.lastSeq }))
         }
-      })()
-    }, 1500)
+
+        setPollDelayMs(INITIAL_POLL_DELAY_MS)
+        timer = window.setTimeout(() => {
+          void poll()
+        }, INITIAL_POLL_DELAY_MS)
+      } catch {
+        if (canceled) return
+        setRunError('Live log polling failed. Retrying with backoff.')
+        setPollDelayMs((prev) => {
+          const nextDelay = Math.min(MAX_POLL_DELAY_MS, prev * 2)
+          timer = window.setTimeout(() => {
+            void poll()
+          }, nextDelay)
+          return nextDelay
+        })
+      }
+    }
+
+    timer = window.setTimeout(() => {
+      void poll()
+    }, pollDelayMs)
 
     return () => {
       canceled = true
-      window.clearInterval(timer)
+      if (timer !== null) window.clearTimeout(timer)
     }
-  }, [lastSeqByRunId, selectedRun, selectedRunId])
+  }, [lastSeqByRunId, pollDelayMs, selectedRun, selectedRunId])
 
   return (
     <section className="panel codebase-panel" aria-label="Codebase">
@@ -299,14 +331,18 @@ export function CodebasePanel({
           <article>
             <h4>Runs</h4>
             {runs.length === 0 ? (
-              <p className="muted">No runs yet. Start one to see status and logs.</p>
+              <div className="codebase-empty-state">
+                <p className="muted">No runs yet. Start one to see status and logs.</p>
+                <button type="button" className="secondary-button" onClick={() => setRunError(null)}>Retry</button>
+              </div>
             ) : (
               <ul className="plain-list codebase-runs-list">
                 {runs.map((run) => (
                   <li key={run.id} className={`codebase-run-row ${selectedRunId === run.id ? 'codebase-run-row-active' : ''}`}>
                     <button type="button" className="codebase-run-select" onClick={() => setSelectedRunId(run.id)}>
                       <span>{run.targetBranch}</span>
-                      <span className="muted">{run.status} · {formatTime(run.createdAt)}</span>
+                      <span className="muted">{formatTime(run.createdAt)}</span>
+                      <span className={`run-status-badge ${runStatusClass(run.status)}`}>{run.status}</span>
                     </button>
                     {!TERMINAL_STATUSES.has(run.status) && (
                       <button type="button" className="secondary-button" onClick={() => void handleCancelRun(run.id)} disabled={runBusy}>
@@ -327,6 +363,21 @@ export function CodebasePanel({
               <>
                 <p className="muted">Run: {selectedRun.id}</p>
                 <p className="muted">Status: {selectedRun.status}</p>
+                {selectedRun.errorMessage ? <p className="billing-error">Failure reason: {selectedRun.errorMessage}</p> : null}
+                <div className="codebase-run-actions-inline">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      if (!selectedRunId) return
+                      void loadSelectedRun(selectedRunId).catch(() => {
+                        setRunError('Failed to refresh run details')
+                      })
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
                 <div className="codebase-log-panel" role="log" aria-live="polite">
                   {selectedRunEvents.length === 0 ? (
                     <p className="muted">No events yet.</p>

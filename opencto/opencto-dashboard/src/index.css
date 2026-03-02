@@ -1309,6 +1309,18 @@ p { margin: 0; }
   justify-content: flex-start;
 }
 
+.codebase-run-actions-inline {
+  display: flex;
+  justify-content: flex-start;
+  margin: 8px 0;
+}
+
+.codebase-empty-state {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+}
+
 .codebase-runs-grid {
   display: grid;
   grid-template-columns: minmax(220px, 340px) 1fr;
@@ -1344,6 +1356,43 @@ p { margin: 0; }
   gap: 4px;
   flex: 1;
   cursor: pointer;
+}
+
+.run-status-badge {
+  justify-self: flex-start;
+  font-size: 11px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 4px 8px;
+}
+
+.run-status-queued {
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.run-status-running {
+  color: #fef08a;
+  border-color: rgba(250, 204, 21, 0.35);
+  background: rgba(250, 204, 21, 0.12);
+}
+
+.run-status-succeeded {
+  color: #b6f3cb;
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.run-status-failed,
+.run-status-canceled,
+.run-status-timed-out {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .codebase-log-panel {
