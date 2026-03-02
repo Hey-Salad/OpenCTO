@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AuthSession, OAuthProvider } from './types/auth'
 import { AudioRealtimeView, type AudioMessage } from './components/audio/AudioRealtimeView'
 import { AudioConfigPanel, type AudioConfig } from './components/audio/AudioConfigPanel'
@@ -93,6 +93,8 @@ function App() {
   const [billingLoading, setBillingLoading] = useState(false)
   const [billingError, setBillingError] = useState<string | null>(null)
   const [minimumLoaderComplete, setMinimumLoaderComplete] = useState(false)
+  const [routeTransitionActive, setRouteTransitionActive] = useState(false)
+  const accountMenuRef = useRef<HTMLDivElement | null>(null)
 
   const billingApi = useMemo(
     () => new BillingHttpClient(`${getApiBaseUrl()}/api/v1/billing`),
@@ -122,7 +124,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setMinimumLoaderComplete(true), 5000)
+    const timer = window.setTimeout(() => setMinimumLoaderComplete(true), 1400)
     return () => window.clearTimeout(timer)
   }, [])
 
@@ -137,10 +139,16 @@ function App() {
   }, [authApi])
 
   useEffect(() => {
+    if (authLoading) {
+      setOnboardingLoading(true)
+      return
+    }
     if (!session?.isAuthenticated) {
       setOnboardingState(null)
       setOnboardingLoading(false)
       setGitHubStatus(null)
+      setGitHubOrgs([])
+      setGitHubRepos([])
       return
     }
     let cancelled = false
@@ -160,7 +168,36 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [session?.isAuthenticated])
+  }, [authLoading, session?.isAuthenticated])
+
+  useEffect(() => {
+    if (!session?.isAuthenticated || !onboardingState?.completed) {
+      setRouteTransitionActive(true)
+      return
+    }
+    setRouteTransitionActive(false)
+    const timer = window.setTimeout(() => setRouteTransitionActive(true), 35)
+    return () => window.clearTimeout(timer)
+  }, [activeSection, onboardingState?.completed, session?.isAuthenticated])
+
+  useEffect(() => {
+    if (!accountMenuOpen) return
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false)
+      }
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAccountMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [accountMenuOpen])
 
   useEffect(() => {
     if (!session?.isAuthenticated || onboardingLoading || !onboardingState?.completed) return
@@ -333,6 +370,12 @@ function App() {
   }
 
   const showWorkspaceLoader = !minimumLoaderComplete || authLoading || (session?.isAuthenticated && onboardingLoading)
+  const loaderStatusMessage = authLoading
+    ? 'Checking secure session state'
+    : session?.isAuthenticated && onboardingLoading
+      ? 'Loading onboarding and workspace access'
+      : 'Loading your workspace'
+
   if (showWorkspaceLoader) {
     return (
       <main className="workspace-loader-screen" aria-label="Loading workspace">
@@ -348,7 +391,7 @@ function App() {
             </svg>
           </div>
           <h1>OpenCTO</h1>
-          <p>Loading your workspace</p>
+          <p>{loaderStatusMessage}</p>
           <div className="workspace-loader-progress" aria-hidden="true">
             <div className="workspace-loader-progress-fill" />
           </div>
@@ -414,15 +457,19 @@ function App() {
           </div>
           <div className="top-bar-meta">
             {session?.isAuthenticated && session.user && (
-              <div className="user-chip" aria-label="Current user">
+              <div ref={accountMenuRef} className="user-chip" aria-label="Current user">
                 <button
                   type="button"
                   className="user-chip-avatar user-chip-avatar-btn"
+                  aria-label="Open account menu"
                   aria-haspopup="menu"
                   aria-expanded={accountMenuOpen}
                   onClick={() => setAccountMenuOpen((prev) => !prev)}
                 >
-                  {(session.user.displayName?.trim()?.[0] ?? session.user.email?.trim()?.[0] ?? 'U').toUpperCase()}
+                  <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <circle cx="10" cy="7" r="3.3" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M4 16c.7-2.5 2.9-4 6-4s5.3 1.5 6 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
                 </button>
                 <div className="user-chip-meta">
                   <strong>{session.user.displayName || 'OpenCTO User'}</strong>
@@ -431,13 +478,31 @@ function App() {
                 {accountMenuOpen && (
                   <div className="account-menu panel" role="menu">
                     <button type="button" role="menuitem" onClick={() => { setActiveSection('settings'); setAccountMenuOpen(false) }}>
-                      Settings
+                      <span className="account-menu-item-content">
+                        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.25" />
+                          <path d="M8 1.8v1.4M8 12.8v1.4M12.2 8h1.4M2.4 8H3.8M11.9 4.1l1 1M3.1 11.9l1 1M11.9 11.9l1-1M3.1 4.1l1 1" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" />
+                        </svg>
+                        <span>Settings</span>
+                      </span>
                     </button>
                     <button type="button" role="menuitem" onClick={() => { setActiveSection('billing'); setAccountMenuOpen(false) }}>
-                      Billing Info
+                      <span className="account-menu-item-content">
+                        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="2" stroke="currentColor" strokeWidth="1.25" />
+                          <path d="M1.8 6.3h12.4" stroke="currentColor" strokeWidth="1.25" />
+                          <path d="M4.2 10.1h3.2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                        </svg>
+                        <span>Billing</span>
+                      </span>
                     </button>
                     <button type="button" role="menuitem" className="account-menu-danger" onClick={() => void handleDeleteAccount()} disabled={isDeletingAccount}>
-                      {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
+                      <span className="account-menu-item-content">
+                        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path d="M3.5 4.2h9M6.1 1.8h3.8M5 4.2v8.3M8 4.2v8.3M11 4.2v8.3M4.3 14h7.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                        </svg>
+                        <span>{isDeletingAccount ? 'Deleting...' : 'Delete Account'}</span>
+                      </span>
                     </button>
                   </div>
                 )}
@@ -466,7 +531,7 @@ function App() {
           </button>
         </aside>
 
-        <section className="center-column">
+        <section className={`center-column route-content ${routeTransitionActive ? 'route-content-active' : ''}`}>
           {errorMessage && (
             <section className="panel">
               <p className="billing-error">{errorMessage}</p>

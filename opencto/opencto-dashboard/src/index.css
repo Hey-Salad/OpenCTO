@@ -59,11 +59,13 @@ p { margin: 0; }
   display: grid;
   justify-items: center;
   gap: 12px;
+  animation: loaderCardIn 320ms ease-out;
 }
 
 .workspace-loader-logo svg {
   width: 84px;
   height: 84px;
+  filter: drop-shadow(0 6px 18px rgba(237, 76, 76, 0.35));
 }
 
 .workspace-loader-card h1 {
@@ -93,6 +95,11 @@ p { margin: 0; }
   width: 40%;
   background: linear-gradient(90deg, var(--brand-secondary), var(--brand-primary));
   animation: workspace-loader-slide 1.25s ease-in-out infinite;
+}
+
+@keyframes loaderCardIn {
+  0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes workspace-loader-slide {
@@ -166,7 +173,7 @@ p { margin: 0; }
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  background: var(--brand-primary);
+  background: linear-gradient(160deg, #ef5555, #d93f3f);
   color: #fff;
   display: grid;
   place-items: center;
@@ -174,9 +181,20 @@ p { margin: 0; }
   font-weight: 700;
 }
 
+.user-chip-avatar svg {
+  width: 16px;
+  height: 16px;
+}
+
 .user-chip-avatar-btn {
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.user-chip-avatar-btn:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  transform: translateY(-1px);
 }
 
 .account-menu {
@@ -188,6 +206,7 @@ p { margin: 0; }
   padding: 8px;
   display: grid;
   gap: 4px;
+  animation: accountMenuIn 160ms ease-out;
 }
 
 .account-menu button {
@@ -207,6 +226,23 @@ p { margin: 0; }
 .account-menu-danger {
   color: var(--brand-primary) !important;
   border-color: rgba(237, 76, 76, 0.35) !important;
+}
+
+.account-menu-item-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-menu-item-content svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+@keyframes accountMenuIn {
+  0% { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .user-chip-meta {
@@ -277,6 +313,17 @@ p { margin: 0; }
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+}
+
+.route-content {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.route-content-active {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* Jobs: side-by-side list + detail */
@@ -1150,6 +1197,33 @@ p { margin: 0; }
   border-radius: 10px;
   padding: 10px 12px;
   background: var(--bg-surface-2);
+  display: grid;
+  gap: 8px;
+}
+
+.codebase-status-badge {
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+}
+
+.codebase-status-connected {
+  color: #b6f3cb;
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.codebase-status-disconnected {
+  color: #ffd0cd;
+  border-color: rgba(237, 76, 76, 0.35);
+  background: rgba(237, 76, 76, 0.12);
+}
+
+.codebase-connect-cta {
+  justify-self: flex-start;
 }
 
 .codebase-grid {
