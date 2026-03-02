@@ -320,28 +320,41 @@ export function CodebasePanel({
           ) : repos.length === 0 ? (
             <p className="muted">No repositories available for this selection.</p>
           ) : (
-            <ul className="plain-list codebase-repo-list">
-              {repos.map((repo) => (
-                <li key={repo.fullName} className="list-row">
-                  <div>
-                    <p>{repo.fullName}</p>
-                    <p className="muted">{repo.private ? 'Private' : 'Public'} · {repo.defaultBranch ?? 'main'}</p>
-                  </div>
-                  <div className="codebase-repo-actions">
-                    <button
-                      type="button"
-                      className="secondary-button codebase-repo-link"
-                      onClick={() => setRepoUrl(`https://github.com/${repo.fullName}.git`)}
-                    >
-                      Use
-                    </button>
-                    <a href={repo.htmlUrl} target="_blank" rel="noreferrer" className="secondary-button codebase-repo-link">
-                      Open
-                    </a>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="codebase-table-wrap codebase-repo-list">
+              <table className="codebase-table">
+                <thead>
+                  <tr>
+                    <th>Repository</th>
+                    <th>Visibility</th>
+                    <th>Branch</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {repos.map((repo) => (
+                    <tr key={repo.fullName}>
+                      <td>{repo.fullName}</td>
+                      <td>{repo.private ? 'Private' : 'Public'}</td>
+                      <td>{repo.defaultBranch ?? 'main'}</td>
+                      <td>
+                        <div className="codebase-repo-actions">
+                          <button
+                            type="button"
+                            className="secondary-button codebase-repo-link"
+                            onClick={() => setRepoUrl(`https://github.com/${repo.fullName}.git`)}
+                          >
+                            Use
+                          </button>
+                          <a href={repo.htmlUrl} target="_blank" rel="noreferrer" className="secondary-button codebase-repo-link">
+                            Open
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </article>
       </div>
@@ -408,22 +421,40 @@ export function CodebasePanel({
                 <button type="button" className="secondary-button" onClick={() => setRunError(null)}>Retry</button>
               </div>
             ) : (
-              <ul className="plain-list codebase-runs-list">
-                {runs.map((run) => (
-                  <li key={run.id} className={`codebase-run-row ${selectedRunId === run.id ? 'codebase-run-row-active' : ''}`}>
-                    <button type="button" className="codebase-run-select" onClick={() => setSelectedRunId(run.id)}>
-                      <span>{run.targetBranch}</span>
-                      <span className="muted">{formatTime(run.createdAt)}</span>
-                      <span className={`run-status-badge ${runStatusClass(run.status)}`}>{run.status}</span>
-                    </button>
-                    {!TERMINAL_STATUSES.has(run.status) && (
-                      <button type="button" className="secondary-button" onClick={() => void handleCancelRun(run.id)} disabled={runBusy}>
-                        Cancel
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <div className="codebase-table-wrap codebase-runs-list">
+                <table className="codebase-table">
+                  <thead>
+                    <tr>
+                      <th>Branch</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.map((run) => (
+                      <tr key={run.id} className={selectedRunId === run.id ? 'codebase-run-row-active' : ''}>
+                        <td>
+                          <button type="button" className="codebase-run-select" onClick={() => setSelectedRunId(run.id)}>
+                            {run.targetBranch}
+                          </button>
+                        </td>
+                        <td><span className={`run-status-badge ${runStatusClass(run.status)}`}>{run.status}</span></td>
+                        <td>{formatTime(run.createdAt)}</td>
+                        <td>
+                          {!TERMINAL_STATUSES.has(run.status) ? (
+                            <button type="button" className="secondary-button" onClick={() => void handleCancelRun(run.id)} disabled={runBusy}>
+                              Cancel
+                            </button>
+                          ) : (
+                            <span className="muted">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </article>
 
@@ -454,14 +485,28 @@ export function CodebasePanel({
                   {selectedRunEvents.length === 0 ? (
                     <p className="muted">No events yet.</p>
                   ) : (
-                    <ul className="plain-list codebase-log-lines">
-                      {selectedRunEvents.map((event) => (
-                        <li key={event.id} className={`codebase-log-line codebase-log-${event.level}`}>
-                          <span className="codebase-log-seq">#{event.seq}</span>
-                          <span>{event.message}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <table className="codebase-table codebase-log-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Time</th>
+                          <th>Level</th>
+                          <th>Event</th>
+                          <th>Message</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedRunEvents.map((event) => (
+                          <tr key={event.id} className={`codebase-log-${event.level}`}>
+                            <td className="codebase-log-seq">#{event.seq}</td>
+                            <td>{formatTime(event.createdAt)}</td>
+                            <td>{event.level}</td>
+                            <td>{event.eventType}</td>
+                            <td>{event.message}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   )}
                 </div>
                 <div className="codebase-artifacts">
@@ -469,24 +514,37 @@ export function CodebasePanel({
                   {selectedRunArtifacts.length === 0 ? (
                     <p className="muted">No artifacts available.</p>
                   ) : (
-                    <ul className="plain-list">
-                      {selectedRunArtifacts.map((artifact) => (
-                        <li key={artifact.id} className="list-row">
-                          <div>
-                            <p>{artifact.path}</p>
-                            <p className="muted">{artifact.kind}</p>
-                          </div>
-                          <a
-                            className="secondary-button codebase-repo-link"
-                            href={getCodebaseRunArtifactDownloadUrl(selectedRun.id, artifact.id)}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Download
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="codebase-table-wrap">
+                      <table className="codebase-table">
+                        <thead>
+                          <tr>
+                            <th>Artifact</th>
+                            <th>Kind</th>
+                            <th>Created</th>
+                            <th>Download</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedRunArtifacts.map((artifact) => (
+                            <tr key={artifact.id}>
+                              <td>{artifact.path}</td>
+                              <td>{artifact.kind}</td>
+                              <td>{formatTime(artifact.createdAt)}</td>
+                              <td>
+                                <a
+                                  className="secondary-button codebase-repo-link"
+                                  href={getCodebaseRunArtifactDownloadUrl(selectedRun.id, artifact.id)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Download
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </>
