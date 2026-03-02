@@ -23,7 +23,8 @@ test('renders metadata and triggers selection', () => {
   render(<JobRow job={job} active={false} onSelect={onSelect} />)
 
   expect(screen.getByText('Sync governance docs')).toBeInTheDocument()
-  expect(screen.getByText('docs/governance | 2 steps')).toBeInTheDocument()
+  expect(screen.getByText('docs/governance')).toBeInTheDocument()
+  expect(screen.getByText('2 steps')).toBeInTheDocument()
   expect(screen.getByText('WARN')).toBeInTheDocument()
   expect(screen.getByText('$1.20')).toBeInTheDocument()
 

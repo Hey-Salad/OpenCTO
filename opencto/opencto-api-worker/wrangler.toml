@@ -6,16 +6,20 @@ workers_dev = true
 [env.production]
 name = "opencto-api"
 route = { pattern = "api.opencto.works/*", zone_name = "opencto.works" }
+vars = { ENVIRONMENT = "production", OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works", APP_BASE_URL = "https://app.opencto.works", API_BASE_URL = "https://api.opencto.works" }
+d1_databases = [
+  { binding = "DB", database_name = "opencto-chat-store", database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4" },
+]
 
-# D1 database — uncomment and set database_id when ready
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "opencto-production"
-# database_id = "YOUR_D1_DATABASE_ID"
+[[d1_databases]]
+binding = "DB"
+database_name = "opencto-chat-store"
+database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4"
 
 [vars]
 ENVIRONMENT = "production"
 OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works"
+APP_BASE_URL = "https://app.opencto.works"
 
 # Secrets (set via wrangler secret put):
 # - OPENAI_API_KEY

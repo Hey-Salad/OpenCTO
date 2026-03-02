@@ -3,5 +3,8 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://heysalad-sheri-auth.heysalad-o.workers.dev; img-src 'self' data:; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.opencto.works https://opencto-api-worker.heysalad-o.workers.dev https://cloud-services-api.opencto.works https://api.openai.com wss://api.openai.com https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'
   Permissions-Policy: interest-cohort=()
+
+/index.html
+  Cache-Control: no-store, no-cache, must-revalidate

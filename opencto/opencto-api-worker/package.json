@@ -9,7 +9,14 @@
     "lint": "eslint src --ext .ts",
     "build": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "stripe:login": "./scripts/stripe-dev.sh login",
+    "stripe:listen": "./scripts/stripe-dev.sh listen",
+    "stripe:trigger:checkout": "./scripts/stripe-dev.sh trigger-checkout",
+    "stripe:trigger:subscription": "./scripts/stripe-dev.sh trigger-subscription",
+    "stripe:trigger:invoice": "./scripts/stripe-dev.sh trigger-invoice",
+    "stripe:checkout": "./scripts/stripe-dev.sh checkout",
+    "stripe:subscription": "./scripts/stripe-dev.sh subscription"
   },
   "keywords": [
     "cloudflare-workers",
@@ -26,7 +33,7 @@
     "eslint": "^8.57.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0",
-    "wrangler": "^3.53.1"
+    "wrangler": "^4.69.0"
   },
   "dependencies": {
     "@simplewebauthn/server": "^10.0.0",

@@ -14,7 +14,11 @@ export interface Env {
   CF_API_TOKEN: string
   CF_ACCOUNT_ID: string
   GITHUB_TOKEN: string
+  GITHUB_OAUTH_CLIENT_ID: string
+  GITHUB_OAUTH_CLIENT_SECRET: string
+  API_BASE_URL: string
   OPENCTO_AGENT_BASE_URL: string
+  APP_BASE_URL: string
 }
 
 export type UserRole = 'owner' | 'cto' | 'developer' | 'viewer' | 'auditor'
@@ -154,4 +158,24 @@ export interface RequestContext {
   userId: string
   user: SessionUser
   env: Env
+}
+
+export interface ChatMessageRecord {
+  id: string
+  role: 'USER' | 'ASSISTANT' | 'TOOL'
+  kind?: 'speech' | 'code' | 'command' | 'output' | 'artifact' | 'plan'
+  text: string
+  timestamp: string
+  startMs: number
+  endMs: number
+  metadata?: Record<string, unknown>
+}
+
+export interface ChatSessionRecord {
+  id: string
+  userId: string
+  title: string
+  messages: ChatMessageRecord[]
+  createdAt: string
+  updatedAt: string
 }

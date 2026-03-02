@@ -1,5 +1,6 @@
 import { normalizeApiError, safeFetchJson } from '../lib/safeError'
 import type { Job, Step } from '../types/opencto'
+import { getApiBaseUrl } from '../config/apiBase'
 
 export interface OpenCtoApi {
   listJobs: () => Promise<Job[]>
@@ -10,8 +11,10 @@ export interface OpenCtoApi {
   denyStep: (stepId: string) => Promise<Step>
 }
 
+const DEFAULT_API_BASE = `${getApiBaseUrl()}/api/v1`
+
 export class OpenCtoHttpClient implements OpenCtoApi {
-  constructor(private readonly baseUrl = 'https://api.opencto.works/api/v1') {}
+  constructor(private readonly baseUrl = DEFAULT_API_BASE) {}
 
   async listJobs(): Promise<Job[]> {
     try {

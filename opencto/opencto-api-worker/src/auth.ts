@@ -8,24 +8,62 @@ import type {
   PasskeyEnrollmentStart,
   PasskeyEnrollmentComplete,
   RequestContext,
+  Env,
+  SessionUser,
 } from './types'
 import { NotFoundException, BadRequestException } from './errors'
 import { jsonResponse } from './errors'
+import { upsertGitHubConnection } from './github'
+
+type SessionTokenPayload = {
+  sub: string
+  email: string
+  name: string
+  role: SessionUser['role']
+  provider: 'github'
+  exp: number
+}
+
+type OAuthStatePayload = {
+  nonce: string
+  returnTo: string
+  exp: number
+}
 
 // GET /api/v1/auth/session
 export async function getSession(ctx: RequestContext): Promise<Response> {
   const { user, env } = ctx
 
-  // Query trusted devices for this user
-  const deviceResult = await env.DB.prepare(
-    'SELECT COUNT(*) as count FROM devices WHERE user_id = ? AND trust_state = ?'
-  )
-    .bind(user.id, 'TRUSTED')
-    .first<{ count: number }>()
+  if (!env.DB) {
+    const session: AuthSession = {
+      isAuthenticated: true,
+      trustedDevice: true,
+      mfaRequired: false,
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+      },
+    }
+    return jsonResponse(session)
+  }
+
+  let trustedDevice = true
+  try {
+    const deviceResult = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM devices WHERE user_id = ? AND trust_state = ?'
+    )
+      .bind(user.id, 'TRUSTED')
+      .first<{ count: number }>()
+    trustedDevice = (deviceResult?.count || 0) > 0
+  } catch {
+    trustedDevice = true
+  }
 
   const session: AuthSession = {
     isAuthenticated: true,
-    trustedDevice: (deviceResult?.count || 0) > 0,
+    trustedDevice,
     mfaRequired: false, // TODO: Implement MFA logic
     user: {
       id: user.id,
@@ -41,12 +79,10 @@ export async function getSession(ctx: RequestContext): Promise<Response> {
 // GET /api/v1/auth/devices
 export async function getTrustedDevices(ctx: RequestContext): Promise<Response> {
   const { user, env } = ctx
+  if (!env.DB) return jsonResponse([])
 
-  const result = await env.DB.prepare(
-    'SELECT id, display_name, platform, city, country, last_seen_at, trust_state FROM devices WHERE user_id = ? ORDER BY last_seen_at DESC'
-  )
-    .bind(user.id)
-    .all<{
+  let result: {
+    results?: Array<{
       id: string
       display_name: string
       platform: string
@@ -54,7 +90,25 @@ export async function getTrustedDevices(ctx: RequestContext): Promise<Response> 
       country: string
       last_seen_at: string
       trust_state: string
-    }>()
+    }>
+  }
+  try {
+    result = await env.DB.prepare(
+      'SELECT id, display_name, platform, city, country, last_seen_at, trust_state FROM devices WHERE user_id = ? ORDER BY last_seen_at DESC'
+    )
+      .bind(user.id)
+      .all<{
+        id: string
+        display_name: string
+        platform: string
+        city: string
+        country: string
+        last_seen_at: string
+        trust_state: string
+      }>()
+  } catch {
+    return jsonResponse([])
+  }
 
   const devices: TrustedDevice[] = (result.results || []).map((row) => ({
     id: row.id,
@@ -75,6 +129,9 @@ export async function revokeDevice(
   ctx: RequestContext
 ): Promise<Response> {
   const { user, env } = ctx
+  if (!env.DB) {
+    throw new NotFoundException('Device not found')
+  }
 
   // Verify device belongs to user
   const device = await env.DB.prepare(
@@ -118,18 +175,32 @@ export async function revokeDevice(
 // GET /api/v1/auth/passkeys (not in original spec but useful)
 export async function listPasskeys(ctx: RequestContext): Promise<Response> {
   const { user, env } = ctx
+  if (!env.DB) return jsonResponse([])
 
-  const result = await env.DB.prepare(
-    'SELECT id, display_name, device_type, last_used_at, created_at FROM passkey_credentials WHERE user_id = ? ORDER BY created_at DESC'
-  )
-    .bind(user.id)
-    .all<{
+  let result: {
+    results?: Array<{
       id: string
       display_name: string
       device_type: string
       last_used_at: string | null
       created_at: string
-    }>()
+    }>
+  }
+  try {
+    result = await env.DB.prepare(
+      'SELECT id, display_name, device_type, last_used_at, created_at FROM passkey_credentials WHERE user_id = ? ORDER BY created_at DESC'
+    )
+      .bind(user.id)
+      .all<{
+        id: string
+        display_name: string
+        device_type: string
+        last_used_at: string | null
+        created_at: string
+      }>()
+  } catch {
+    return jsonResponse([])
+  }
 
   const passkeys: PasskeyCredential[] = (result.results || []).map((row) => ({
     id: row.id,
@@ -145,6 +216,13 @@ export async function listPasskeys(ctx: RequestContext): Promise<Response> {
 // POST /api/v1/auth/passkeys/enroll/start
 export async function startPasskeyEnrollment(ctx: RequestContext): Promise<Response> {
   const { user, env } = ctx
+  if (!env.DB) {
+    return jsonResponse({
+      challenge: generateChallenge(),
+      rpId: env.WEBAUTHN_RP_ID,
+      userId: user.id,
+    })
+  }
 
   // Generate a random challenge
   const challenge = generateChallenge()
@@ -173,6 +251,15 @@ export async function completePasskeyEnrollment(
   ctx: RequestContext
 ): Promise<Response> {
   const { user, env } = ctx
+  if (!env.DB) {
+    if (!challengeResponse.length) {
+      throw new BadRequestException('Invalid challenge response')
+    }
+    return jsonResponse({
+      passkeyId: crypto.randomUUID(),
+      verified: true,
+    })
+  }
 
   // In a real implementation, you would:
   // 1. Verify the challenge response using @simplewebauthn/server
@@ -212,6 +299,263 @@ export async function completePasskeyEnrollment(
   }
 
   return jsonResponse(result)
+}
+
+export async function startGitHubOAuth(request: Request, env: Env): Promise<Response> {
+  if (!env.JWT_SECRET) {
+    return jsonResponse({ error: 'JWT_SECRET is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+  if (!env.GITHUB_OAUTH_CLIENT_ID) {
+    return jsonResponse({ error: 'GITHUB_OAUTH_CLIENT_ID is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+
+  const url = new URL(request.url)
+  const returnTo = sanitizeReturnTo(url.searchParams.get('returnTo'), env.APP_BASE_URL || 'https://app.opencto.works')
+  const redirectUri = `${resolveApiBaseUrl(request, env)}/api/v1/auth/oauth/github/callback`
+  const state = await signToken<OAuthStatePayload>(
+    {
+      nonce: crypto.randomUUID(),
+      returnTo,
+      exp: nowEpochSeconds() + 600,
+    },
+    env.JWT_SECRET,
+  )
+
+  const github = new URL('https://github.com/login/oauth/authorize')
+  github.searchParams.set('client_id', env.GITHUB_OAUTH_CLIENT_ID)
+  github.searchParams.set('redirect_uri', redirectUri)
+  github.searchParams.set('scope', 'read:user user:email read:org repo')
+  github.searchParams.set('state', state)
+
+  return Response.redirect(github.toString(), 302)
+}
+
+export async function completeGitHubOAuth(request: Request, env: Env): Promise<Response> {
+  if (!env.JWT_SECRET) {
+    return jsonResponse({ error: 'JWT_SECRET is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+  if (!env.GITHUB_OAUTH_CLIENT_ID || !env.GITHUB_OAUTH_CLIENT_SECRET) {
+    return jsonResponse(
+      { error: 'GITHUB_OAUTH_CLIENT_ID or GITHUB_OAUTH_CLIENT_SECRET is not configured', code: 'CONFIG_ERROR' },
+      500,
+    )
+  }
+
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code') ?? ''
+  const stateToken = url.searchParams.get('state') ?? ''
+  if (!code || !stateToken) {
+    return jsonResponse({ error: 'Missing code/state from GitHub OAuth callback', code: 'BAD_REQUEST' }, 400)
+  }
+
+  const state = await verifyToken<OAuthStatePayload>(stateToken, env.JWT_SECRET)
+  if (!state || state.exp < nowEpochSeconds()) {
+    return jsonResponse({ error: 'Invalid or expired OAuth state', code: 'UNAUTHORIZED' }, 401)
+  }
+
+  const redirectUri = `${resolveApiBaseUrl(request, env)}/api/v1/auth/oauth/github/callback`
+  const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: env.GITHUB_OAUTH_CLIENT_ID,
+      client_secret: env.GITHUB_OAUTH_CLIENT_SECRET,
+      code,
+      redirect_uri: redirectUri,
+      state: stateToken,
+    }),
+  })
+
+  const tokenBody = await tokenRes.json().catch(() => ({})) as { access_token?: string; scope?: string; error?: string }
+  const githubAccessToken = tokenBody.access_token
+  if (!tokenRes.ok || !githubAccessToken) {
+    return jsonResponse(
+      { error: 'Failed to exchange GitHub OAuth code', code: 'UPSTREAM_ERROR', details: tokenBody },
+      502,
+    )
+  }
+
+  const userRes = await fetch('https://api.github.com/user', {
+    headers: {
+      Authorization: `Bearer ${githubAccessToken}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'opencto-api-worker',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  })
+  const userBody = await userRes.json().catch(() => ({})) as { id?: number; login?: string; name?: string; email?: string | null }
+  if (!userRes.ok || !userBody.id || !userBody.login) {
+    return jsonResponse(
+      { error: 'Failed to load GitHub user profile', code: 'UPSTREAM_ERROR', details: userBody },
+      502,
+    )
+  }
+
+  let email = userBody.email ?? ''
+  if (!email) {
+    const emailsRes = await fetch('https://api.github.com/user/emails', {
+      headers: {
+        Authorization: `Bearer ${githubAccessToken}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'opencto-api-worker',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    })
+    const emailsBody = await emailsRes.json().catch(() => []) as Array<{ email?: string; primary?: boolean; verified?: boolean }>
+    const primary = emailsBody.find((e) => e.primary && e.verified)?.email
+      ?? emailsBody.find((e) => e.verified)?.email
+      ?? emailsBody[0]?.email
+      ?? ''
+    email = primary
+  }
+
+  if (!email) {
+    return jsonResponse({ error: 'GitHub account does not expose an email', code: 'UNAUTHORIZED' }, 401)
+  }
+
+  if (env.DB) {
+    await upsertGitHubConnection(env, {
+      userId: `github-${userBody.id}`,
+      githubUserId: String(userBody.id),
+      githubLogin: userBody.login,
+      accessToken: githubAccessToken,
+      scope: tokenBody.scope ?? '',
+    })
+  }
+
+  const sessionToken = await signToken<SessionTokenPayload>(
+    {
+      sub: `github-${userBody.id}`,
+      email,
+      name: userBody.name || userBody.login,
+      role: 'owner',
+      provider: 'github',
+      exp: nowEpochSeconds() + 60 * 60 * 24 * 7,
+    },
+    env.JWT_SECRET,
+  )
+
+  const returnTo = sanitizeReturnTo(state.returnTo, env.APP_BASE_URL || 'https://app.opencto.works')
+  const location = `${returnTo}#auth_token=${encodeURIComponent(sessionToken)}`
+  return Response.redirect(location, 302)
+}
+
+export async function parseSessionToken(token: string, env: Env): Promise<SessionUser | null> {
+  if (!env.JWT_SECRET) return null
+  const payload = await verifyToken<SessionTokenPayload>(token, env.JWT_SECRET)
+  if (!payload || payload.exp < nowEpochSeconds()) return null
+  return {
+    id: payload.sub,
+    email: payload.email,
+    displayName: payload.name,
+    role: payload.role,
+  }
+}
+
+// DELETE /api/v1/auth/account
+export async function deleteAccount(ctx: RequestContext): Promise<Response> {
+  const { env, userId } = ctx
+  if (!env.DB) {
+    return jsonResponse({ deleted: false, reason: 'D1 database not configured' }, 200)
+  }
+
+  const deleteStatements: Array<{ sql: string; args: unknown[] }> = [
+    { sql: 'DELETE FROM devices WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM passkey_credentials WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM passkey_challenges WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM chats WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM github_connections WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM github_orgs WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM github_repositories WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM github_pull_requests WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM github_check_runs WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM onboarding_meta WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM user_profiles WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM workspace_members WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM subscriptions WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM usage_metrics WHERE user_id = ?', args: [userId] },
+  ]
+
+  for (const statement of deleteStatements) {
+    try {
+      await env.DB.prepare(statement.sql).bind(...statement.args).run()
+    } catch {
+      // Ignore missing table/schema drift and continue.
+    }
+  }
+
+  return jsonResponse({ deleted: true })
+}
+
+function sanitizeReturnTo(raw: string | null, fallback: string): string {
+  if (!raw) return fallback
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:') return fallback
+    if (!url.hostname.endsWith('opencto.works')) return fallback
+    return `${url.origin}${url.pathname}${url.search}`
+  } catch {
+    return fallback
+  }
+}
+
+function nowEpochSeconds(): number {
+  return Math.floor(Date.now() / 1000)
+}
+
+function resolveApiBaseUrl(request: Request, env: Env): string {
+  const configured = (env.API_BASE_URL || '').trim()
+  if (configured) return configured.replace(/\/+$/, '')
+  return new URL(request.url).origin
+}
+
+function base64UrlEncode(input: Uint8Array): string {
+  const base64 = btoa(String.fromCharCode(...input))
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+function base64UrlDecode(input: string): Uint8Array {
+  const padded = input.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(input.length / 4) * 4, '=')
+  const binary = atob(padded)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+async function importHmacKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify'],
+  )
+}
+
+async function signToken<T extends Record<string, unknown>>(payload: T, secret: string): Promise<string> {
+  const key = await importHmacKey(secret)
+  const payloadBytes = new TextEncoder().encode(JSON.stringify(payload))
+  const payloadB64 = base64UrlEncode(payloadBytes)
+  const sigBytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64)))
+  return `${payloadB64}.${base64UrlEncode(sigBytes)}`
+}
+
+async function verifyToken<T extends Record<string, unknown>>(token: string, secret: string): Promise<T | null> {
+  const [payloadB64, sigB64] = token.split('.')
+  if (!payloadB64 || !sigB64) return null
+  const key = await importHmacKey(secret)
+  const ok = await crypto.subtle.verify(
+    'HMAC',
+    key,
+    base64UrlDecode(sigB64),
+    new TextEncoder().encode(payloadB64),
+  )
+  if (!ok) return null
+  try {
+    return JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadB64))) as T
+  } catch {
+    return null
+  }
 }
 
 // Helper function to generate a cryptographic challenge

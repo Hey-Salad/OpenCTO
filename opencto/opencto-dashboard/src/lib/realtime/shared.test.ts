@@ -8,6 +8,7 @@ import {
   normalizeGeminiModel,
   parseMessagePayload,
   proxyGet,
+  selectSupportedGoogleLiveModel,
 } from './shared'
 
 describe('realtime shared helpers', () => {
@@ -24,6 +25,12 @@ describe('realtime shared helpers', () => {
     expect(isOpenAIRealtimeModel('gpt-4.1')).toBe(false)
     expect(normalizeGeminiModel('gemini-2.0-flash-live-001')).toBe('models/gemini-2.0-flash-live-001')
     expect(normalizeGeminiModel('models/gemini-2.0-flash-live-001')).toBe('models/gemini-2.0-flash-live-001')
+    expect(selectSupportedGoogleLiveModel('gemini-2.5-flash-native-audio-preview-09-2025')).toBe(
+      'gemini-2.5-flash-native-audio-preview-09-2025',
+    )
+    expect(selectSupportedGoogleLiveModel('gemini-2.0-flash-live-001')).toBe(
+      'gemini-2.5-flash-native-audio-preview-12-2025',
+    )
   })
 
   test('detects and normalizes github models', () => {

@@ -6,6 +6,8 @@ import type {
   InvoicesResponse,
   PlanCode,
 } from '../types/billing'
+import { getApiBaseUrl } from '../config/apiBase'
+import { getAuthHeaders } from '../lib/authToken'
 
 export interface BillingApi {
   createCheckoutSession: (planCode: PlanCode, interval: BillingInterval) => Promise<CheckoutSessionResponse>
@@ -14,11 +16,14 @@ export interface BillingApi {
   getInvoices: () => Promise<InvoicesResponse>
 }
 
+const DEFAULT_BILLING_BASE = `${getApiBaseUrl()}/api/v1/billing`
+
 async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
     headers: {
       'content-type': 'application/json',
+      ...getAuthHeaders(),
       ...(init?.headers ?? {}),
     },
   })
@@ -31,7 +36,7 @@ async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promi
 }
 
 export class BillingHttpClient implements BillingApi {
-  constructor(private readonly baseUrl = 'https://api.opencto.works/api/v1/billing') {}
+  constructor(private readonly baseUrl = DEFAULT_BILLING_BASE) {}
 
   createCheckoutSession(planCode: PlanCode, interval: BillingInterval): Promise<CheckoutSessionResponse> {
     return fetchJson<CheckoutSessionResponse>(`${this.baseUrl}/checkout/session`, {

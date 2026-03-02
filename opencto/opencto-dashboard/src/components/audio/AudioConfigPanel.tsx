@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { isGeminiLiveModel } from '../../lib/realtime/shared'
+import { useEffect, useState } from 'react'
+import { GOOGLE_LIVE_VOICE_MODELS, isGeminiLiveModel, selectSupportedGoogleLiveModel } from '../../lib/realtime/shared'
 
 export interface AudioConfig {
   systemInstructions: string
@@ -43,11 +43,12 @@ const VOICE_MODEL_GROUPS = [
   },
   {
     label: 'Voice (Realtime) · Google',
-    models: [
-      { value: 'gemini-2.5-flash-native-audio-preview-12-2025', label: 'Gemini 2.5 Flash Native Audio' },
-      { value: 'gemini-2.0-flash-live-001', label: 'Gemini 2.0 Flash Live' },
-      { value: 'gemini-live-2.0-flash-exp', label: 'Gemini Live 2.0 Flash' },
-    ],
+    models: GOOGLE_LIVE_VOICE_MODELS.map((value) => ({
+      value,
+      label: value === 'gemini-2.5-flash-native-audio-preview-12-2025'
+        ? 'Gemini 2.5 Flash Native Audio (12-2025)'
+        : 'Gemini 2.5 Flash Native Audio (09-2025)',
+    })),
   },
 ]
 
@@ -124,6 +125,17 @@ export function AudioConfigPanel({ config, onConfigChange }: AudioConfigPanelPro
     }
     onConfigChange({ ...config, [key]: value })
   }
+
+  useEffect(() => {
+    if (!isGeminiLiveModel(config.voiceModel)) return
+    const safeVoiceModel = selectSupportedGoogleLiveModel(config.voiceModel)
+    if (safeVoiceModel === config.voiceModel) return
+    onConfigChange({
+      ...config,
+      voiceModel: safeVoiceModel,
+      transcriptModel: 'gpt-4o-mini-transcribe',
+    })
+  }, [config, onConfigChange])
 
   return (
     <aside className="audio-config-panel panel" aria-label="Audio configuration">

@@ -3,14 +3,60 @@
 
 import Stripe from 'stripe'
 import type { Env, PlanCode, BillingInterval } from './types'
-import { jsonResponse, BadRequestException } from './errors'
+import { jsonResponse, BadRequestException, InternalServerException } from './errors'
 
 // Initialize Stripe client
 function getStripeClient(env: Env): Stripe {
+  if (!env.STRIPE_SECRET_KEY) {
+    throw new InternalServerException('STRIPE_SECRET_KEY is not configured')
+  }
   return new Stripe(env.STRIPE_SECRET_KEY, {
     apiVersion: '2024-04-10',
     httpClient: Stripe.createFetchHttpClient(),
   })
+}
+
+let webhookSchemaReady = false
+
+async function ensureWebhookSchema(env: Env): Promise<void> {
+  if (webhookSchemaReady) return
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS billing_events (
+      event_id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      processed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run()
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS workspace_billing (
+      workspace_id TEXT PRIMARY KEY,
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT,
+      plan_code TEXT NOT NULL DEFAULT 'STARTER',
+      interval TEXT NOT NULL DEFAULT 'MONTHLY',
+      status TEXT NOT NULL DEFAULT 'inactive',
+      current_period_end TEXT,
+      cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run()
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS invoices (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      stripe_invoice_id TEXT UNIQUE NOT NULL,
+      number TEXT NOT NULL,
+      amount_paid_usd INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      status TEXT NOT NULL,
+      hosted_invoice_url TEXT,
+      pdf_url TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run()
+  webhookSchemaReady = true
 }
 
 // POST /api/v1/billing/webhooks/stripe
@@ -24,6 +70,9 @@ export async function handleStripeWebhook(request: Request, env: Env): Promise<R
   }
 
   const stripe = getStripeClient(env)
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    throw new InternalServerException('STRIPE_WEBHOOK_SECRET is not configured')
+  }
 
   // Verify webhook signature
   let event: Stripe.Event
@@ -33,6 +82,8 @@ export async function handleStripeWebhook(request: Request, env: Env): Promise<R
     console.error('Webhook signature verification failed:', err instanceof Error ? err.message : 'Unknown error')
     throw new BadRequestException('Invalid webhook signature')
   }
+
+  await ensureWebhookSchema(env)
 
   // Check for duplicate events (idempotency)
   const isDuplicate = await isEventProcessed(event.id, env)
@@ -81,7 +132,7 @@ export async function handleStripeWebhook(request: Request, env: Env): Promise<R
 
 // Check if event has already been processed
 async function isEventProcessed(eventId: string, env: Env): Promise<boolean> {
-  const result = await env.DB.prepare('SELECT id FROM webhook_events WHERE stripe_event_id = ?')
+  const result = await env.DB.prepare('SELECT event_id FROM billing_events WHERE event_id = ?')
     .bind(eventId)
     .first()
 
@@ -91,9 +142,9 @@ async function isEventProcessed(eventId: string, env: Env): Promise<boolean> {
 // Mark event as processed
 async function markEventProcessed(event: Stripe.Event, env: Env): Promise<void> {
   await env.DB.prepare(
-    'INSERT INTO webhook_events (id, stripe_event_id, event_type, payload) VALUES (?, ?, ?, ?)'
+    'INSERT INTO billing_events (event_id, event_type, payload) VALUES (?, ?, ?)'
   )
-    .bind(crypto.randomUUID(), event.id, event.type, JSON.stringify(event))
+    .bind(event.id, event.type, JSON.stringify(event))
     .run()
 }
 
@@ -103,16 +154,30 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, _env: E
 
   // Extract metadata
   const userId = session.metadata?.userId
+  const workspaceId = session.metadata?.workspaceId || (userId ? `ws-${userId}` : undefined)
   const planCode = session.metadata?.planCode as PlanCode
   const interval = session.metadata?.interval as BillingInterval
 
-  if (!userId || !planCode || !interval) {
+  if (!workspaceId || !planCode || !interval) {
     console.error('Missing metadata in checkout session:', session.id)
     return
   }
 
-  // Subscription will be created by subscription.created event
-  // This event is mainly for tracking and analytics
+  const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
+  if (!customerId) return
+
+  await _env.DB.prepare(
+    `INSERT INTO workspace_billing (workspace_id, stripe_customer_id, plan_code, interval, status, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(workspace_id) DO UPDATE SET
+      stripe_customer_id = excluded.stripe_customer_id,
+      plan_code = excluded.plan_code,
+      interval = excluded.interval,
+      status = excluded.status,
+      updated_at = excluded.updated_at`,
+  )
+    .bind(workspaceId, customerId, planCode, interval, 'pending')
+    .run()
 }
 
 // Handle subscription created/updated
@@ -125,9 +190,9 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, env:
     : subscription.customer.id
 
   // Get user ID from subscription metadata or customer
-  const userId = subscription.metadata?.userId || await getUserIdFromCustomer(customerId, env)
-  if (!userId) {
-    console.error('Cannot find user ID for subscription:', subscription.id)
+  const workspaceId = subscription.metadata?.workspaceId || await getWorkspaceIdFromCustomer(customerId, env)
+  if (!workspaceId) {
+    console.error('Cannot find workspace ID for subscription:', subscription.id)
     return
   }
 
@@ -135,50 +200,32 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, env:
   const planCode = (subscription.metadata?.planCode as PlanCode) || 'STARTER'
   const interval = (subscription.metadata?.interval as BillingInterval) || 'MONTHLY'
 
-  // Check if subscription already exists
-  const existing = await env.DB.prepare(
-    'SELECT id FROM subscriptions WHERE stripe_subscription_id = ?'
+  await env.DB.prepare(
+    `INSERT INTO workspace_billing (
+      workspace_id, stripe_customer_id, stripe_subscription_id, plan_code, status, interval, current_period_end, cancel_at_period_end, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(workspace_id) DO UPDATE SET
+      stripe_customer_id = excluded.stripe_customer_id,
+      stripe_subscription_id = excluded.stripe_subscription_id,
+      plan_code = excluded.plan_code,
+      status = excluded.status,
+      interval = excluded.interval,
+      current_period_end = excluded.current_period_end,
+      cancel_at_period_end = excluded.cancel_at_period_end,
+      updated_at = excluded.updated_at`,
   )
-    .bind(subscription.id)
-    .first<{ id: string }>()
-
-  if (existing) {
-    // Update existing subscription
-    await env.DB.prepare(
-      `UPDATE subscriptions
-       SET plan_code = ?, status = ?, interval = ?, current_period_start = ?, current_period_end = ?, cancel_at_period_end = ?, updated_at = datetime('now')
-       WHERE stripe_subscription_id = ?`
+    .bind(
+      workspaceId,
+      customerId,
+      subscription.id,
+      planCode,
+      subscription.status,
+      interval,
+      new Date(subscription.current_period_end * 1000).toISOString(),
+      subscription.cancel_at_period_end ? 1 : 0,
     )
-      .bind(
-        planCode,
-        subscription.status,
-        interval,
-        new Date(subscription.current_period_start * 1000).toISOString(),
-        new Date(subscription.current_period_end * 1000).toISOString(),
-        subscription.cancel_at_period_end ? 1 : 0,
-        subscription.id
-      )
-      .run()
-  } else {
-    // Create new subscription
-    await env.DB.prepare(
-      `INSERT INTO subscriptions (id, customer_id, user_id, stripe_subscription_id, plan_code, status, interval, current_period_start, current_period_end, cancel_at_period_end)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        crypto.randomUUID(),
-        customerId,
-        userId,
-        subscription.id,
-        planCode,
-        subscription.status,
-        interval,
-        new Date(subscription.current_period_start * 1000).toISOString(),
-        new Date(subscription.current_period_end * 1000).toISOString(),
-        subscription.cancel_at_period_end ? 1 : 0
-      )
-      .run()
-  }
+    .run()
 }
 
 // Handle subscription deleted
@@ -186,7 +233,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, env:
   console.log(`Subscription deleted: ${subscription.id}`)
 
   await env.DB.prepare(
-    `UPDATE subscriptions
+    `UPDATE workspace_billing
      SET status = 'canceled', updated_at = datetime('now')
      WHERE stripe_subscription_id = ?`
   )
@@ -208,15 +255,14 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, env: Env): Promise<voi
     return
   }
 
-  // Get internal subscription ID
-  const subscription = await env.DB.prepare(
-    'SELECT id FROM subscriptions WHERE stripe_subscription_id = ?'
+  const workspace = await env.DB.prepare(
+    'SELECT workspace_id FROM workspace_billing WHERE stripe_subscription_id = ?'
   )
     .bind(subscriptionId)
-    .first<{ id: string }>()
+    .first<{ workspace_id: string }>()
 
-  if (!subscription) {
-    console.error('Subscription not found for invoice:', invoice.id)
+  if (!workspace) {
+    console.error('Workspace billing not found for invoice:', invoice.id)
     return
   }
 
@@ -245,12 +291,12 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, env: Env): Promise<voi
   } else {
     // Create new invoice
     await env.DB.prepare(
-      `INSERT INTO invoices (id, subscription_id, stripe_invoice_id, number, amount_paid_usd, currency, status, hosted_invoice_url, pdf_url)
+      `INSERT INTO invoices (id, workspace_id, stripe_invoice_id, number, amount_paid_usd, currency, status, hosted_invoice_url, pdf_url)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         crypto.randomUUID(),
-        subscription.id,
+        workspace.workspace_id,
         invoice.id,
         invoice.number || `INV-${invoice.id}`,
         invoice.amount_paid,
@@ -274,7 +320,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, env: Env): Pr
 
   if (subscriptionId) {
     await env.DB.prepare(
-      `UPDATE subscriptions
+      `UPDATE workspace_billing
        SET status = 'past_due', updated_at = datetime('now')
        WHERE stripe_subscription_id = ?`
     )
@@ -283,13 +329,12 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, env: Env): Pr
   }
 }
 
-// Helper function to get user ID from customer
-async function getUserIdFromCustomer(customerId: string, env: Env): Promise<string | null> {
+async function getWorkspaceIdFromCustomer(customerId: string, env: Env): Promise<string | null> {
   const result = await env.DB.prepare(
-    'SELECT user_id FROM subscriptions WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1'
+    'SELECT workspace_id FROM workspace_billing WHERE stripe_customer_id = ? ORDER BY updated_at DESC LIMIT 1'
   )
     .bind(customerId)
-    .first<{ user_id: string }>()
+    .first<{ workspace_id: string }>()
 
-  return result?.user_id || null
+  return result?.workspace_id || null
 }

@@ -2,9 +2,10 @@ import {
   type AgentEvent,
   type CTOAgentConfig,
 } from './shared'
+import { getApiBaseUrl } from '../../config/apiBase'
+import { getAuthHeaders } from '../authToken'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
-const AUTH_HEADER = { Authorization: 'Bearer demo-token' }
+const API_BASE = getApiBaseUrl()
 
 export class GitHubModelsAdapter {
   private hasConnected = false
@@ -53,7 +54,7 @@ export class GitHubModelsAdapter {
       const response = await fetch(`${API_BASE}/api/v1/agent/respond`, {
         method: 'POST',
         headers: {
-          ...AUTH_HEADER,
+          ...getAuthHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

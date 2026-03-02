@@ -1,3 +1,6 @@
+import { getApiBaseUrl } from '../../config/apiBase'
+import { getAuthHeaders } from '../authToken'
+
 export interface CTOAgentConfig {
   model: string
   reasoningModel?: string
@@ -31,12 +34,16 @@ export type FunctionTool = {
   }
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
-const AUTH_HEADER = { Authorization: 'Bearer demo-token' }
+const API_BASE = getApiBaseUrl()
 
 export const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY
 
 export const CONNECT_TIMEOUT_MS = 10_000
+export const GOOGLE_LIVE_VOICE_MODELS = [
+  'gemini-2.5-flash-native-audio-preview-12-2025',
+  'gemini-2.5-flash-native-audio-preview-09-2025',
+] as const
+const GOOGLE_LIVE_VOICE_MODEL_SET = new Set<string>(GOOGLE_LIVE_VOICE_MODELS)
 
 export const TOOLS: FunctionTool[] = [
   {
@@ -112,6 +119,50 @@ export const TOOLS: FunctionTool[] = [
       required: ['startDate', 'endDate'],
     },
   },
+  {
+    type: 'function',
+    name: 'list_github_orgs',
+    description: 'List GitHub organizations available to the authenticated token',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    type: 'function',
+    name: 'list_github_repos',
+    description: 'List repositories in a GitHub organization',
+    parameters: {
+      type: 'object',
+      properties: {
+        org: { type: 'string', description: 'GitHub organization login' },
+      },
+      required: ['org'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'list_github_pull_requests',
+    description: 'List recent pull requests for a repository',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string', description: 'Repository owner or organization' },
+        repo: { type: 'string', description: 'Repository name' },
+      },
+      required: ['owner', 'repo'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'list_github_actions_runs',
+    description: 'List recent GitHub Actions workflow runs for a repository',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string', description: 'Repository owner or organization' },
+        repo: { type: 'string', description: 'Repository name' },
+      },
+      required: ['owner', 'repo'],
+    },
+  },
 ]
 
 export const PCM_WORKLET_CODE = `
@@ -130,6 +181,26 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
 }
 registerProcessor('pcm-capture-processor', PcmCaptureProcessor)
 `
+
+export async function loadPcmCaptureWorklet(audioContext: AudioContext): Promise<void> {
+  // Prefer static asset to avoid CSP restrictions on blob: worklet modules.
+  try {
+    await audioContext.audioWorklet.addModule('/pcm-capture-processor.js')
+    return
+  } catch (primaryError) {
+    // Fallback for local/dev environments.
+    const blob = new Blob([PCM_WORKLET_CODE], { type: 'application/javascript' })
+    const blobUrl = URL.createObjectURL(blob)
+    try {
+      await audioContext.audioWorklet.addModule(blobUrl)
+    } finally {
+      URL.revokeObjectURL(blobUrl)
+    }
+    if (primaryError) {
+      // no-op: fallback succeeded
+    }
+  }
+}
 
 export function isGeminiModel(model: string): boolean {
   return model.toLowerCase().includes('gemini')
@@ -155,6 +226,12 @@ export function extractGitHubModelId(model: string): string {
 export function normalizeGeminiModel(model: string): string {
   if (model.startsWith('models/')) return model
   return `models/${model}`
+}
+
+export function selectSupportedGoogleLiveModel(model: string): string {
+  const stripped = model.startsWith('models/') ? model.slice('models/'.length) : model
+  if (GOOGLE_LIVE_VOICE_MODEL_SET.has(stripped)) return stripped
+  return GOOGLE_LIVE_VOICE_MODELS[0]
 }
 
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -209,7 +286,7 @@ export async function parseMessagePayload(data: unknown): Promise<Record<string,
 }
 
 export async function proxyGet(path: string): Promise<string> {
-  const res = await fetch(`${API_BASE}${path}`, { headers: AUTH_HEADER })
+  const res = await fetch(`${API_BASE}${path}`, { headers: getAuthHeaders() })
   const text = await res.text()
   return res.ok ? text : JSON.stringify({ error: `HTTP ${res.status}`, details: text })
 }
@@ -233,6 +310,18 @@ export async function executeToolProxy(name: string, args: Record<string, unknow
     case 'get_openai_usage':
       return proxyGet(
         `/api/v1/cto/openai/usage?start=${encodeURIComponent(String(args.startDate ?? ''))}&end=${encodeURIComponent(String(args.endDate ?? ''))}`,
+      )
+    case 'list_github_orgs':
+      return proxyGet('/api/v1/cto/github/orgs')
+    case 'list_github_repos':
+      return proxyGet(`/api/v1/cto/github/orgs/${encodeURIComponent(String(args.org ?? ''))}/repos`)
+    case 'list_github_pull_requests':
+      return proxyGet(
+        `/api/v1/cto/github/repos/${encodeURIComponent(String(args.owner ?? ''))}/${encodeURIComponent(String(args.repo ?? ''))}/pulls`,
+      )
+    case 'list_github_actions_runs':
+      return proxyGet(
+        `/api/v1/cto/github/repos/${encodeURIComponent(String(args.owner ?? ''))}/${encodeURIComponent(String(args.repo ?? ''))}/actions/runs`,
       )
     default:
       return JSON.stringify({ error: `Unknown tool: ${name}` })
