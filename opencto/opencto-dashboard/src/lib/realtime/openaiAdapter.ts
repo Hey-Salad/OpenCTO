@@ -23,6 +23,7 @@ export class OpenAIRealtimeAdapter {
   private hasEmittedSessionEnded = false
   private handledToolCallIds = new Set<string>()
   private hasPendingInputAudio = false
+  private isDisconnecting = false
 
   constructor(
     private readonly tokenUrl: string,
@@ -31,6 +32,7 @@ export class OpenAIRealtimeAdapter {
   ) {}
 
   async connect(): Promise<void> {
+    this.isDisconnecting = false
     const res = await fetch(this.tokenUrl, {
       method: 'POST',
       headers: {
@@ -72,6 +74,7 @@ export class OpenAIRealtimeAdapter {
         if (settled) return
         settled = true
         clearTimeout(timeout)
+        this.isDisconnecting = false
         this._sendSessionUpdate()
         this.playbackCtx = new AudioContext({ sampleRate: 24000 })
         this.onEvent({ type: 'session_started' })
@@ -84,7 +87,9 @@ export class OpenAIRealtimeAdapter {
           clearTimeout(timeout)
           reject(new Error('WebSocket connection error'))
         }
-        this.onEvent({ type: 'error', message: '[openai] WebSocket connection error' })
+        if (!this.isDisconnecting) {
+          this.onEvent({ type: 'error', message: '[openai] WebSocket connection error' })
+        }
       }
 
       ws.onclose = (event: CloseEvent) => {
@@ -92,7 +97,7 @@ export class OpenAIRealtimeAdapter {
           settled = true
           clearTimeout(timeout)
           reject(new Error(`WebSocket closed before open (code ${event.code}${event.reason ? `: ${event.reason}` : ''})`))
-        } else if (event.code !== 1000) {
+        } else if (event.code !== 1000 && !this.isDisconnecting) {
           this.onEvent({
             type: 'error',
             message: `[openai] WebSocket closed (code ${event.code}${event.reason ? `: ${event.reason}` : ''})`,
@@ -108,6 +113,7 @@ export class OpenAIRealtimeAdapter {
   }
 
   disconnect(): void {
+    this.isDisconnecting = true
     this.stopMicrophone()
     void this.playbackCtx?.close()
     this.playbackCtx = null

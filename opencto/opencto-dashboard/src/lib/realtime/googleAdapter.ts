@@ -22,6 +22,11 @@ export class GoogleLiveAdapter {
   private nextPlaybackTime = 0
   private hasEmittedSessionEnded = false
   private handledToolCallIds = new Set<string>()
+  private isDisconnecting = false
+  private latestInputTranscript = ''
+  private latestOutputTranscript = ''
+  private latestInputTranscriptAt = 0
+  private latestOutputTranscriptAt = 0
 
   constructor(
     private readonly config: CTOAgentConfig,
@@ -31,6 +36,11 @@ export class GoogleLiveAdapter {
   async connect(): Promise<void> {
     if (!GOOGLE_API_KEY) throw new Error('VITE_GOOGLE_API_KEY is not set')
 
+    this.isDisconnecting = false
+    this.latestInputTranscript = ''
+    this.latestOutputTranscript = ''
+    this.latestInputTranscriptAt = 0
+    this.latestOutputTranscriptAt = 0
     this.hasEmittedSessionEnded = false
     const wsUrls = [
       `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(GOOGLE_API_KEY)}`,
@@ -71,6 +81,7 @@ export class GoogleLiveAdapter {
         if (settled) return
         settled = true
         clearTimeout(timeout)
+        this.isDisconnecting = false
         this._sendSetup()
         this.playbackCtx = new AudioContext({ sampleRate: 24000 })
         this.onEvent({ type: 'session_started' })
@@ -83,7 +94,9 @@ export class GoogleLiveAdapter {
           clearTimeout(timeout)
           reject(new Error('Google Live WebSocket connection error'))
         }
-        this.onEvent({ type: 'error', message: '[google] WebSocket connection error' })
+        if (!this.isDisconnecting) {
+          this.onEvent({ type: 'error', message: '[google] WebSocket connection error' })
+        }
       }
 
       ws.onclose = (event: CloseEvent) => {
@@ -91,7 +104,7 @@ export class GoogleLiveAdapter {
           settled = true
           clearTimeout(timeout)
           reject(new Error(`Google WebSocket closed before open (code ${event.code}${event.reason ? `: ${event.reason}` : ''})`))
-        } else if (event.code !== 1000) {
+        } else if (event.code !== 1000 && !this.isDisconnecting) {
           this.onEvent({
             type: 'error',
             message: `[google] WebSocket closed (code ${event.code}${event.reason ? `: ${event.reason}` : ''})`,
@@ -107,6 +120,7 @@ export class GoogleLiveAdapter {
   }
 
   disconnect(): void {
+    this.isDisconnecting = true
     this.stopMicrophone()
     void this.playbackCtx?.close()
     this.playbackCtx = null
@@ -212,13 +226,35 @@ export class GoogleLiveAdapter {
         (event.inputTranscription as Record<string, unknown> | undefined)
         ?? ((event.serverContent as Record<string, unknown> | undefined)?.inputTranscription as Record<string, unknown> | undefined)
       const inputText = (inputTranscription?.text as string | undefined) ?? ''
-      if (inputText.trim()) this.onEvent({ type: 'user_transcript', text: inputText.trim() })
+      const normalizedInputText = inputText.trim()
+      if (
+        normalizedInputText
+        && !(
+          normalizedInputText === this.latestInputTranscript
+          && Date.now() - this.latestInputTranscriptAt < 1500
+        )
+      ) {
+        this.latestInputTranscript = normalizedInputText
+        this.latestInputTranscriptAt = Date.now()
+        this.onEvent({ type: 'user_transcript', text: normalizedInputText })
+      }
 
       const outputTranscription =
         (event.outputTranscription as Record<string, unknown> | undefined)
         ?? ((event.serverContent as Record<string, unknown> | undefined)?.outputTranscription as Record<string, unknown> | undefined)
       const outputText = (outputTranscription?.text as string | undefined) ?? ''
-      if (outputText.trim()) this.onEvent({ type: 'assistant_transcript_done', text: outputText.trim() })
+      const normalizedOutputText = outputText.trim()
+      if (
+        normalizedOutputText
+        && !(
+          normalizedOutputText === this.latestOutputTranscript
+          && Date.now() - this.latestOutputTranscriptAt < 1500
+        )
+      ) {
+        this.latestOutputTranscript = normalizedOutputText
+        this.latestOutputTranscriptAt = Date.now()
+        this.onEvent({ type: 'assistant_transcript_done', text: normalizedOutputText })
+      }
 
       const serverContent = event.serverContent as Record<string, unknown> | undefined
       if (serverContent?.interrupted) {
@@ -230,7 +266,18 @@ export class GoogleLiveAdapter {
       const parts = (modelTurn?.parts as Array<Record<string, unknown>> | undefined) ?? []
       for (const part of parts) {
         const text = part.text as string | undefined
-        if (text?.trim()) this.onEvent({ type: 'assistant_transcript_done', text: text.trim() })
+        const normalizedPartText = text?.trim() ?? ''
+        if (
+          normalizedPartText
+          && !(
+            normalizedPartText === this.latestOutputTranscript
+            && Date.now() - this.latestOutputTranscriptAt < 1500
+          )
+        ) {
+          this.latestOutputTranscript = normalizedPartText
+          this.latestOutputTranscriptAt = Date.now()
+          this.onEvent({ type: 'assistant_transcript_done', text: normalizedPartText })
+        }
 
         const inlineData = part.inlineData as Record<string, unknown> | undefined
         const audioData = inlineData?.data
