@@ -169,6 +169,25 @@ class MockD1Database {
       return { count } as T
     }
 
+    if (normalized.startsWith('select count(*) as total_runs,')) {
+      const [userId, since] = args
+      const scoped = Array.from(this.runs.values()).filter((run) => run.user_id === String(userId) && run.created_at >= String(since))
+      const succeeded = scoped.filter((run) => run.status === 'succeeded').length
+      const failed = scoped.filter((run) => run.status === 'failed' || run.status === 'timed_out' || run.status === 'canceled').length
+      const active = scoped.filter((run) => run.status === 'queued' || run.status === 'running').length
+      return {
+        total_runs: scoped.length,
+        succeeded_runs: succeeded,
+        failed_runs: failed,
+        active_runs: active,
+        avg_duration_seconds: 3.5,
+      } as T
+    }
+
+    if (normalized.startsWith('select id, run_id, kind, path, size_bytes, sha256, url, expires_at, created_at from codebase_run_artifacts where run_id = ? and id = ?')) {
+      return null
+    }
+
     throw new Error(`Unhandled first SQL: ${sql}`)
   }
 
@@ -182,6 +201,25 @@ class MockD1Database {
         .sort((a, b) => a.seq - b.seq)
         .slice(0, Number(limit))
       return { results: filtered.map((event) => structuredClone(event) as T) }
+    }
+
+    if (normalized.startsWith('select id, run_id, kind, path, size_bytes, sha256, url, expires_at, created_at from codebase_run_artifacts')) {
+      return { results: [] }
+    }
+
+    if (normalized.startsWith('select seq, level, event_type, message, created_at from codebase_run_events')) {
+      const [runId] = args
+      const filtered = this.events
+        .filter((event) => event.run_id === String(runId))
+        .sort((a, b) => a.seq - b.seq)
+        .map((event) => ({
+          seq: event.seq,
+          level: event.level,
+          event_type: event.event_type,
+          message: event.message,
+          created_at: event.created_at,
+        }))
+      return { results: filtered as T[] }
     }
 
     throw new Error(`Unhandled all SQL: ${sql}`)
@@ -477,5 +515,58 @@ describe('Codebase run endpoints', () => {
     expect(res.status).toBe(200)
     expect(body.run.status).toBe('succeeded')
     expect(db.countEvents(createdBody.run.id)).toBe(beforeEventCount)
+  })
+
+  it('GET /api/v1/codebase/metrics returns aggregated totals', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({}, db)
+    await createRun(env)
+
+    const res = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/codebase/metrics', {
+        headers: { Authorization: 'Bearer demo-token' },
+      }),
+      env,
+    )
+    const body = await res.json() as { totals: { totalRuns: number } }
+
+    expect(res.status).toBe(200)
+    expect(body.totals.totalRuns).toBeGreaterThan(0)
+  })
+
+  it('GET /api/v1/codebase/runs/:id/artifacts includes generated log artifact', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({}, db)
+    const created = await createRun(env)
+    const createdBody = await created.json() as { run: { id: string } }
+
+    const res = await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/codebase/runs/${createdBody.run.id}/artifacts`, {
+        headers: { Authorization: 'Bearer demo-token' },
+      }),
+      env,
+    )
+    const body = await res.json() as { artifacts: Array<{ id: string }> }
+
+    expect(res.status).toBe(200)
+    expect(body.artifacts.some((artifact) => artifact.id === 'log')).toBe(true)
+  })
+
+  it('GET /api/v1/codebase/runs/:id/artifacts/log returns text log content', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({}, db)
+    const created = await createRun(env)
+    const createdBody = await created.json() as { run: { id: string } }
+
+    const res = await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/codebase/runs/${createdBody.run.id}/artifacts/log`, {
+        headers: { Authorization: 'Bearer demo-token' },
+      }),
+      env,
+    )
+    const body = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(body).toContain('run.queued')
   })
 })
