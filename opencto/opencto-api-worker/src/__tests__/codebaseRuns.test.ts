@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import worker from '../index'
 import { __setContainerDispatcherForTests } from '../codebaseRuns'
-import type { Env } from '../types'
+import type { Env, UserRole } from '../types'
 
 type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
 
@@ -46,6 +46,13 @@ class MockD1Database {
     const run = this.runs.get(runId)
     if (!run) return
     run.status = status
+  }
+
+  setRunTiming(runId: string, startedAt: string | null, completedAt: string | null): void {
+    const run = this.runs.get(runId)
+    if (!run) return
+    run.started_at = startedAt
+    run.completed_at = completedAt
   }
 
   countEvents(runId: string): number {
@@ -184,6 +191,18 @@ class MockD1Database {
       return { results: filtered.map((event) => structuredClone(event) as T) }
     }
 
+    if (normalized.startsWith('select status, started_at, completed_at from codebase_runs where user_id = ? and created_at >= ?')) {
+      const [userId, since] = args
+      const filtered = Array.from(this.runs.values())
+        .filter((run) => run.user_id === String(userId) && run.created_at >= String(since))
+        .map((run) => ({
+          status: run.status,
+          started_at: run.started_at,
+          completed_at: run.completed_at,
+        }) as T)
+      return { results: filtered }
+    }
+
     throw new Error(`Unhandled all SQL: ${sql}`)
   }
 }
@@ -264,6 +283,53 @@ async function createRun(env: Env, body?: Record<string, unknown>): Promise<Resp
   )
 }
 
+function base64UrlEncode(input: Uint8Array): string {
+  return Buffer.from(input)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+async function createSessionToken(env: Env, role: UserRole, sub = 'github-test-user'): Promise<string> {
+  const payload = {
+    sub,
+    email: 'test@example.com',
+    name: 'Test User',
+    role,
+    provider: 'github',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  }
+  const payloadB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)))
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(env.JWT_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64))
+  const sigB64 = base64UrlEncode(new Uint8Array(sig))
+  return `${payloadB64}.${sigB64}`
+}
+
+async function createRunWithAuth(env: Env, token: string, body?: Record<string, unknown>): Promise<Response> {
+  return await worker.fetch(
+    new Request('https://api.opencto.works/api/v1/codebase/runs', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body ?? {
+        repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+        commands: ['git clone https://github.com/Hey-Salad/CTO-AI.git', 'npm run build'],
+      }),
+    }),
+    env,
+  )
+}
+
 describe('Codebase run endpoints', () => {
   it('POST /api/v1/codebase/runs succeeds and persists normalized commands', async () => {
     const db = new MockD1Database()
@@ -284,6 +350,21 @@ describe('Codebase run endpoints', () => {
     expect(body.run.timeoutSeconds).toBe(1800)
   })
 
+  it('POST /api/v1/codebase/runs returns 403 for non-owner/cto roles', async () => {
+    const env = createMockEnv()
+    const developerToken = await createSessionToken(env, 'developer')
+    const res = await createRunWithAuth(env, developerToken, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+    const body = await res.json() as { code?: string; status?: number; details?: { code?: string } }
+
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('FORBIDDEN')
+    expect(body.status).toBe(403)
+    expect(body.details?.code).toBe('CODEBASE_ACCESS_DENIED')
+  })
+
   it('POST /api/v1/codebase/runs rejects disallowed or chained commands', async () => {
     const env = createMockEnv()
 
@@ -297,6 +378,20 @@ describe('Codebase run endpoints', () => {
     expect(body.code).toBe('BAD_REQUEST')
     expect(body.status).toBe(400)
     expect(body.error).toContain('Shell chaining')
+  })
+
+  it('POST /api/v1/codebase/runs rejects invalid repo URL', async () => {
+    const env = createMockEnv()
+    const res = await createRun(env, {
+      repoUrl: 'https://gitlab.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+    const body = await res.json() as { code?: string; status?: number; error?: string }
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('BAD_REQUEST')
+    expect(body.status).toBe(400)
+    expect(body.error).toContain('github.com')
   })
 
   it('POST /api/v1/codebase/runs rejects unauthorized requests', async () => {
@@ -326,9 +421,32 @@ describe('Codebase run endpoints', () => {
     const body = await res.json() as { code?: string; status?: number; error?: string }
 
     expect(res.status).toBe(429)
-    expect(body.code).toBe('QUOTA_EXCEEDED')
+    expect(body.code).toBe('CODEBASE_CONCURRENCY_LIMIT')
     expect(body.status).toBe(429)
     expect(body.error).toContain('Concurrent run quota')
+  })
+
+  it('POST /api/v1/codebase/runs returns quota error when daily cap is exceeded', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({
+      CODEBASE_MAX_CONCURRENT_RUNS: '5',
+      CODEBASE_DAILY_RUN_LIMIT: '1',
+    }, db)
+    await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+
+    const res = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+    const body = await res.json() as { code?: string; status?: number; error?: string }
+
+    expect(res.status).toBe(429)
+    expect(body.code).toBe('CODEBASE_DAILY_LIMIT')
+    expect(body.status).toBe(429)
+    expect(body.error).toContain('Daily run quota')
   })
 
   it('POST /api/v1/codebase/runs rejects invalid timeout payloads', async () => {
@@ -375,7 +493,7 @@ describe('Codebase run endpoints', () => {
 
     expect(res.status).toBe(201)
     expect(body.run.status).toBe('succeeded')
-    expect(db.countEvents(runId)).toBe(6)
+    expect(db.countEvents(runId)).toBe(7)
   })
 
   it('GET /api/v1/codebase/runs/:id returns run when found', async () => {
@@ -432,7 +550,7 @@ describe('Codebase run endpoints', () => {
     const body = await res.json() as { events: Array<{ seq: number }> }
 
     expect(res.status).toBe(200)
-    expect(body.events.map((event) => event.seq)).toEqual([1, 2, 3])
+    expect(body.events.map((event) => event.seq)).toEqual([1, 2, 3, 4])
   })
 
   it('POST /api/v1/codebase/runs/:id/cancel transitions queued/running to canceled', async () => {
@@ -456,6 +574,33 @@ describe('Codebase run endpoints', () => {
     expect(body.run.status).toBe('canceled')
   })
 
+  it('POST /api/v1/codebase/runs/:id/cancel returns 403 for non-owner/cto roles', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({}, db)
+    const ownerToken = await createSessionToken(env, 'owner', 'github-shared-user')
+    const developerToken = await createSessionToken(env, 'developer', 'github-shared-user')
+
+    const created = await createRunWithAuth(env, ownerToken, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+    const createdBody = await created.json() as { run: { id: string } }
+
+    const res = await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/codebase/runs/${createdBody.run.id}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${developerToken}` },
+      }),
+      env,
+    )
+    const body = await res.json() as { code?: string; status?: number; details?: { code?: string } }
+
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('FORBIDDEN')
+    expect(body.status).toBe(403)
+    expect(body.details?.code).toBe('CODEBASE_ACCESS_DENIED')
+  })
+
   it('POST /api/v1/codebase/runs/:id/cancel is no-op for terminal status', async () => {
     const db = new MockD1Database()
     const env = createMockEnv({}, db)
@@ -477,5 +622,44 @@ describe('Codebase run endpoints', () => {
     expect(res.status).toBe(200)
     expect(body.run.status).toBe('succeeded')
     expect(db.countEvents(createdBody.run.id)).toBe(beforeEventCount)
+  })
+
+  it('GET /api/v1/codebase/metrics returns basic aggregation for last 24h', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({}, db)
+
+    const createdA = await createRun(env, { repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git', commands: ['npm run build'] })
+    const runA = (await createdA.json() as { run: { id: string } }).run.id
+    db.setRunStatus(runA, 'succeeded')
+    db.setRunTiming(runA, '2026-03-02T10:00:00.000Z', '2026-03-02T10:00:10.000Z')
+
+    const createdB = await createRun(env, { repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git', commands: ['npm run build'] })
+    const runB = (await createdB.json() as { run: { id: string } }).run.id
+    db.setRunStatus(runB, 'failed')
+    db.setRunTiming(runB, '2026-03-02T11:00:00.000Z', '2026-03-02T11:00:30.000Z')
+
+    const createdC = await createRun(env, { repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git', commands: ['npm run build'] })
+    const runC = (await createdC.json() as { run: { id: string } }).run.id
+    db.setRunStatus(runC, 'canceled')
+    db.setRunTiming(runC, null, null)
+
+    const res = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/codebase/metrics', {
+        headers: { Authorization: 'Bearer demo-token' },
+      }),
+      env,
+    )
+    const body = await res.json() as {
+      totals: { created: number; succeeded: number; failed: number; canceled: number; avgDurationMs: number }
+      windowHours: number
+    }
+
+    expect(res.status).toBe(200)
+    expect(body.windowHours).toBe(24)
+    expect(body.totals.created).toBe(3)
+    expect(body.totals.succeeded).toBe(1)
+    expect(body.totals.failed).toBe(1)
+    expect(body.totals.canceled).toBe(1)
+    expect(body.totals.avgDurationMs).toBe(20000)
   })
 })

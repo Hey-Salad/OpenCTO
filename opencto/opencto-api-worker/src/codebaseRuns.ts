@@ -2,6 +2,7 @@ import { getContainer } from '@cloudflare/containers'
 import type { RequestContext } from './types'
 import {
   BadRequestException,
+  ForbiddenException,
   InternalServerException,
   NotFoundException,
   NotImplementedException,
@@ -51,6 +52,7 @@ const MIN_TIMEOUT_SECONDS = 60
 const MAX_TIMEOUT_SECONDS = 1800
 const TERMINAL_RUN_STATUSES = new Set<RunStatus>(['succeeded', 'failed', 'canceled', 'timed_out'])
 const BLOCKED_CHAINING_PATTERN = /(?:&&|;|\|\||\||`|\$\()/
+const CODEBASE_ALLOWED_ROLES = new Set(['owner', 'cto'])
 
 interface CodebaseRunRow {
   id: string
@@ -162,6 +164,39 @@ function normalizeAndValidateCommands(raw: unknown): string[] {
   }
 
   return commands
+}
+
+function normalizeAndValidateRepoUrl(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    throw new BadRequestException('repoUrl is required')
+  }
+
+  const repoUrl = raw.trim()
+  let parsed: URL
+  try {
+    parsed = new URL(repoUrl)
+  } catch {
+    throw new BadRequestException('repoUrl must be a valid URL')
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new BadRequestException('repoUrl must use https')
+  }
+
+  if (parsed.hostname !== 'github.com') {
+    throw new BadRequestException('repoUrl must target github.com')
+  }
+
+  if (parsed.search || parsed.hash) {
+    throw new BadRequestException('repoUrl must not include query parameters or fragments')
+  }
+
+  const path = parsed.pathname.replace(/^\/+|\/+$/g, '')
+  if (!/^[^/]+\/[^/]+(?:\.git)?$/.test(path)) {
+    throw new BadRequestException('repoUrl must match https://github.com/<owner>/<repo>[.git]')
+  }
+
+  return `https://github.com/${path}`
 }
 
 function normalizeTimeoutSeconds(input: unknown, bounds: { defaultTimeout: number; minTimeout: number; maxTimeout: number }): number {
@@ -347,7 +382,7 @@ async function enforceRunLimits(ctx: RequestContext): Promise<void> {
   ).bind(ctx.userId).first<{ count: number }>()
 
   if ((concurrent?.count ?? 0) >= concurrentCap) {
-    throw new TooManyRequestsException('Concurrent run quota exceeded', {
+    throw new TooManyRequestsException('Concurrent run quota exceeded', 'CODEBASE_CONCURRENCY_LIMIT', {
       concurrentCap,
     })
   }
@@ -359,11 +394,20 @@ async function enforceRunLimits(ctx: RequestContext): Promise<void> {
   ).bind(ctx.userId, dayStart).first<{ count: number }>()
 
   if ((daily?.count ?? 0) >= dailyCap) {
-    throw new TooManyRequestsException('Daily run quota exceeded', {
+    throw new TooManyRequestsException('Daily run quota exceeded', 'CODEBASE_DAILY_LIMIT', {
       dailyCap,
       dayStart,
     })
   }
+}
+
+function assertCodebaseRunWriteAccess(ctx: RequestContext): void {
+  if (CODEBASE_ALLOWED_ROLES.has(ctx.user.role)) return
+  throw new ForbiddenException('Only owner or cto can create/cancel codebase runs', {
+    code: 'CODEBASE_ACCESS_DENIED',
+    allowedRoles: [...CODEBASE_ALLOWED_ROLES],
+    userRole: ctx.user.role,
+  })
 }
 
 function normalizeContainerResponse(payload: unknown): ContainerExecutionResult {
@@ -445,11 +489,9 @@ export async function createCodebaseRun(
   ctx: RequestContext,
 ): Promise<Response> {
   await ensureSchema(ctx)
+  assertCodebaseRunWriteAccess(ctx)
 
-  const repoUrl = (payload.repoUrl ?? '').trim()
-  if (!repoUrl) {
-    throw new BadRequestException('repoUrl is required')
-  }
+  const repoUrl = normalizeAndValidateRepoUrl(payload.repoUrl)
 
   const commands = normalizeAndValidateCommands(payload.commands)
   const timeoutBounds = getTimeoutBounds(ctx)
@@ -500,6 +542,16 @@ export async function createCodebaseRun(
     level: 'info',
     eventType: 'run.plan',
     message: `Requested commands: ${commands.join(' | ')}`,
+  }, ctx)
+
+  await appendEvent(runId, {
+    level: 'system',
+    eventType: 'run.audit',
+    message: 'Run command audit recorded.',
+    payload: {
+      repoUrl,
+      normalizedCommands: commands,
+    },
   }, ctx)
 
   if (executionMode === 'container') {
@@ -601,6 +653,7 @@ export async function getCodebaseRunEvents(runId: string, request: Request, ctx:
 
 // POST /api/v1/codebase/runs/:id/cancel
 export async function cancelCodebaseRun(runId: string, ctx: RequestContext): Promise<Response> {
+  assertCodebaseRunWriteAccess(ctx)
   const row = await getRunRow(runId, ctx)
 
   if (TERMINAL_RUN_STATUSES.has(row.status)) {
@@ -620,4 +673,48 @@ export async function cancelCodebaseRun(runId: string, ctx: RequestContext): Pro
 
   const updated = await getRunRow(runId, ctx)
   return jsonResponse({ run: mapRun(updated) })
+}
+
+// GET /api/v1/codebase/metrics
+export async function getCodebaseRunMetrics(ctx: RequestContext): Promise<Response> {
+  await ensureSchema(ctx)
+  const since = new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString()
+  const rows = await ctx.env.DB.prepare(
+    `SELECT status, started_at, completed_at
+     FROM codebase_runs
+     WHERE user_id = ? AND created_at >= ?`,
+  ).bind(ctx.userId, since).all<{ status: RunStatus; started_at: string | null; completed_at: string | null }>()
+
+  const result = {
+    created: 0,
+    succeeded: 0,
+    failed: 0,
+    canceled: 0,
+    avgDurationMs: 0,
+  }
+
+  let durationTotalMs = 0
+  let durationCount = 0
+  for (const row of rows.results ?? []) {
+    result.created += 1
+    if (row.status === 'succeeded') result.succeeded += 1
+    if (row.status === 'failed' || row.status === 'timed_out') result.failed += 1
+    if (row.status === 'canceled') result.canceled += 1
+
+    if (row.started_at && row.completed_at) {
+      const startedMs = Date.parse(row.started_at)
+      const completedMs = Date.parse(row.completed_at)
+      if (Number.isFinite(startedMs) && Number.isFinite(completedMs) && completedMs >= startedMs) {
+        durationTotalMs += (completedMs - startedMs)
+        durationCount += 1
+      }
+    }
+  }
+
+  result.avgDurationMs = durationCount > 0 ? Math.round(durationTotalMs / durationCount) : 0
+  return jsonResponse({
+    windowHours: 24,
+    since,
+    totals: result,
+  })
 }
