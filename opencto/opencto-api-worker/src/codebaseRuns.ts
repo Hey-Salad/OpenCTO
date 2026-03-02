@@ -81,6 +81,18 @@ interface CodebaseRunEventRow {
   created_at: string
 }
 
+interface CodebaseRunArtifactRow {
+  id: string
+  run_id: string
+  kind: string
+  path: string
+  size_bytes: number | null
+  sha256: string | null
+  url: string | null
+  expires_at: string | null
+  created_at: string
+}
+
 let schemaReady = false
 let containerDispatcher: ContainerDispatchFn = defaultContainerDispatcher
 const getContainerUnsafe = getContainer as unknown as (
@@ -212,6 +224,10 @@ function mapEvent(row: CodebaseRunEventRow) {
     payload: row.payload_json ? redactUnknown(JSON.parse(row.payload_json)) : null,
     createdAt: row.created_at,
   }
+}
+
+function isTerminalStatus(status: RunStatus): boolean {
+  return TERMINAL_RUN_STATUSES.has(status)
 }
 
 async function ensureSchema(ctx: RequestContext): Promise<void> {
@@ -596,6 +612,220 @@ export async function getCodebaseRunEvents(runId: string, request: Request, ctx:
     events,
     lastSeq,
     pollAfterMs: 1500,
+  })
+}
+
+// GET /api/v1/codebase/runs/:id/events/stream
+export async function streamCodebaseRunEvents(runId: string, request: Request, ctx: RequestContext): Promise<Response> {
+  await getRunRow(runId, ctx)
+
+  const url = new URL(request.url)
+  const initialAfterSeq = Math.max(0, Number.parseInt(url.searchParams.get('afterSeq') ?? '0', 10) || 0)
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false
+      let afterSeq = initialAfterSeq
+      const encoder = new TextEncoder()
+
+      const sendEvent = (event: string, payload: unknown) => {
+        controller.enqueue(encoder.encode(`event: ${event}\n`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
+      }
+
+      const close = () => {
+        if (closed) return
+        closed = true
+        try {
+          controller.close()
+        } catch {
+          // no-op
+        }
+      }
+
+      const tick = async (): Promise<void> => {
+        if (closed) return
+        try {
+          const rows = await ctx.env.DB.prepare(
+            `SELECT id, run_id, seq, level, event_type, message, payload_json, created_at
+             FROM codebase_run_events
+             WHERE run_id = ? AND seq > ?
+             ORDER BY seq ASC
+             LIMIT 200`,
+          ).bind(runId, afterSeq).all<CodebaseRunEventRow>()
+
+          const events = (rows.results ?? []).map(mapEvent)
+          if (events.length > 0) {
+            afterSeq = events[events.length - 1]!.seq
+            sendEvent('events', { runId, events, lastSeq: afterSeq })
+          } else {
+            sendEvent('heartbeat', { runId, lastSeq: afterSeq })
+          }
+
+          const run = await getRunRow(runId, ctx)
+          sendEvent('run', { run: mapRun(run) })
+
+          if (isTerminalStatus(run.status)) {
+            sendEvent('done', { runId, status: run.status })
+            close()
+            return
+          }
+
+          setTimeout(() => { void tick() }, 1500)
+        } catch (error) {
+          sendEvent('error', { message: error instanceof Error ? error.message : 'Failed to stream events' })
+          close()
+        }
+      }
+
+      void tick()
+      request.signal.addEventListener('abort', close)
+    },
+    cancel() {
+      // no-op
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+    },
+  })
+}
+
+// GET /api/v1/codebase/metrics
+export async function getCodebaseMetrics(ctx: RequestContext): Promise<Response> {
+  await ensureSchema(ctx)
+  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  const row = await ctx.env.DB.prepare(
+    `SELECT
+       COUNT(*) AS total_runs,
+       SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded_runs,
+       SUM(CASE WHEN status IN ('failed', 'timed_out', 'canceled') THEN 1 ELSE 0 END) AS failed_runs,
+       SUM(CASE WHEN status IN ('queued', 'running') THEN 1 ELSE 0 END) AS active_runs,
+       AVG(
+         CASE
+           WHEN completed_at IS NOT NULL AND started_at IS NOT NULL
+           THEN (julianday(completed_at) - julianday(started_at)) * 86400
+           ELSE NULL
+         END
+       ) AS avg_duration_seconds
+     FROM codebase_runs
+     WHERE user_id = ? AND created_at >= ?`,
+  ).bind(ctx.userId, sinceIso).first<{
+    total_runs: number | null
+    succeeded_runs: number | null
+    failed_runs: number | null
+    active_runs: number | null
+    avg_duration_seconds: number | null
+  }>()
+
+  return jsonResponse({
+    window: '24h',
+    since: sinceIso,
+    totals: {
+      totalRuns: row?.total_runs ?? 0,
+      succeededRuns: row?.succeeded_runs ?? 0,
+      failedRuns: row?.failed_runs ?? 0,
+      activeRuns: row?.active_runs ?? 0,
+      avgDurationSeconds: row?.avg_duration_seconds ? Number(row.avg_duration_seconds.toFixed(2)) : 0,
+    },
+  })
+}
+
+// GET /api/v1/codebase/runs/:id/artifacts
+export async function listCodebaseRunArtifacts(runId: string, ctx: RequestContext): Promise<Response> {
+  await getRunRow(runId, ctx)
+
+  const rows = await ctx.env.DB.prepare(
+    `SELECT id, run_id, kind, path, size_bytes, sha256, url, expires_at, created_at
+     FROM codebase_run_artifacts
+     WHERE run_id = ?
+     ORDER BY created_at DESC`,
+  ).bind(runId).all<CodebaseRunArtifactRow>()
+
+  const artifacts = (rows.results ?? []).map((row) => ({
+    id: row.id,
+    runId: row.run_id,
+    kind: row.kind,
+    path: row.path,
+    sizeBytes: row.size_bytes,
+    sha256: row.sha256,
+    url: row.url,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  }))
+
+  return jsonResponse({
+    artifacts: [
+      {
+        id: 'log',
+        runId,
+        kind: 'log',
+        path: 'run-log.txt',
+        createdAt: nowIso(),
+      },
+      ...artifacts,
+    ],
+  })
+}
+
+// GET /api/v1/codebase/runs/:id/artifacts/:artifactId
+export async function downloadCodebaseRunArtifact(runId: string, artifactId: string, ctx: RequestContext): Promise<Response> {
+  await getRunRow(runId, ctx)
+
+  if (artifactId === 'log') {
+    const rows = await ctx.env.DB.prepare(
+      `SELECT seq, level, event_type, message, created_at
+       FROM codebase_run_events
+       WHERE run_id = ?
+       ORDER BY seq ASC`,
+    ).bind(runId).all<{
+      seq: number
+      level: EventLevel
+      event_type: string
+      message: string
+      created_at: string
+    }>()
+
+    const lines = (rows.results ?? []).map((row) => {
+      const timestamp = new Date(row.created_at).toISOString()
+      return `[${timestamp}] [#${row.seq}] [${row.level}] [${row.event_type}] ${row.message}`
+    })
+    const body = lines.join('\n')
+    return new Response(body, {
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'content-disposition': `attachment; filename="${runId}-run-log.txt"`,
+      },
+    })
+  }
+
+  const artifact = await ctx.env.DB.prepare(
+    `SELECT id, run_id, kind, path, size_bytes, sha256, url, expires_at, created_at
+     FROM codebase_run_artifacts
+     WHERE run_id = ? AND id = ?
+     LIMIT 1`,
+  ).bind(runId, artifactId).first<CodebaseRunArtifactRow>()
+
+  if (!artifact) throw new NotFoundException('Codebase artifact not found')
+  if (!artifact.url) throw new NotImplementedException('Artifact download URL is not available for this artifact')
+
+  return jsonResponse({
+    artifact: {
+      id: artifact.id,
+      runId: artifact.run_id,
+      kind: artifact.kind,
+      path: artifact.path,
+      sizeBytes: artifact.size_bytes,
+      sha256: artifact.sha256,
+      url: artifact.url,
+      expiresAt: artifact.expires_at,
+      createdAt: artifact.created_at,
+    },
   })
 }
 

@@ -1302,6 +1302,25 @@ p { margin: 0; }
   gap: 4px;
 }
 
+.codebase-metrics-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.codebase-metric-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #141418;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.codebase-metric-card strong {
+  font-size: 16px;
+}
+
 .codebase-run-form {
   display: grid;
   gap: 10px;
@@ -1448,6 +1467,12 @@ p { margin: 0; }
 .codebase-log-info { color: #b6f3cb; }
 .codebase-log-warn { color: #facc15; }
 .codebase-log-error { color: #fecaca; }
+
+.codebase-artifacts {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
 
 .onboarding-terms {
   display: flex;

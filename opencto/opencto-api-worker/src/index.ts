@@ -197,14 +197,34 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await codebaseRuns.createCodebaseRun(body, ctx)
   }
 
+  if (path === '/api/v1/codebase/metrics' && method === 'GET') {
+    return await codebaseRuns.getCodebaseMetrics(ctx)
+  }
+
   if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)$/) && method === 'GET') {
     const runId = path.split('/')[5] ?? ''
     return await codebaseRuns.getCodebaseRun(runId, ctx)
   }
 
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/events\/stream$/) && method === 'GET') {
+    const runId = path.split('/')[5] ?? ''
+    return await codebaseRuns.streamCodebaseRunEvents(runId, request, ctx)
+  }
+
   if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/events$/) && method === 'GET') {
     const runId = path.split('/')[5] ?? ''
     return await codebaseRuns.getCodebaseRunEvents(runId, request, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/artifacts$/) && method === 'GET') {
+    const runId = path.split('/')[5] ?? ''
+    return await codebaseRuns.listCodebaseRunArtifacts(runId, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/artifacts\/([^/]+)$/) && method === 'GET') {
+    const runId = path.split('/')[5] ?? ''
+    const artifactId = path.split('/')[7] ?? ''
+    return await codebaseRuns.downloadCodebaseRunArtifact(runId, artifactId, ctx)
   }
 
   if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/cancel$/) && method === 'POST') {
