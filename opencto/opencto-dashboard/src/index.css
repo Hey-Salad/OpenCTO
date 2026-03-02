@@ -23,10 +23,7 @@
 body {
   margin: 0;
   font-family: 'Figtree', sans-serif;
-  background:
-    radial-gradient(900px 700px at 88% -15%, rgba(237, 76, 76, 0.22), transparent 55%),
-    radial-gradient(760px 640px at -10% 0%, rgba(250, 160, 154, 0.12), transparent 48%),
-    var(--bg-app);
+  background: #0b0b0d;
   color: var(--text-body);
 }
 
@@ -43,10 +40,7 @@ p { margin: 0; }
   display: grid;
   place-items: center;
   padding: 16px;
-  background:
-    radial-gradient(900px 700px at 88% -15%, rgba(237, 76, 76, 0.22), transparent 55%),
-    radial-gradient(760px 640px at -10% 0%, rgba(250, 160, 154, 0.12), transparent 48%),
-    var(--bg-app);
+  background: #0b0b0d;
 }
 
 .workspace-loader-card {
@@ -93,7 +87,7 @@ p { margin: 0; }
 .workspace-loader-progress-fill {
   height: 100%;
   width: 40%;
-  background: linear-gradient(90deg, var(--brand-secondary), var(--brand-primary));
+  background: #f4f4f7;
   animation: workspace-loader-slide 1.25s ease-in-out infinite;
 }
 
@@ -173,7 +167,7 @@ p { margin: 0; }
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  background: linear-gradient(160deg, #ef5555, #d93f3f);
+  background: #1c1c20;
   color: #fff;
   display: grid;
   place-items: center;
@@ -261,6 +255,17 @@ p { margin: 0; }
   color: var(--text-muted);
   text-transform: none;
   letter-spacing: normal;
+}
+
+.user-chip-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: transform 0.16s ease;
+}
+
+.user-chip-chevron-open {
+  transform: rotate(180deg);
 }
 
 .left-sidebar {
@@ -982,7 +987,7 @@ p { margin: 0; }
 .invoice-skeleton-row {
   height: 12px;
   border-radius: 6px;
-  background: linear-gradient(90deg, #242424 0%, #2f2f2f 50%, #242424 100%);
+  background: #2a2a2e;
 }
 
 @media (max-width: 1100px) {
@@ -1024,9 +1029,7 @@ p { margin: 0; }
 
 .auth-brand-panel {
   margin-bottom: 6px;
-  background:
-    radial-gradient(420px 240px at 95% -10%, rgba(237, 76, 76, 0.18), transparent 55%),
-    var(--bg-surface);
+  background: var(--bg-surface);
 }
 
 .auth-login-panel h3 {
@@ -1078,9 +1081,7 @@ p { margin: 0; }
 .onboarding-panel {
   width: min(920px, 100%);
   border-color: rgba(250, 160, 154, 0.3);
-  background:
-    radial-gradient(520px 260px at 110% -20%, rgba(237, 76, 76, 0.16), transparent 60%),
-    var(--bg-surface);
+  background: var(--bg-surface);
 }
 
 .onboarding-header {
@@ -2230,4 +2231,29 @@ button:disabled {
   grid-template-areas:
     'top top top'
     'left center right';
+}
+
+/* v1 launch polish: flat black look and no visible border lines */
+.panel,
+.user-chip,
+.nav-item,
+.nav-item-active,
+.account-menu button,
+.auth-provider-btn,
+.workspace-loader-card,
+.billing-error,
+.invoice-skeleton,
+.codebase-panel,
+.audio-message,
+.audio-code-card,
+.audio-command-card,
+.audio-output-card,
+.audio-artifact-card,
+.audio-plan-card {
+  border: none !important;
+}
+
+.nav-item,
+.nav-item-active {
+  border-left: none !important;
 }
