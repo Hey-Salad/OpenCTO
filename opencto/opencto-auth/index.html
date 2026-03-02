@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenCTO | Authentication</title>
+    <style>
+      :root {
+        --bg: #0f0f12;
+        --bg-2: #17171c;
+        --text: #f4f4f7;
+        --muted: #a3a3b2;
+        --border: rgba(250, 160, 154, 0.28);
+        --primary: #ed4c4c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        font-family: "Sora", "Avenir Next", "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(900px 700px at 88% -15%, rgba(237, 76, 76, 0.22), transparent 55%),
+          radial-gradient(760px 640px at -10% 0%, rgba(250, 160, 154, 0.12), transparent 48%),
+          linear-gradient(145deg, var(--bg), var(--bg-2));
+      }
+      .auth-card {
+        width: min(520px, 100%);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 1.8rem;
+        background: rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(8px);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.7rem;
+      }
+      .brand svg {
+        width: 28px;
+        height: 28px;
+      }
+      .brand span {
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.8rem;
+      }
+      p {
+        margin: 0 0 1.25rem;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .btn {
+        width: 100%;
+        border: 0;
+        border-radius: 12px;
+        padding: 0.9rem 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        margin-bottom: 0.7rem;
+      }
+      .btn-primary {
+        background: var(--primary);
+        color: #ffffff;
+      }
+      .btn-primary:hover {
+        background: #d94444;
+      }
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.12);
+        color: var(--text);
+      }
+      .meta {
+        margin-top: 0.6rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .meta code {
+        color: #d7e4ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="auth-card">
+      <div class="brand">
+        <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <rect width="28" height="28" rx="6" fill="#ed4c4c" />
+          <path d="M 6,21 A 9.5 9.5 0 1 1 22,13" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+          <circle cx="6" cy="21" r="1.5" fill="#ffd0cd" />
+          <circle cx="22" cy="13" r="1.5" fill="#ffd0cd" />
+          <polyline points="9,14 13,17 9,20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <polyline points="12,15.5 16,18.5 12,21.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span>OpenCTO</span>
+      </div>
+      <h1>Authentication Gateway</h1>
+      <p>Sign in to OpenCTO from web or authorize future CLI sessions with device flow.</p>
+      <button class="btn btn-primary" onclick="window.location.href='https://app.opencto.works/login'">Continue to App Login</button>
+      <button class="btn btn-secondary" onclick="window.location.href='https://app.opencto.works'">Open App</button>
+      <div class="meta">Planned routes: <code>/device</code>, <code>/oauth/github/start</code>, <code>/oauth/github/callback</code></div>
+    </main>
+  </body>
+</html>
