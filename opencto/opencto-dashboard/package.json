@@ -12,8 +12,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@openai/agents-realtime": "^0.5.2",
+    "highlight.js": "^11.11.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

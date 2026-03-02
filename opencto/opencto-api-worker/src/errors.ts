@@ -57,6 +57,13 @@ export class InternalServerException extends ApiException {
   }
 }
 
+const CORS_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key',
+}
+
 export function toJsonResponse(error: unknown): Response {
   // Handle known API exceptions
   if (error instanceof ApiException) {
@@ -67,7 +74,7 @@ export function toJsonResponse(error: unknown): Response {
     }
     return new Response(JSON.stringify(body), {
       status: error.statusCode,
-      headers: { 'Content-Type': 'application/json' },
+      headers: CORS_HEADERS,
     })
   }
 
@@ -81,20 +88,12 @@ export function toJsonResponse(error: unknown): Response {
   }
   return new Response(JSON.stringify(body), {
     status: 500,
-    headers: { 'Content-Type': 'application/json' },
+    headers: CORS_HEADERS,
   })
 }
 
 export function jsonResponse<T>(data: T, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*', // TODO: Configure CORS properly
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key',
-    },
-  })
+  return new Response(JSON.stringify(data), { status, headers: CORS_HEADERS })
 }
 
 // Safe error sanitization - never expose sensitive data

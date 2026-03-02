@@ -1,4 +1,5 @@
 import { normalizeApiError, safeFetchJson } from '../lib/safeError'
+import { getApiBaseUrl } from '../config/apiBase'
 import type {
   ComplianceCheck,
   CreateComplianceCheckRequest,
@@ -11,8 +12,10 @@ export interface ComplianceApi {
   exportEvidencePackage: (jobId: string) => Promise<EvidenceExportResult>
 }
 
+const DEFAULT_API_BASE = `${getApiBaseUrl()}/api/v1`
+
 export class ComplianceHttpClient implements ComplianceApi {
-  constructor(private readonly baseUrl = 'https://api.opencto.works/api/v1') {}
+  constructor(private readonly baseUrl = DEFAULT_API_BASE) {}
 
   async createComplianceCheck(request: CreateComplianceCheckRequest): Promise<ComplianceCheck> {
     try {

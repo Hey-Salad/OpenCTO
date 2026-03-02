@@ -6,9 +6,7 @@ interface AuthLoginPanelProps {
 }
 
 const PROVIDERS: Array<{ key: OAuthProvider; label: string; subtitle: string }> = [
-  { key: 'google', label: 'Continue with Google', subtitle: 'OAuth provider' },
   { key: 'github', label: 'Continue with GitHub', subtitle: 'Developer identity' },
-  { key: 'cloudflare', label: 'Continue with Cloudflare', subtitle: 'Infrastructure identity' },
 ]
 
 export function AuthLoginPanel({ onProviderLogin, loadingProvider }: AuthLoginPanelProps) {
@@ -32,7 +30,7 @@ export function AuthLoginPanel({ onProviderLogin, loadingProvider }: AuthLoginPa
         ))}
       </div>
       <p className="muted auth-policy-note">
-        Super-admin policy: any verified user with <code>@salad.hr</code> is granted owner-level access.
+        Access policy: owner-level permissions are granted by workspace entitlement settings.
       </p>
     </section>
   )

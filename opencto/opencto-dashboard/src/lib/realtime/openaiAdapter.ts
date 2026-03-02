@@ -1,14 +1,15 @@
 import {
   CONNECT_TIMEOUT_MS,
-  PCM_WORKLET_CODE,
   TOOLS,
   arrayBufferToBase64,
   base64ToArrayBuffer,
   executeToolProxy,
+  loadPcmCaptureWorklet,
   parseMessagePayload,
   type AgentEvent,
   type CTOAgentConfig,
 } from './shared'
+import { getAuthHeaders } from '../authToken'
 
 export class OpenAIRealtimeAdapter {
   private ws: WebSocket | null = null
@@ -33,7 +34,7 @@ export class OpenAIRealtimeAdapter {
     const res = await fetch(this.tokenUrl, {
       method: 'POST',
       headers: {
-        Authorization: 'Bearer demo-token',
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ model: this.config.model }),
@@ -86,7 +87,17 @@ export class OpenAIRealtimeAdapter {
         this.onEvent({ type: 'error', message: '[openai] WebSocket connection error' })
       }
 
-      ws.onclose = () => {
+      ws.onclose = (event: CloseEvent) => {
+        if (!settled) {
+          settled = true
+          clearTimeout(timeout)
+          reject(new Error(`WebSocket closed before open (code ${event.code}${event.reason ? `: ${event.reason}` : ''})`))
+        } else if (event.code !== 1000) {
+          this.onEvent({
+            type: 'error',
+            message: `[openai] WebSocket closed (code ${event.code}${event.reason ? `: ${event.reason}` : ''})`,
+          })
+        }
         this._emitSessionEndedOnce()
       }
 
@@ -115,11 +126,7 @@ export class OpenAIRealtimeAdapter {
 
     this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
     this.captureCtx = new AudioContext({ sampleRate: 24000 })
-
-    const blob = new Blob([PCM_WORKLET_CODE], { type: 'application/javascript' })
-    const blobUrl = URL.createObjectURL(blob)
-    await this.captureCtx.audioWorklet.addModule(blobUrl)
-    URL.revokeObjectURL(blobUrl)
+    await loadPcmCaptureWorklet(this.captureCtx)
 
     const source = this.captureCtx.createMediaStreamSource(this.mediaStream)
     this.workletNode = new AudioWorkletNode(this.captureCtx, 'pcm-capture-processor')

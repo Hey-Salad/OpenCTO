@@ -7,6 +7,9 @@ import * as auth from './auth'
 import * as compliance from './compliance'
 import * as billing from './billing'
 import * as webhooks from './webhooks'
+import * as chats from './chats'
+import * as onboarding from './onboarding'
+import * as github from './github'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -35,6 +38,14 @@ export default {
         return await webhooks.handleStripeWebhook(request, env)
       }
 
+      // OAuth endpoints (no prior auth required)
+      if (path === '/api/v1/auth/oauth/github/start' && request.method === 'GET') {
+        return await auth.startGitHubOAuth(request, env)
+      }
+      if (path === '/api/v1/auth/oauth/github/callback' && request.method === 'GET') {
+        return await auth.completeGitHubOAuth(request, env)
+      }
+
       // All other endpoints require authentication
       const ctx = await authenticate(request, env)
 
@@ -48,22 +59,34 @@ export default {
 
 // Authentication middleware
 async function authenticate(request: Request, env: Env): Promise<RequestContext> {
-  // TODO: Implement proper JWT/session authentication
-  // For now, we'll use a stub implementation
-
-  // Get Authorization header
   const authHeader = request.headers.get('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new UnauthorizedException('Missing or invalid authorization header')
+  const accessEmail = request.headers.get('CF-Access-Authenticated-User-Email')
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null
+
+  // Production auth: signed session token from OAuth callback.
+  if (bearerToken && bearerToken !== 'demo-token') {
+    const sessionUser = await auth.parseSessionToken(bearerToken, env)
+    if (sessionUser) {
+      return {
+        userId: sessionUser.id,
+        user: sessionUser,
+        env,
+      }
+    }
   }
 
-  // TODO: Verify JWT token and extract user info
-  // const token = authHeader.substring(7) // Remove 'Bearer ' prefix
-  // For now, we'll use a stub user
+  // Development fallback only outside production.
+  const hasDemoToken = bearerToken === 'demo-token' && env.ENVIRONMENT !== 'production'
+  if (!hasDemoToken && !accessEmail) {
+    throw new UnauthorizedException('Missing authorization. Sign in via GitHub OAuth or Cloudflare Access identity.')
+  }
+
+  const email = accessEmail ?? 'demo@opencto.works'
+  const id = `user-${email.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
   const user: SessionUser = {
-    id: 'user-123',
-    email: 'demo@opencto.works',
-    displayName: 'Demo User',
+    id,
+    email,
+    displayName: email.split('@')[0] || 'OpenCTO User',
     role: 'owner',
   }
 
@@ -105,6 +128,10 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await auth.completePasskeyEnrollment(body.challengeResponse, ctx)
   }
 
+  if (path === '/api/v1/auth/account' && method === 'DELETE') {
+    return await auth.deleteAccount(ctx)
+  }
+
   // Compliance endpoints
   if (path === '/api/v1/compliance/checks' && method === 'POST') {
     const body = await request.json() as { jobId: string; checkType: ComplianceCheckType }
@@ -120,6 +147,63 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   if (path === '/api/v1/compliance/evidence/export' && method === 'POST') {
     const body = await request.json() as { jobId: string }
     return await compliance.exportEvidencePackage(body.jobId, ctx)
+  }
+
+  // Chat persistence endpoints
+  if (path === '/api/v1/chats' && method === 'GET') {
+    return await chats.listChats(ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/chats\/([^/]+)$/) && method === 'GET') {
+    const chatId = path.split('/')[4] ?? ''
+    return await chats.getChat(chatId, ctx)
+  }
+
+  if (path === '/api/v1/chats/save' && method === 'POST') {
+    const body = await request.json() as {
+      id?: string
+      title?: string
+      messages?: Array<{
+        id: string
+        role: 'USER' | 'ASSISTANT' | 'TOOL'
+        kind?: 'speech' | 'code' | 'command' | 'output' | 'artifact' | 'plan'
+        text: string
+        timestamp: string
+        startMs: number
+        endMs: number
+        metadata?: Record<string, unknown>
+      }>
+    }
+    return await chats.saveChat(body, ctx)
+  }
+
+  // Onboarding endpoints
+  if (path === '/api/v1/onboarding' && method === 'GET') {
+    return await onboarding.getOnboarding(ctx)
+  }
+
+  if (path === '/api/v1/onboarding' && method === 'POST') {
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>
+    return await onboarding.saveOnboarding(body, ctx)
+  }
+
+  // GitHub integration endpoints
+  if (path === '/api/v1/github/status' && method === 'GET') {
+    return await github.getGitHubStatus(ctx)
+  }
+
+  if (path === '/api/v1/github/sync' && method === 'POST') {
+    return await github.syncGitHub(ctx)
+  }
+
+  if (path === '/api/v1/github/orgs' && method === 'GET') {
+    return await github.listGitHubOrgs(ctx)
+  }
+
+  if (path === '/api/v1/github/repos' && method === 'GET') {
+    const url = new URL(request.url)
+    const org = url.searchParams.get('org') ?? ''
+    return await github.listGitHubRepos(ctx, org)
   }
 
   // Realtime token endpoint — mints a short-lived ephemeral key for the browser WebSocket
@@ -188,6 +272,33 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     const start = url.searchParams.get('start') ?? ''
     const end = url.searchParams.get('end') ?? ''
     return await proxyOpenAI(`/v1/usage?start_time=${start}&end_time=${end}`, ctx.env)
+  }
+
+  if (path === '/api/v1/cto/github/orgs' && method === 'GET') {
+    return await proxyGitHub('/user/orgs?per_page=50', ctx.env)
+  }
+
+  if (path.match(/^\/api\/v1\/cto\/github\/orgs\/([^/]+)\/repos$/) && method === 'GET') {
+    const org = path.split('/')[6] ?? ''
+    return await proxyGitHub(`/orgs/${encodeURIComponent(org)}/repos?sort=updated&per_page=50`, ctx.env)
+  }
+
+  if (path.match(/^\/api\/v1\/cto\/github\/repos\/([^/]+)\/([^/]+)\/pulls$/) && method === 'GET') {
+    const owner = path.split('/')[6] ?? ''
+    const repo = path.split('/')[7] ?? ''
+    return await proxyGitHub(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=all&sort=updated&direction=desc&per_page=20`,
+      ctx.env,
+    )
+  }
+
+  if (path.match(/^\/api\/v1\/cto\/github\/repos\/([^/]+)\/([^/]+)\/actions\/runs$/) && method === 'GET') {
+    const owner = path.split('/')[6] ?? ''
+    const repo = path.split('/')[7] ?? ''
+    return await proxyGitHub(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/runs?per_page=20`,
+      ctx.env,
+    )
   }
 
   if (path === '/api/v1/cto/github/chat/completions' && method === 'POST') {
@@ -290,6 +401,30 @@ async function proxyGitHubChatCompletions(request: Request, env: Env): Promise<R
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+  })
+
+  const raw = await res.text()
+  return new Response(raw, {
+    status: res.status,
+    headers: {
+      'Content-Type': res.headers.get('Content-Type') ?? 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+  })
+}
+
+async function proxyGitHub(apiPath: string, env: Env): Promise<Response> {
+  if (!env.GITHUB_TOKEN) {
+    return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+
+  const res = await fetch(`https://api.github.com${apiPath}`, {
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'opencto-api-worker',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
   })
 
   const raw = await res.text()

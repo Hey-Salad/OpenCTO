@@ -209,6 +209,10 @@ function createMockEnv(): Env {
     CF_API_TOKEN: 'cf-test-mock',
     CF_ACCOUNT_ID: 'cf-account-mock',
     GITHUB_TOKEN: 'github-test-mock',
+    GITHUB_OAUTH_CLIENT_ID: 'github-oauth-client-id-mock',
+    GITHUB_OAUTH_CLIENT_SECRET: 'github-oauth-client-secret-mock',
+    API_BASE_URL: 'https://api.opencto.works',
     OPENCTO_AGENT_BASE_URL: 'https://cloud-services-api.opencto.works',
+    APP_BASE_URL: 'https://app.opencto.works',
   }
 }

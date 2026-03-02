@@ -1,4 +1,6 @@
 import { normalizeApiError, safeFetchJson } from '../lib/safeError'
+import { clearStoredAuthToken, consumeAuthTokenFromHash, getAuthHeaders } from '../lib/authToken'
+import { getApiBaseUrl } from '../config/apiBase'
 import type {
   AuthSession,
   OAuthProvider,
@@ -11,6 +13,8 @@ import type {
 export interface AuthApi {
   getSession: () => Promise<AuthSession>
   signInWithProvider: (provider: OAuthProvider) => Promise<AuthSession>
+  signOut?: () => void
+  deleteAccount?: () => Promise<void>
   getTrustedDevices: () => Promise<TrustedDevice[]>
   revokeDevice: (deviceId: string) => Promise<TrustedDevice>
   listPasskeys: () => Promise<PasskeyCredential[]>
@@ -18,39 +22,38 @@ export interface AuthApi {
   completePasskeyEnrollment: (challengeResponse: string) => Promise<PasskeyEnrollmentComplete>
 }
 
+const DEFAULT_API_BASE = `${getApiBaseUrl()}/api/v1`
+
 export class AuthHttpClient implements AuthApi {
-  constructor(private readonly baseUrl = 'https://api.opencto.works/api/v1') {}
+  constructor(private readonly baseUrl = DEFAULT_API_BASE) {}
 
   async getSession(): Promise<AuthSession> {
     try {
-      return await safeFetchJson<AuthSession>(`${this.baseUrl}/auth/session`, undefined, 'Failed to load auth session')
+      consumeAuthTokenFromHash()
+      return await safeFetchJson<AuthSession>(
+        `${this.baseUrl}/auth/session`,
+        { headers: getAuthHeaders() },
+        'Failed to load auth session',
+      )
     } catch (error) {
       throw normalizeApiError(error, 'Failed to load auth session')
     }
   }
 
   async signInWithProvider(provider: OAuthProvider): Promise<AuthSession> {
-    try {
-      return await safeFetchJson<AuthSession>(
-        `${this.baseUrl}/auth/oauth/${provider}/start`,
-        {
-          method: 'POST',
-          headers: {
-            'x-idempotency-key': `oauth-start-${provider}-${Date.now()}`,
-          },
-        },
-        'Failed to start provider sign-in',
-      )
-    } catch (error) {
-      throw normalizeApiError(error, 'Failed to start provider sign-in')
+    if (provider === 'github' && typeof window !== 'undefined') {
+      const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`
+      window.location.href = `${this.baseUrl}/auth/oauth/github/start?returnTo=${encodeURIComponent(returnTo)}`
+      return new Promise<AuthSession>(() => {})
     }
+    return this.getSession()
   }
 
   async getTrustedDevices(): Promise<TrustedDevice[]> {
     try {
       return await safeFetchJson<TrustedDevice[]>(
         `${this.baseUrl}/auth/devices`,
-        undefined,
+        { headers: getAuthHeaders() },
         'Failed to load trusted devices',
       )
     } catch (error) {
@@ -65,6 +68,7 @@ export class AuthHttpClient implements AuthApi {
         {
           method: 'POST',
           headers: {
+            ...getAuthHeaders(),
             'x-idempotency-key': `revoke-${deviceId}-${Date.now()}`,
           },
         },
@@ -79,7 +83,7 @@ export class AuthHttpClient implements AuthApi {
     try {
       return await safeFetchJson<PasskeyCredential[]>(
         `${this.baseUrl}/auth/passkeys`,
-        undefined,
+        { headers: getAuthHeaders() },
         'Failed to load passkeys',
       )
     } catch (error) {
@@ -94,6 +98,7 @@ export class AuthHttpClient implements AuthApi {
         {
           method: 'POST',
           headers: {
+            ...getAuthHeaders(),
             'x-idempotency-key': `passkey-start-${Date.now()}`,
           },
         },
@@ -112,6 +117,7 @@ export class AuthHttpClient implements AuthApi {
           method: 'POST',
           body: JSON.stringify({ challengeResponse }),
           headers: {
+            ...getAuthHeaders(),
             'x-idempotency-key': `passkey-complete-${Date.now()}`,
           },
         },
@@ -119,6 +125,26 @@ export class AuthHttpClient implements AuthApi {
       )
     } catch (error) {
       throw normalizeApiError(error, 'Failed to complete passkey enrollment')
+    }
+  }
+
+  signOut(): void {
+    clearStoredAuthToken()
+  }
+
+  async deleteAccount(): Promise<void> {
+    try {
+      await safeFetchJson<{ deleted: boolean }>(
+        `${this.baseUrl}/auth/account`,
+        {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+        },
+        'Failed to delete account',
+      )
+      clearStoredAuthToken()
+    } catch (error) {
+      throw normalizeApiError(error, 'Failed to delete account')
     }
   }
 }

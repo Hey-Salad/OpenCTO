@@ -7,11 +7,15 @@ interface StreamMessageItemProps {
 export function StreamMessageItem({ step }: StreamMessageItemProps) {
   return (
     <article className="stream-item">
-      <header>
-        <p className="role-label">{step.role}</p>
-        <time>{new Date(step.timestamp).toLocaleTimeString()}</time>
+      <header className="stream-item-header">
+        <span className={`stream-role-badge stream-role-${step.role.toLowerCase()}`}>
+          {step.role}
+        </span>
+        <time className="stream-item-time">
+          {new Date(step.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </time>
       </header>
-      <p>{step.message}</p>
+      <p className="stream-item-message">{step.message}</p>
     </article>
   )
 }

@@ -1,13 +1,14 @@
 import {
   CONNECT_TIMEOUT_MS,
   GOOGLE_API_KEY,
-  PCM_WORKLET_CODE,
   TOOLS,
   arrayBufferToBase64,
   base64ToArrayBuffer,
   executeToolProxy,
+  loadPcmCaptureWorklet,
   normalizeGeminiModel,
   parseMessagePayload,
+  selectSupportedGoogleLiveModel,
   type AgentEvent,
   type CTOAgentConfig,
 } from './shared'
@@ -31,10 +32,27 @@ export class GoogleLiveAdapter {
     if (!GOOGLE_API_KEY) throw new Error('VITE_GOOGLE_API_KEY is not set')
 
     this.hasEmittedSessionEnded = false
-    this.ws = new WebSocket(
+    const wsUrls = [
       `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(GOOGLE_API_KEY)}`,
-    )
+      `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(GOOGLE_API_KEY)}`,
+    ]
 
+    let lastError: Error | null = null
+    for (const wsUrl of wsUrls) {
+      try {
+        await this._connectSocket(wsUrl)
+        return
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        this.ws?.close()
+        this.ws = null
+      }
+    }
+    throw lastError ?? new Error('Google Live WebSocket connection failed')
+  }
+
+  private async _connectSocket(wsUrl: string): Promise<void> {
+    this.ws = new WebSocket(wsUrl)
     await new Promise<void>((resolve, reject) => {
       const ws = this.ws
       if (!ws) {
@@ -68,7 +86,17 @@ export class GoogleLiveAdapter {
         this.onEvent({ type: 'error', message: '[google] WebSocket connection error' })
       }
 
-      ws.onclose = () => {
+      ws.onclose = (event: CloseEvent) => {
+        if (!settled) {
+          settled = true
+          clearTimeout(timeout)
+          reject(new Error(`Google WebSocket closed before open (code ${event.code}${event.reason ? `: ${event.reason}` : ''})`))
+        } else if (event.code !== 1000) {
+          this.onEvent({
+            type: 'error',
+            message: `[google] WebSocket closed (code ${event.code}${event.reason ? `: ${event.reason}` : ''})`,
+          })
+        }
         this._emitSessionEndedOnce()
       }
 
@@ -94,11 +122,7 @@ export class GoogleLiveAdapter {
 
     this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
     this.captureCtx = new AudioContext({ sampleRate: 16000 })
-
-    const blob = new Blob([PCM_WORKLET_CODE], { type: 'application/javascript' })
-    const blobUrl = URL.createObjectURL(blob)
-    await this.captureCtx.audioWorklet.addModule(blobUrl)
-    URL.revokeObjectURL(blobUrl)
+    await loadPcmCaptureWorklet(this.captureCtx)
 
     const source = this.captureCtx.createMediaStreamSource(this.mediaStream)
     this.workletNode = new AudioWorkletNode(this.captureCtx, 'pcm-capture-processor')
@@ -143,9 +167,18 @@ export class GoogleLiveAdapter {
   }
 
   private _sendSetup(): void {
+    const requestedModel = this.config.model
+    const selectedModel = selectSupportedGoogleLiveModel(requestedModel)
+    if (selectedModel !== requestedModel && selectedModel !== requestedModel.replace(/^models\//, '')) {
+      this.onEvent({
+        type: 'error',
+        message: `[google] Unsupported realtime model "${requestedModel}". Falling back to "${selectedModel}".`,
+      })
+    }
+
     this._send({
       setup: {
-        model: normalizeGeminiModel(this.config.model),
+        model: normalizeGeminiModel(selectedModel),
         generationConfig: { responseModalities: ['AUDIO'] },
         systemInstruction: { parts: [{ text: this.config.instructions }] },
         inputAudioTranscription: {},
@@ -175,11 +208,15 @@ export class GoogleLiveAdapter {
         this.onEvent({ type: 'error', message: `[google] ${String(setupComplete.error)}` })
       }
 
-      const inputTranscription = event.inputTranscription as Record<string, unknown> | undefined
+      const inputTranscription =
+        (event.inputTranscription as Record<string, unknown> | undefined)
+        ?? ((event.serverContent as Record<string, unknown> | undefined)?.inputTranscription as Record<string, unknown> | undefined)
       const inputText = (inputTranscription?.text as string | undefined) ?? ''
       if (inputText.trim()) this.onEvent({ type: 'user_transcript', text: inputText.trim() })
 
-      const outputTranscription = event.outputTranscription as Record<string, unknown> | undefined
+      const outputTranscription =
+        (event.outputTranscription as Record<string, unknown> | undefined)
+        ?? ((event.serverContent as Record<string, unknown> | undefined)?.outputTranscription as Record<string, unknown> | undefined)
       const outputText = (outputTranscription?.text as string | undefined) ?? ''
       if (outputText.trim()) this.onEvent({ type: 'assistant_transcript_done', text: outputText.trim() })
 
