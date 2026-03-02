@@ -92,6 +92,7 @@ function App() {
   const [billingInvoices, setBillingInvoices] = useState<Invoice[]>([])
   const [billingLoading, setBillingLoading] = useState(false)
   const [billingError, setBillingError] = useState<string | null>(null)
+  const [isBillingConfigured, setIsBillingConfigured] = useState(true)
   const [minimumLoaderComplete, setMinimumLoaderComplete] = useState(false)
   const [routeTransitionActive, setRouteTransitionActive] = useState(false)
   const accountMenuRef = useRef<HTMLDivElement | null>(null)
@@ -332,13 +333,19 @@ function App() {
       }
 
       if (summaryResult.status === 'rejected' && invoicesResult.status === 'rejected') {
-        setBillingError(normalizeApiError(summaryResult.reason, 'Failed to load billing').message)
+        const normalized = normalizeApiError(summaryResult.reason, 'Failed to load billing')
+        setBillingError(normalized.message)
+        setIsBillingConfigured(normalized.code !== 'CONFIG_ERROR')
       } else if (summaryResult.status === 'rejected') {
-        setBillingError(normalizeApiError(summaryResult.reason, 'Failed to load billing summary').message)
+        const normalized = normalizeApiError(summaryResult.reason, 'Failed to load billing summary')
+        setBillingError(normalized.message)
+        setIsBillingConfigured(normalized.code !== 'CONFIG_ERROR')
       } else if (invoicesResult.status === 'rejected') {
         setBillingError(normalizeApiError(invoicesResult.reason, 'Failed to load invoices').message)
+        setIsBillingConfigured(true)
       } else {
         setBillingError(null)
+        setIsBillingConfigured(true)
       }
 
       if (!cancelled) setBillingLoading(false)
@@ -595,14 +602,16 @@ function App() {
               isInvoicesLoading={billingLoading}
               summaryError={billingError}
               invoicesError={billingError}
-              isBillingConfigured={true}
+              isBillingConfigured={isBillingConfigured}
               onUpgrade={() => {
                 void billingApi.createCheckoutSession('TEAM', 'MONTHLY')
                   .then((sessionData) => {
                     window.location.href = sessionData.checkoutUrl
                   })
                   .catch((error) => {
-                    setErrorMessage(normalizeApiError(error, 'Failed to start checkout').message)
+                    const normalized = normalizeApiError(error, 'Failed to start checkout')
+                    setErrorMessage(normalized.message)
+                    if (normalized.code === 'CONFIG_ERROR') setIsBillingConfigured(false)
                   })
               }}
               onManage={() => {
@@ -611,7 +620,9 @@ function App() {
                     window.location.href = portal.url
                   })
                   .catch((error) => {
-                    setErrorMessage(normalizeApiError(error, 'Failed to open billing portal').message)
+                    const normalized = normalizeApiError(error, 'Failed to open billing portal')
+                    setErrorMessage(normalized.message)
+                    if (normalized.code === 'CONFIG_ERROR') setIsBillingConfigured(false)
                   })
               }}
             />
