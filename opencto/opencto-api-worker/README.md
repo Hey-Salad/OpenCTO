@@ -120,6 +120,13 @@ This deploys the worker to Cloudflare Workers.
 - `GET /api/v1/compliance/checks` - List compliance checks
 - `POST /api/v1/compliance/evidence/export` - Export evidence package
 
+### Codebase Runs (MVP scaffold)
+
+- `POST /api/v1/codebase/runs` - Queue a codebase execution run
+- `GET /api/v1/codebase/runs/:id` - Get run status and metrics
+- `GET /api/v1/codebase/runs/:id/events` - Poll run events/log lines
+- `POST /api/v1/codebase/runs/:id/cancel` - Cancel queued/running run
+
 ### Billing
 
 - `GET /api/v1/billing/subscription` - Get subscription summary

@@ -10,6 +10,7 @@ import * as webhooks from './webhooks'
 import * as chats from './chats'
 import * as onboarding from './onboarding'
 import * as github from './github'
+import * as codebaseRuns from './codebaseRuns'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -175,6 +176,34 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
       }>
     }
     return await chats.saveChat(body, ctx)
+  }
+
+  // Codebase run execution endpoints
+  if (path === '/api/v1/codebase/runs' && method === 'POST') {
+    const body = await request.json().catch(() => ({})) as {
+      repoUrl?: string
+      repoFullName?: string
+      baseBranch?: string
+      targetBranch?: string
+      commands?: unknown
+      timeoutSeconds?: number
+    }
+    return await codebaseRuns.createCodebaseRun(body, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)$/) && method === 'GET') {
+    const runId = path.split('/')[5] ?? ''
+    return await codebaseRuns.getCodebaseRun(runId, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/events$/) && method === 'GET') {
+    const runId = path.split('/')[5] ?? ''
+    return await codebaseRuns.getCodebaseRunEvents(runId, request, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/cancel$/) && method === 'POST') {
+    const runId = path.split('/')[5] ?? ''
+    return await codebaseRuns.cancelCodebaseRun(runId, ctx)
   }
 
   // Onboarding endpoints

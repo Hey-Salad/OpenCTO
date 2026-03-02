@@ -1013,6 +1013,7 @@ p { margin: 0; }
   .onboarding-grid { grid-template-columns: 1fr; }
   .onboarding-github { flex-direction: column; align-items: flex-start; }
   .codebase-grid { grid-template-columns: 1fr; }
+  .codebase-runs-grid { grid-template-columns: 1fr; }
 }
 
 .unauth-shell {
@@ -1258,6 +1259,123 @@ p { margin: 0; }
   text-decoration: none;
   font-size: 12px;
 }
+
+.codebase-repo-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.codebase-runs-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-surface-2);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.codebase-runs-header {
+  display: grid;
+  gap: 4px;
+}
+
+.codebase-run-form {
+  display: grid;
+  gap: 10px;
+}
+
+.codebase-run-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.codebase-run-form input,
+.codebase-run-form textarea {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: #141418;
+  color: var(--text-body);
+  padding: 8px 10px;
+}
+
+.codebase-run-form textarea {
+  resize: vertical;
+}
+
+.codebase-run-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.codebase-runs-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 340px) 1fr;
+  gap: 12px;
+}
+
+.codebase-runs-list {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.codebase-run-row {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.codebase-run-row-active {
+  border-color: var(--brand-secondary);
+  background: rgba(250, 160, 154, 0.12);
+}
+
+.codebase-run-select {
+  border: none;
+  background: transparent;
+  color: var(--text-body);
+  display: grid;
+  text-align: left;
+  gap: 4px;
+  flex: 1;
+  cursor: pointer;
+}
+
+.codebase-log-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #121217;
+  min-height: 240px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.codebase-log-lines {
+  gap: 6px;
+}
+
+.codebase-log-line {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  font-family: 'Figtree', sans-serif;
+  font-size: 12px;
+}
+
+.codebase-log-seq {
+  color: var(--text-muted);
+}
+
+.codebase-log-system { color: var(--text-muted); }
+.codebase-log-info { color: #b6f3cb; }
+.codebase-log-warn { color: #facc15; }
+.codebase-log-error { color: #fecaca; }
 
 .onboarding-terms {
   display: flex;

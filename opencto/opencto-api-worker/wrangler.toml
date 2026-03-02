@@ -21,6 +21,20 @@ ENVIRONMENT = "production"
 OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works"
 APP_BASE_URL = "https://app.opencto.works"
 
+# Cloudflare Containers MVP draft:
+# - This worker will orchestrate run lifecycle and authorization.
+# - The container runtime will execute approved commands only.
+# - Container service binding values should be configured per environment.
+#
+# [containers]
+# services = [
+#   { binding = "CODEBASE_EXECUTOR", service = "opencto-codebase-executor", environment = "production" }
+# ]
+#
+# [vars]
+# CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS = "600"
+# CODEBASE_RUN_MAX_TIMEOUT_SECONDS = "1800"
+
 # Secrets (set via wrangler secret put):
 # - OPENAI_API_KEY
 # - STRIPE_SECRET_KEY
