@@ -475,6 +475,14 @@ function App() {
                   <strong>{session.user.displayName || 'OpenCTO User'}</strong>
                   <span>{session.user.email}</span>
                 </div>
+                <svg
+                  className={`user-chip-chevron ${accountMenuOpen ? 'user-chip-chevron-open' : ''}`}
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path d="M4 6.5L8 10L12 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 {accountMenuOpen && (
                   <div className="account-menu panel" role="menu">
                     <button type="button" role="menuitem" onClick={() => { setActiveSection('settings'); setAccountMenuOpen(false) }}>
