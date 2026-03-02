@@ -5,6 +5,7 @@ import {
   isGeminiLiveModel,
   isGeminiModel,
   isOpenAIRealtimeModel,
+  loadPcmCaptureWorklet,
   normalizeGeminiModel,
   parseMessagePayload,
   proxyGet,
@@ -67,5 +68,45 @@ describe('realtime shared helpers', () => {
   test('executeToolProxy rejects unknown tools safely', async () => {
     const output = await executeToolProxy('does_not_exist', {})
     expect(output).toContain('Unknown tool: does_not_exist')
+  })
+
+  test('loadPcmCaptureWorklet falls back to blob module when static module load fails', async () => {
+    const addModule = vi.fn()
+      .mockRejectedValueOnce(new Error('static module missing'))
+      .mockResolvedValueOnce(undefined)
+    const createObjectUrlSpy = vi.fn(() => 'blob:worklet')
+    const revokeObjectUrlSpy = vi.fn()
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectUrlSpy, configurable: true, writable: true })
+    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectUrlSpy, configurable: true, writable: true })
+
+    const ctx = {
+      audioWorklet: {
+        addModule,
+      },
+    } as unknown as AudioContext
+
+    await expect(loadPcmCaptureWorklet(ctx)).resolves.toBeUndefined()
+    expect(addModule).toHaveBeenNthCalledWith(1, '/pcm-capture-processor.js')
+    expect(addModule).toHaveBeenNthCalledWith(2, 'blob:worklet')
+    expect(createObjectUrlSpy).toHaveBeenCalledTimes(1)
+    expect(revokeObjectUrlSpy).toHaveBeenCalledWith('blob:worklet')
+  })
+
+  test('loadPcmCaptureWorklet rejects when static and fallback module loads both fail', async () => {
+    const addModule = vi.fn()
+      .mockRejectedValueOnce(new Error('static module missing'))
+      .mockRejectedValueOnce(new Error('blob module blocked'))
+    Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:worklet'), configurable: true, writable: true })
+    const revokeObjectUrlSpy = vi.fn()
+    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectUrlSpy, configurable: true, writable: true })
+
+    const ctx = {
+      audioWorklet: {
+        addModule,
+      },
+    } as unknown as AudioContext
+
+    await expect(loadPcmCaptureWorklet(ctx)).rejects.toThrow('blob module blocked')
+    expect(revokeObjectUrlSpy).toHaveBeenCalledWith('blob:worklet')
   })
 })

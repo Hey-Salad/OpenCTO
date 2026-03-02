@@ -8,6 +8,7 @@ import type {
 } from '../types/billing'
 import { getApiBaseUrl } from '../config/apiBase'
 import { getAuthHeaders } from '../lib/authToken'
+import { normalizeApiError, safeFetchJson } from '../lib/safeError'
 
 export interface BillingApi {
   createCheckoutSession: (planCode: PlanCode, interval: BillingInterval) => Promise<CheckoutSessionResponse>
@@ -18,21 +19,18 @@ export interface BillingApi {
 
 const DEFAULT_BILLING_BASE = `${getApiBaseUrl()}/api/v1/billing`
 
-async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...getAuthHeaders(),
-      ...(init?.headers ?? {}),
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Billing API request failed: ${response.status}`)
+async function fetchJson<T>(input: RequestInfo | URL, init: RequestInit | undefined, fallbackMessage: string): Promise<T> {
+  try {
+    return await safeFetchJson<T>(input, {
+      ...init,
+      headers: {
+        ...getAuthHeaders(),
+        ...(init?.headers ?? {}),
+      },
+    }, fallbackMessage)
+  } catch (error) {
+    throw normalizeApiError(error, fallbackMessage)
   }
-
-  return (await response.json()) as T
 }
 
 export class BillingHttpClient implements BillingApi {
@@ -45,7 +43,7 @@ export class BillingHttpClient implements BillingApi {
       headers: {
         'x-idempotency-key': `checkout-${planCode}-${interval}-${Date.now()}`,
       },
-    })
+    }, 'Failed to create checkout session')
   }
 
   createBillingPortalSession(): Promise<BillingPortalSessionResponse> {
@@ -54,14 +52,14 @@ export class BillingHttpClient implements BillingApi {
       headers: {
         'x-idempotency-key': `portal-${Date.now()}`,
       },
-    })
+    }, 'Failed to create billing portal session')
   }
 
   getSubscriptionSummary(): Promise<BillingSummaryResponse> {
-    return fetchJson<BillingSummaryResponse>(`${this.baseUrl}/subscription`)
+    return fetchJson<BillingSummaryResponse>(`${this.baseUrl}/subscription`, undefined, 'Failed to load billing summary')
   }
 
   getInvoices(): Promise<InvoicesResponse> {
-    return fetchJson<InvoicesResponse>(`${this.baseUrl}/invoices`)
+    return fetchJson<InvoicesResponse>(`${this.baseUrl}/invoices`, undefined, 'Failed to load invoices')
   }
 }
