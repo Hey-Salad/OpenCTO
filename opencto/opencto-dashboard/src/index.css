@@ -65,6 +65,7 @@ p { margin: 0; }
 .workspace-loader-card h1 {
   font-size: 26px;
   letter-spacing: 0.03em;
+  font-family: 'Grandstander', 'Figtree', sans-serif;
 }
 
 .workspace-loader-card p {
@@ -111,6 +112,13 @@ p { margin: 0; }
     'left center right';
   gap: 14px;
   padding: 14px;
+}
+
+.app-shell-codebase {
+  grid-template-columns: 215px minmax(0, 1fr);
+  grid-template-areas:
+    'top top'
+    'left center';
 }
 
 .top-bar {
