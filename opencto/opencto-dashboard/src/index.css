@@ -907,6 +907,18 @@ p { margin: 0; }
   background: var(--bg-surface-2);
 }
 
+.billing-beta-card {
+  margin-top: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #151515;
+}
+
 .status-badge {
   border-radius: 999px;
   padding: 4px 10px;
@@ -1374,30 +1386,46 @@ p { margin: 0; }
   overflow: auto;
 }
 
-.codebase-run-row {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
 .codebase-run-row-active {
-  border-color: var(--brand-secondary);
   background: rgba(250, 160, 154, 0.12);
 }
 
 .codebase-run-select {
-  border: none;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 8px;
   background: transparent;
   color: var(--text-body);
-  display: grid;
+  display: inline-flex;
   text-align: left;
-  gap: 4px;
-  flex: 1;
   cursor: pointer;
+}
+
+.codebase-table-wrap {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: auto;
+  background: #121217;
+}
+
+.codebase-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.codebase-table th,
+.codebase-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.codebase-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .run-status-badge {
@@ -1451,16 +1479,10 @@ p { margin: 0; }
   gap: 6px;
 }
 
-.codebase-log-line {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 8px;
-  font-family: 'Figtree', sans-serif;
-  font-size: 12px;
-}
-
 .codebase-log-seq {
   color: var(--text-muted);
+  font-family: 'Figtree', sans-serif;
+  font-size: 12px;
 }
 
 .codebase-log-system { color: var(--text-muted); }
@@ -1541,6 +1563,10 @@ button:disabled {
 @media (max-width: 1200px) {
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+  .billing-beta-card {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
