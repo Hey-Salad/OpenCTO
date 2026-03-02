@@ -126,8 +126,11 @@ This deploys the worker to Cloudflare Workers.
 - `GET /api/v1/codebase/runs/:id` - Get run status and metrics
 - `GET /api/v1/codebase/runs/:id/events` - Poll run events/log lines
 - `POST /api/v1/codebase/runs/:id/cancel` - Cancel queued/running run
+- `GET /api/v1/codebase/metrics` - Per-user run metrics for the last 24 hours
 
 Runtime controls:
+- Create/cancel access restricted to `owner` and `cto` roles
+- Repository URL validation restricted to `https://github.com/<owner>/<repo>[.git]`
 - Command normalization + allowlist template enforcement
 - Shell chaining guard (`&&`, `;`, `|`, backticks, `$(`)
 - Per-user concurrent and daily run quotas

@@ -212,6 +212,10 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await codebaseRuns.cancelCodebaseRun(runId, ctx)
   }
 
+  if (path === '/api/v1/codebase/metrics' && method === 'GET') {
+    return await codebaseRuns.getCodebaseRunMetrics(ctx)
+  }
+
   // Onboarding endpoints
   if (path === '/api/v1/onboarding' && method === 'GET') {
     return await onboarding.getOnboarding(ctx)
