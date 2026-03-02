@@ -471,18 +471,27 @@ function App() {
                     <path d="M4 16c.7-2.5 2.9-4 6-4s5.3 1.5 6 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                   </svg>
                 </button>
-                <div className="user-chip-meta">
-                  <strong>{session.user.displayName || 'OpenCTO User'}</strong>
-                  <span>{session.user.email}</span>
-                </div>
-                <svg
-                  className={`user-chip-chevron ${accountMenuOpen ? 'user-chip-chevron-open' : ''}`}
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  aria-hidden="true"
+                <button
+                  type="button"
+                  className="user-chip-toggle"
+                  aria-label="Open account menu"
+                  aria-haspopup="menu"
+                  aria-expanded={accountMenuOpen}
+                  onClick={() => setAccountMenuOpen((prev) => !prev)}
                 >
-                  <path d="M4 6.5L8 10L12 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                  <div className="user-chip-meta">
+                    <strong>{session.user.displayName || 'OpenCTO User'}</strong>
+                    <span>{session.user.email}</span>
+                  </div>
+                  <svg
+                    className={`user-chip-chevron ${accountMenuOpen ? 'user-chip-chevron-open' : ''}`}
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 6.5L8 10L12 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
                 {accountMenuOpen && (
                   <div className="account-menu panel" role="menu">
                     <button type="button" role="menuitem" onClick={() => { setActiveSection('settings'); setAccountMenuOpen(false) }}>

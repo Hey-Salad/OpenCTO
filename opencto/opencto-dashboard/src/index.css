@@ -1,13 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Grandstander:wght@600;700&display=swap');
 @import 'highlight.js/styles/github-dark.css';
 
 :root {
   --brand-primary: #ed4c4c;
   --brand-secondary: #faa09a;
   --brand-tertiary: #ffd0cd;
-  --bg-app: #0f0f12;
-  --bg-surface: #17171c;
-  --bg-surface-2: #1f1f26;
+  --bg-app: #0b0b0d;
+  --bg-surface: #0b0b0d;
+  --bg-surface-2: #0b0b0d;
   --border-color: #2f2f39;
   --text-body: #f4f4f7;
   --text-muted: #a3a3b2;
@@ -139,6 +139,10 @@ p { margin: 0; }
   letter-spacing: 0.02em;
 }
 
+.brand-mark h1 {
+  font-family: 'Grandstander', 'Figtree', sans-serif;
+}
+
 .top-bar-meta {
   display: flex;
   align-items: center;
@@ -189,6 +193,17 @@ p { margin: 0; }
 .user-chip-avatar-btn:hover {
   border-color: rgba(255, 255, 255, 0.42);
   transform: translateY(-1px);
+}
+
+.user-chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
 }
 
 .account-menu {
