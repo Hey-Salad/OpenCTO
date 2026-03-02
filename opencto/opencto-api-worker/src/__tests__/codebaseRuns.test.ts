@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import worker from '../index'
+import { __setContainerDispatcherForTests } from '../codebaseRuns'
 import type { Env } from '../types'
 
 type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
@@ -104,6 +105,26 @@ class MockD1Database {
       run.status = String(status) as RunStatus
       run.canceled_at = String(canceledAt)
       run.completed_at = String(completedAt)
+      return
+    }
+
+    if (normalized.startsWith('update codebase_runs set status = ?, started_at = coalesce(started_at, ?)')) {
+      const [status, startedAt, runId, userId] = args
+      const run = this.runs.get(String(runId))
+      if (!run || run.user_id !== String(userId)) return
+      run.status = String(status) as RunStatus
+      run.started_at = run.started_at ?? String(startedAt)
+      run.error_message = null
+      return
+    }
+
+    if (normalized.startsWith('update codebase_runs set status = ?, completed_at = ?, error_message = ?')) {
+      const [status, completedAt, errorMessage, runId, userId] = args
+      const run = this.runs.get(String(runId))
+      if (!run || run.user_id !== String(userId)) return
+      run.status = String(status) as RunStatus
+      run.completed_at = String(completedAt)
+      run.error_message = errorMessage == null ? null : String(errorMessage)
       return
     }
 
@@ -214,12 +235,17 @@ function createMockEnv(overrides: Partial<Env> = {}, db = new MockD1Database()):
     API_BASE_URL: 'https://api.opencto.works',
     OPENCTO_AGENT_BASE_URL: 'https://cloud-services-api.opencto.works',
     APP_BASE_URL: 'https://app.opencto.works',
+    CODEBASE_EXECUTOR: undefined,
     CODEBASE_EXECUTION_MODE: 'stub',
     CODEBASE_DAILY_RUN_LIMIT: '100',
     CODEBASE_MAX_CONCURRENT_RUNS: '2',
     ...overrides,
   }
 }
+
+afterEach(() => {
+  __setContainerDispatcherForTests(null)
+})
 
 async function createRun(env: Env, body?: Record<string, unknown>): Promise<Response> {
   return await worker.fetch(
@@ -326,6 +352,30 @@ describe('Codebase run endpoints', () => {
     expect(res.status).toBe(501)
     expect(body.code).toBe('NOT_IMPLEMENTED')
     expect(body.status).toBe(501)
+  })
+
+  it('POST /api/v1/codebase/runs dispatches to container in container mode', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({
+      CODEBASE_EXECUTION_MODE: 'container',
+      CODEBASE_EXECUTOR: {} as DurableObjectNamespace,
+    }, db)
+
+    __setContainerDispatcherForTests(async () => ({
+      status: 'succeeded',
+      logs: [
+        { level: 'system', message: 'container accepted run' },
+        { level: 'info', message: 'executed npm run build' },
+      ],
+    }))
+
+    const res = await createRun(env)
+    const body = await res.json() as { run: { status: RunStatus } }
+    const runId = db.getFirstRunId()
+
+    expect(res.status).toBe(201)
+    expect(body.run.status).toBe('succeeded')
+    expect(db.countEvents(runId)).toBe(6)
   })
 
   it('GET /api/v1/codebase/runs/:id returns run when found', async () => {

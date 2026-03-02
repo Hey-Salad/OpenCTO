@@ -1,3 +1,4 @@
+import { getContainer } from '@cloudflare/containers'
 import type { RequestContext } from './types'
 import {
   BadRequestException,
@@ -12,6 +13,23 @@ import { redactSecrets, redactUnknown } from './redaction'
 type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
 type EventLevel = 'system' | 'info' | 'warn' | 'error'
 type ExecutionMode = 'stub' | 'container'
+
+interface ContainerExecutionLog {
+  level: EventLevel
+  message: string
+}
+
+interface ContainerExecutionResult {
+  status: Extract<RunStatus, 'succeeded' | 'failed' | 'timed_out'>
+  logs: ContainerExecutionLog[]
+  errorMessage?: string
+}
+
+type ContainerDispatchFn = (
+  runId: string,
+  payload: { repoUrl: string; baseBranch: string; targetBranch: string; commands: string[]; timeoutSeconds: number },
+  ctx: RequestContext,
+) => Promise<ContainerExecutionResult>
 
 const ALLOWED_COMMAND_TEMPLATES = [
   'git clone',
@@ -32,7 +50,6 @@ const DEFAULT_TIMEOUT_SECONDS = 600
 const MIN_TIMEOUT_SECONDS = 60
 const MAX_TIMEOUT_SECONDS = 1800
 const TERMINAL_RUN_STATUSES = new Set<RunStatus>(['succeeded', 'failed', 'canceled', 'timed_out'])
-
 const BLOCKED_CHAINING_PATTERN = /(?:&&|;|\|\||\||`|\$\()/
 
 interface CodebaseRunRow {
@@ -65,6 +82,11 @@ interface CodebaseRunEventRow {
 }
 
 let schemaReady = false
+let containerDispatcher: ContainerDispatchFn = defaultContainerDispatcher
+const getContainerUnsafe = getContainer as unknown as (
+  binding: unknown,
+  instanceId: string,
+) => { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> }
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -303,6 +325,20 @@ async function appendEvent(
   ).run()
 }
 
+async function setRunStatus(runId: string, ctx: RequestContext, input: { status: RunStatus; errorMessage?: string | null }): Promise<void> {
+  const timestamp = nowIso()
+  if (input.status === 'running') {
+    await ctx.env.DB.prepare(
+      'UPDATE codebase_runs SET status = ?, started_at = COALESCE(started_at, ?), error_message = NULL WHERE id = ? AND user_id = ?',
+    ).bind('running', timestamp, runId, ctx.userId).run()
+    return
+  }
+
+  await ctx.env.DB.prepare(
+    'UPDATE codebase_runs SET status = ?, completed_at = ?, error_message = ? WHERE id = ? AND user_id = ?',
+  ).bind(input.status, timestamp, input.errorMessage ?? null, runId, ctx.userId).run()
+}
+
 async function enforceRunLimits(ctx: RequestContext): Promise<void> {
   const concurrentCap = getConcurrentRunCap(ctx)
   const concurrent = await ctx.env.DB.prepare(
@@ -330,6 +366,72 @@ async function enforceRunLimits(ctx: RequestContext): Promise<void> {
   }
 }
 
+function normalizeContainerResponse(payload: unknown): ContainerExecutionResult {
+  const body = (payload && typeof payload === 'object') ? payload as Record<string, unknown> : {}
+  const rawStatus = typeof body.status === 'string' ? body.status : 'failed'
+  const status: ContainerExecutionResult['status'] =
+    rawStatus === 'succeeded' || rawStatus === 'timed_out' ? rawStatus : 'failed'
+
+  const logs = Array.isArray(body.logs)
+    ? body.logs
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') return null
+        const row = entry as Record<string, unknown>
+        const level = row.level
+        const message = row.message
+        if (typeof message !== 'string') return null
+        if (level !== 'system' && level !== 'info' && level !== 'warn' && level !== 'error') return null
+        return {
+          level,
+          message,
+        }
+      })
+      .filter((item): item is ContainerExecutionLog => item !== null)
+    : []
+
+  const errorMessage = typeof body.errorMessage === 'string' ? body.errorMessage : undefined
+  return { status, logs, errorMessage }
+}
+
+async function defaultContainerDispatcher(
+  runId: string,
+  payload: { repoUrl: string; baseBranch: string; targetBranch: string; commands: string[]; timeoutSeconds: number },
+  ctx: RequestContext,
+): Promise<ContainerExecutionResult> {
+  if (!ctx.env.CODEBASE_EXECUTOR) {
+    throw new NotImplementedException('Container execution requested but CODEBASE_EXECUTOR binding is not configured')
+  }
+
+  const instance = getContainerUnsafe(ctx.env.CODEBASE_EXECUTOR, runId)
+  const response = await instance.fetch('http://container.internal/execute', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      runId,
+      ...payload,
+    }),
+  })
+
+  const rawBody = await response.json().catch(() => ({}))
+  const normalized = normalizeContainerResponse(rawBody)
+
+  if (!response.ok) {
+    return {
+      status: 'failed',
+      logs: normalized.logs,
+      errorMessage: normalized.errorMessage ?? `Container request failed with status ${response.status}`,
+    }
+  }
+
+  return normalized
+}
+
+export function __setContainerDispatcherForTests(dispatcher: ContainerDispatchFn | null): void {
+  containerDispatcher = dispatcher ?? defaultContainerDispatcher
+}
+
 // POST /api/v1/codebase/runs
 export async function createCodebaseRun(
   payload: {
@@ -352,19 +454,17 @@ export async function createCodebaseRun(
   const commands = normalizeAndValidateCommands(payload.commands)
   const timeoutBounds = getTimeoutBounds(ctx)
   const timeoutSeconds = normalizeTimeoutSeconds(payload.timeoutSeconds, timeoutBounds)
-
-  if (getExecutionMode(ctx) === 'container') {
-    throw new NotImplementedException('Container mode is not wired yet', {
-      executionMode: 'container',
-    })
-  }
-
   await enforceRunLimits(ctx)
 
   const createdAt = nowIso()
   const runId = crypto.randomUUID()
   const baseBranch = (payload.baseBranch ?? 'main').trim() || 'main'
   const targetBranch = (payload.targetBranch ?? `opencto/${runId.slice(0, 8)}`).trim() || `opencto/${runId.slice(0, 8)}`
+  const executionMode = getExecutionMode(ctx)
+
+  if (executionMode === 'container' && !ctx.env.CODEBASE_EXECUTOR) {
+    throw new NotImplementedException('Container execution requested but CODEBASE_EXECUTOR binding is not configured')
+  }
 
   await ctx.env.DB.prepare(
     `INSERT INTO codebase_runs (
@@ -392,7 +492,7 @@ export async function createCodebaseRun(
     payload: {
       timeoutSeconds,
       commandAllowlistVersion: COMMAND_ALLOWLIST_VERSION,
-      executionMode: 'stub',
+      executionMode,
     },
   }, ctx)
 
@@ -401,6 +501,50 @@ export async function createCodebaseRun(
     eventType: 'run.plan',
     message: `Requested commands: ${commands.join(' | ')}`,
   }, ctx)
+
+  if (executionMode === 'container') {
+    await setRunStatus(runId, ctx, { status: 'running' })
+    await appendEvent(runId, {
+      level: 'system',
+      eventType: 'run.dispatched',
+      message: 'Run dispatched to container executor.',
+    }, ctx)
+
+    const result = await containerDispatcher(runId, {
+      repoUrl,
+      baseBranch,
+      targetBranch,
+      commands,
+      timeoutSeconds,
+    }, ctx)
+
+    for (const log of result.logs) {
+      await appendEvent(runId, {
+        level: log.level,
+        eventType: 'container.log',
+        message: log.message,
+      }, ctx)
+    }
+
+    if (result.status === 'succeeded') {
+      await setRunStatus(runId, ctx, { status: 'succeeded' })
+      await appendEvent(runId, {
+        level: 'system',
+        eventType: 'run.completed',
+        message: 'Container execution completed successfully.',
+      }, ctx)
+    } else {
+      await setRunStatus(runId, ctx, {
+        status: result.status,
+        errorMessage: result.errorMessage ?? 'Container execution failed',
+      })
+      await appendEvent(runId, {
+        level: 'error',
+        eventType: 'run.failed',
+        message: result.errorMessage ?? 'Container execution failed',
+      }, ctx)
+    }
+  }
 
   const row = await getRunRow(runId, ctx)
   return jsonResponse({

@@ -1,15 +1,43 @@
 name = "opencto-api-worker"
 main = "src/index.ts"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-03-02"
 workers_dev = true
+
+[[containers]]
+class_name = "CodebaseExecutorContainer"
+image = "./container-runtime/codebase-executor/Dockerfile"
+max_instances = 4
+
+[[durable_objects.bindings]]
+class_name = "CodebaseExecutorContainer"
+name = "CODEBASE_EXECUTOR"
+
+[[migrations]]
+new_sqlite_classes = ["CodebaseExecutorContainer"]
+tag = "v1_codebase_executor_container"
 
 [env.production]
 name = "opencto-api"
 route = { pattern = "api.opencto.works/*", zone_name = "opencto.works" }
-vars = { ENVIRONMENT = "production", OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works", APP_BASE_URL = "https://app.opencto.works", API_BASE_URL = "https://api.opencto.works" }
+vars = {
+  ENVIRONMENT = "production",
+  OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works",
+  APP_BASE_URL = "https://app.opencto.works",
+  API_BASE_URL = "https://api.opencto.works",
+  CODEBASE_EXECUTION_MODE = "stub",
+  CODEBASE_MAX_CONCURRENT_RUNS = "2",
+  CODEBASE_DAILY_RUN_LIMIT = "30",
+  CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS = "600",
+  CODEBASE_RUN_MIN_TIMEOUT_SECONDS = "60",
+  CODEBASE_RUN_MAX_TIMEOUT_SECONDS = "1800"
+}
 d1_databases = [
   { binding = "DB", database_name = "opencto-chat-store", database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4" },
 ]
+
+[[env.production.durable_objects.bindings]]
+class_name = "CodebaseExecutorContainer"
+name = "CODEBASE_EXECUTOR"
 
 [[d1_databases]]
 binding = "DB"
@@ -20,24 +48,12 @@ database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4"
 ENVIRONMENT = "production"
 OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works"
 APP_BASE_URL = "https://app.opencto.works"
-
-# Cloudflare Containers MVP draft:
-# - This worker will orchestrate run lifecycle and authorization.
-# - The container runtime will execute approved commands only.
-# - Container service binding values should be configured per environment.
-#
-# [containers]
-# services = [
-#   { binding = "CODEBASE_EXECUTOR", service = "opencto-codebase-executor", environment = "production" }
-# ]
-#
-# [vars]
-# CODEBASE_EXECUTION_MODE = "stub"
-# CODEBASE_MAX_CONCURRENT_RUNS = "2"
-# CODEBASE_DAILY_RUN_LIMIT = "20"
-# CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS = "600"
-# CODEBASE_RUN_MIN_TIMEOUT_SECONDS = "60"
-# CODEBASE_RUN_MAX_TIMEOUT_SECONDS = "1800"
+CODEBASE_EXECUTION_MODE = "stub"
+CODEBASE_MAX_CONCURRENT_RUNS = "2"
+CODEBASE_DAILY_RUN_LIMIT = "20"
+CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS = "600"
+CODEBASE_RUN_MIN_TIMEOUT_SECONDS = "60"
+CODEBASE_RUN_MAX_TIMEOUT_SECONDS = "1800"
 
 # Secrets (set via wrangler secret put):
 # - OPENAI_API_KEY

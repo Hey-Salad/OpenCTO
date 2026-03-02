@@ -136,7 +136,12 @@ Runtime controls:
 
 Execution mode:
 - `CODEBASE_EXECUTION_MODE=stub` (default): creates local stub runs/events
-- `CODEBASE_EXECUTION_MODE=container`: returns `NOT_IMPLEMENTED` until executor binding is wired
+- `CODEBASE_EXECUTION_MODE=container`: dispatches the run to `CODEBASE_EXECUTOR` container binding
+
+Container runtime image:
+- `container-runtime/codebase-executor/Dockerfile`
+- `container-runtime/codebase-executor/server.js`
+- Endpoint contract: `POST /execute` accepts run payload and returns `{ status, logs, errorMessage? }`
 
 ### Billing
 

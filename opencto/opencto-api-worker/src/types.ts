@@ -19,6 +19,7 @@ export interface Env {
   API_BASE_URL: string
   OPENCTO_AGENT_BASE_URL: string
   APP_BASE_URL: string
+  CODEBASE_EXECUTOR?: DurableObjectNamespace
   CODEBASE_EXECUTION_MODE?: 'stub' | 'container'
   CODEBASE_MAX_CONCURRENT_RUNS?: string
   CODEBASE_DAILY_RUN_LIMIT?: string

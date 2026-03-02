@@ -1,6 +1,7 @@
 // OpenCTO API Worker - Main Entry Point
 // Cloudflare Workers backend for OpenCTO dashboard
 
+import { Container } from '@cloudflare/containers'
 import type { Env, RequestContext, SessionUser, PlanCode, BillingInterval, ComplianceCheckType } from './types'
 import { toJsonResponse, jsonResponse, UnauthorizedException } from './errors'
 import * as auth from './auth'
@@ -11,6 +12,11 @@ import * as chats from './chats'
 import * as onboarding from './onboarding'
 import * as github from './github'
 import * as codebaseRuns from './codebaseRuns'
+
+export class CodebaseExecutorContainer extends Container {
+  defaultPort = 4000
+  sleepAfter = '10m'
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

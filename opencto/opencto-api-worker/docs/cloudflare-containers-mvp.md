@@ -6,7 +6,7 @@ This draft defines how `opencto-api-worker` orchestrates codebase execution insi
 
 1. Dashboard calls `POST /api/v1/codebase/runs` with repository and allowlisted commands.
 2. Worker writes a `codebase_runs` record and initial `codebase_run_events`.
-3. Worker dispatches a container execution request to `CODEBASE_EXECUTOR` (future wiring).
+3. Worker dispatches a container execution request to `CODEBASE_EXECUTOR`.
 4. Container streams lifecycle and command logs back as `codebase_run_events`.
 5. Artifacts (logs, test reports, build metadata) are registered in `codebase_run_artifacts`.
 6. Dashboard polls:
@@ -16,7 +16,7 @@ This draft defines how `opencto-api-worker` orchestrates codebase execution insi
 ## Execution Mode Flag
 
 - `CODEBASE_EXECUTION_MODE=stub`: current MVP behavior with local orchestration records.
-- `CODEBASE_EXECUTION_MODE=container`: currently returns `NOT_IMPLEMENTED` until executor binding is wired.
+- `CODEBASE_EXECUTION_MODE=container`: dispatches to the bound container instance (`runId` as instance key).
 
 ## Required Runtime Controls
 
