@@ -303,10 +303,10 @@ export async function completePasskeyEnrollment(
 
 export async function startGitHubOAuth(request: Request, env: Env): Promise<Response> {
   if (!env.JWT_SECRET) {
-    return jsonResponse({ error: 'JWT_SECRET is not configured', code: 'CONFIG_ERROR' }, 500)
+    return jsonResponse({ error: 'JWT_SECRET is not configured', code: 'CONFIG_ERROR', status: 500 }, 500)
   }
   if (!env.GITHUB_OAUTH_CLIENT_ID) {
-    return jsonResponse({ error: 'GITHUB_OAUTH_CLIENT_ID is not configured', code: 'CONFIG_ERROR' }, 500)
+    return jsonResponse({ error: 'GITHUB_OAUTH_CLIENT_ID is not configured', code: 'CONFIG_ERROR', status: 500 }, 500)
   }
 
   const url = new URL(request.url)
@@ -332,68 +332,91 @@ export async function startGitHubOAuth(request: Request, env: Env): Promise<Resp
 
 export async function completeGitHubOAuth(request: Request, env: Env): Promise<Response> {
   if (!env.JWT_SECRET) {
-    return jsonResponse({ error: 'JWT_SECRET is not configured', code: 'CONFIG_ERROR' }, 500)
+    return jsonResponse({ error: 'JWT_SECRET is not configured', code: 'CONFIG_ERROR', status: 500 }, 500)
   }
   if (!env.GITHUB_OAUTH_CLIENT_ID || !env.GITHUB_OAUTH_CLIENT_SECRET) {
     return jsonResponse(
-      { error: 'GITHUB_OAUTH_CLIENT_ID or GITHUB_OAUTH_CLIENT_SECRET is not configured', code: 'CONFIG_ERROR' },
+      { error: 'GITHUB_OAUTH_CLIENT_ID or GITHUB_OAUTH_CLIENT_SECRET is not configured', code: 'CONFIG_ERROR', status: 500 },
       500,
     )
   }
 
   const url = new URL(request.url)
+  const oauthError = (url.searchParams.get('error') ?? '').trim()
+  if (oauthError) {
+    return jsonResponse(
+      {
+        error: 'GitHub OAuth flow was denied or canceled',
+        code: 'OAUTH_DENIED',
+        status: 401,
+        details: {
+          providerError: oauthError,
+          providerErrorDescription: url.searchParams.get('error_description') ?? undefined,
+        },
+      },
+      401,
+    )
+  }
+
   const code = url.searchParams.get('code') ?? ''
   const stateToken = url.searchParams.get('state') ?? ''
   if (!code || !stateToken) {
-    return jsonResponse({ error: 'Missing code/state from GitHub OAuth callback', code: 'BAD_REQUEST' }, 400)
+    return jsonResponse({ error: 'Missing code/state from GitHub OAuth callback', code: 'BAD_REQUEST', status: 400 }, 400)
   }
 
   const state = await verifyToken<OAuthStatePayload>(stateToken, env.JWT_SECRET)
   if (!state || state.exp < nowEpochSeconds()) {
-    return jsonResponse({ error: 'Invalid or expired OAuth state', code: 'UNAUTHORIZED' }, 401)
+    return jsonResponse({ error: 'Invalid or expired OAuth state', code: 'UNAUTHORIZED', status: 401 }, 401)
   }
 
   const redirectUri = `${resolveApiBaseUrl(request, env)}/api/v1/auth/oauth/github/callback`
-  const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: env.GITHUB_OAUTH_CLIENT_ID,
-      client_secret: env.GITHUB_OAUTH_CLIENT_SECRET,
-      code,
-      redirect_uri: redirectUri,
-      state: stateToken,
-    }),
-  })
+  let tokenRes: Response
+  try {
+    tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: env.GITHUB_OAUTH_CLIENT_ID,
+        client_secret: env.GITHUB_OAUTH_CLIENT_SECRET,
+        code,
+        redirect_uri: redirectUri,
+        state: stateToken,
+      }),
+    })
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: 'GitHub token exchange request failed',
+        code: 'UPSTREAM_ERROR',
+        status: 502,
+        details: { provider: 'github', stage: 'oauth_token_exchange', reason: String(err) },
+      },
+      502,
+    )
+  }
 
   const tokenBody = await tokenRes.json().catch(() => ({})) as { access_token?: string; scope?: string; error?: string }
   const githubAccessToken = tokenBody.access_token
   if (!tokenRes.ok || !githubAccessToken) {
     return jsonResponse(
-      { error: 'Failed to exchange GitHub OAuth code', code: 'UPSTREAM_ERROR', details: tokenBody },
+      {
+        error: 'Failed to exchange GitHub OAuth code',
+        code: 'UPSTREAM_ERROR',
+        status: 502,
+        details: {
+          provider: 'github',
+          stage: 'oauth_token_exchange',
+          upstreamStatus: tokenRes.status,
+          upstreamError: tokenBody.error ?? 'missing_access_token',
+        },
+      },
       502,
     )
   }
 
-  const userRes = await fetch('https://api.github.com/user', {
-    headers: {
-      Authorization: `Bearer ${githubAccessToken}`,
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'opencto-api-worker',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  })
-  const userBody = await userRes.json().catch(() => ({})) as { id?: number; login?: string; name?: string; email?: string | null }
-  if (!userRes.ok || !userBody.id || !userBody.login) {
-    return jsonResponse(
-      { error: 'Failed to load GitHub user profile', code: 'UPSTREAM_ERROR', details: userBody },
-      502,
-    )
-  }
-
-  let email = userBody.email ?? ''
-  if (!email) {
-    const emailsRes = await fetch('https://api.github.com/user/emails', {
+  let userRes: Response
+  try {
+    userRes = await fetch('https://api.github.com/user', {
       headers: {
         Authorization: `Bearer ${githubAccessToken}`,
         Accept: 'application/vnd.github+json',
@@ -401,6 +424,59 @@ export async function completeGitHubOAuth(request: Request, env: Env): Promise<R
         'X-GitHub-Api-Version': '2022-11-28',
       },
     })
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: 'GitHub user profile request failed',
+        code: 'UPSTREAM_ERROR',
+        status: 502,
+        details: { provider: 'github', stage: 'load_profile', reason: String(err) },
+      },
+      502,
+    )
+  }
+  const userBody = await userRes.json().catch(() => ({})) as { id?: number; login?: string; name?: string; email?: string | null }
+  if (!userRes.ok || !userBody.id || !userBody.login) {
+    return jsonResponse(
+      {
+        error: 'Failed to load GitHub user profile',
+        code: 'UPSTREAM_ERROR',
+        status: 502,
+        details: {
+          provider: 'github',
+          stage: 'load_profile',
+          upstreamStatus: userRes.status,
+          hasId: Boolean(userBody.id),
+          hasLogin: Boolean(userBody.login),
+        },
+      },
+      502,
+    )
+  }
+
+  let email = userBody.email ?? ''
+  if (!email) {
+    let emailsRes: Response
+    try {
+      emailsRes = await fetch('https://api.github.com/user/emails', {
+        headers: {
+          Authorization: `Bearer ${githubAccessToken}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'opencto-api-worker',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      })
+    } catch (err) {
+      return jsonResponse(
+        {
+          error: 'GitHub email lookup request failed',
+          code: 'UPSTREAM_ERROR',
+          status: 502,
+          details: { provider: 'github', stage: 'load_emails', reason: String(err) },
+        },
+        502,
+      )
+    }
     const emailsBody = await emailsRes.json().catch(() => []) as Array<{ email?: string; primary?: boolean; verified?: boolean }>
     const primary = emailsBody.find((e) => e.primary && e.verified)?.email
       ?? emailsBody.find((e) => e.verified)?.email
@@ -410,7 +486,7 @@ export async function completeGitHubOAuth(request: Request, env: Env): Promise<R
   }
 
   if (!email) {
-    return jsonResponse({ error: 'GitHub account does not expose an email', code: 'UNAUTHORIZED' }, 401)
+    return jsonResponse({ error: 'GitHub account does not expose an email', code: 'UNAUTHORIZED', status: 401 }, 401)
   }
 
   if (env.DB) {
@@ -443,7 +519,7 @@ export async function completeGitHubOAuth(request: Request, env: Env): Promise<R
 export async function parseSessionToken(token: string, env: Env): Promise<SessionUser | null> {
   if (!env.JWT_SECRET) return null
   const payload = await verifyToken<SessionTokenPayload>(token, env.JWT_SECRET)
-  if (!payload || payload.exp < nowEpochSeconds()) return null
+  if (!isValidSessionTokenPayload(payload) || payload.exp < nowEpochSeconds()) return null
   return {
     id: payload.sub,
     email: payload.email,
@@ -488,14 +564,18 @@ export async function deleteAccount(ctx: RequestContext): Promise<Response> {
 }
 
 function sanitizeReturnTo(raw: string | null, fallback: string): string {
-  if (!raw) return fallback
+  const safeFallback = safeAppBaseUrl(fallback)
+  if (!raw) return safeFallback
   try {
+    const fallbackUrl = new URL(safeFallback)
     const url = new URL(raw)
-    if (url.protocol !== 'https:') return fallback
-    if (!url.hostname.endsWith('opencto.works')) return fallback
+    if (url.protocol !== 'https:') return safeFallback
+    const isSameHost = url.hostname === fallbackUrl.hostname
+    const isSubdomain = url.hostname.endsWith(`.${fallbackUrl.hostname}`)
+    if (!isSameHost && !isSubdomain) return safeFallback
     return `${url.origin}${url.pathname}${url.search}`
   } catch {
-    return fallback
+    return safeFallback
   }
 }
 
@@ -541,20 +621,45 @@ async function signToken<T extends Record<string, unknown>>(payload: T, secret: 
 }
 
 async function verifyToken<T extends Record<string, unknown>>(token: string, secret: string): Promise<T | null> {
-  const [payloadB64, sigB64] = token.split('.')
+  const parts = token.split('.')
+  if (parts.length !== 2) return null
+  const [payloadB64, sigB64] = parts
   if (!payloadB64 || !sigB64) return null
-  const key = await importHmacKey(secret)
-  const ok = await crypto.subtle.verify(
-    'HMAC',
-    key,
-    base64UrlDecode(sigB64),
-    new TextEncoder().encode(payloadB64),
-  )
-  if (!ok) return null
   try {
+    const key = await importHmacKey(secret)
+    const ok = await crypto.subtle.verify(
+      'HMAC',
+      key,
+      base64UrlDecode(sigB64),
+      new TextEncoder().encode(payloadB64),
+    )
+    if (!ok) return null
     return JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadB64))) as T
   } catch {
     return null
+  }
+}
+
+function isValidSessionTokenPayload(payload: SessionTokenPayload | null): payload is SessionTokenPayload {
+  return Boolean(
+    payload
+      && typeof payload.sub === 'string'
+      && typeof payload.email === 'string'
+      && payload.email.includes('@')
+      && typeof payload.name === 'string'
+      && typeof payload.role === 'string'
+      && payload.provider === 'github'
+      && typeof payload.exp === 'number',
+  )
+}
+
+function safeAppBaseUrl(raw: string): string {
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:') return 'https://app.opencto.works'
+    return url.origin
+  } catch {
+    return 'https://app.opencto.works'
   }
 }
 
