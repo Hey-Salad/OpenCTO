@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Grandstander:wght@600;700&display=swap');
-@import 'highlight.js/styles/github-dark.css';
 
 :root {
   --brand-primary: #ed4c4c;
@@ -1256,6 +1255,82 @@ p { margin: 0; }
   gap: 12px;
 }
 
+.codebase-run-card {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--bg-surface-2);
+  display: grid;
+  gap: 10px;
+}
+
+.codebase-run-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.codebase-run-field {
+  display: grid;
+  gap: 6px;
+}
+
+.codebase-run-field input,
+.codebase-run-field select {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-body);
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.codebase-run-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.codebase-run-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.codebase-run-events {
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.codebase-event-row {
+  align-items: flex-start;
+}
+
+.codebase-run-status {
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  padding: 3px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.codebase-run-status-succeeded {
+  color: #b6f3cb;
+}
+
+.codebase-run-status-running,
+.codebase-run-status-queued {
+  color: #f6ddb2;
+}
+
+.codebase-run-status-failed,
+.codebase-run-status-cancelled,
+.codebase-run-status-timed_out {
+  color: #ffd0cd;
+}
+
 .codebase-list-btn {
   width: 100%;
   border: 1px solid var(--border-color);
@@ -1558,6 +1633,7 @@ button:disabled {
 
 .audio-code-card {
   overflow: hidden;
+  background: #101014;
 }
 
 .audio-code-header {
@@ -1567,7 +1643,7 @@ button:disabled {
   gap: 8px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border-color);
-  color: var(--text-muted);
+  color: #f0b4ae;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1585,34 +1661,7 @@ button:disabled {
 }
 
 .audio-code-card code {
-  color: #e5e7eb;
-}
-
-.audio-code-card .hljs {
-  background: transparent;
-  padding: 0;
-}
-
-.audio-code-kw {
-  color: #ff7b72;
-  font-weight: 600;
-}
-
-.audio-code-str {
-  color: #a5d6ff;
-}
-
-.audio-code-num {
-  color: #79c0ff;
-}
-
-.audio-code-comment {
-  color: #8b949e;
-  font-style: italic;
-}
-
-.audio-code-key {
-  color: #d2a8ff;
+  color: #9ecbff;
 }
 
 .audio-command-card {
