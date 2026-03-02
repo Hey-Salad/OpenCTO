@@ -69,6 +69,43 @@ function mergeTranscriptFragment(current: string, incoming: string): string {
   return `${current} ${next}`.replace(/\s+/g, ' ').trim()
 }
 
+const TRANSCRIPT_DEBOUNCE_MS = 700
+const TRANSCRIPT_MIN_WORDS = 3
+const TRANSCRIPT_MAX_HOLD_MS = 2500
+
+function transcriptWordCount(text: string): number {
+  const trimmed = text.trim()
+  if (!trimmed) return 0
+  return trimmed.split(/\s+/).filter(Boolean).length
+}
+
+function looksLikeCompletedSentence(text: string): boolean {
+  return /[.!?…:]$/.test(text.trim())
+}
+
+function formatConnectionError(message: string): string {
+  const normalized = message.trim()
+  if (!normalized) return 'Unable to start a realtime session. Check your model settings and try again.'
+
+  const lower = normalized.toLowerCase()
+  if (lower.includes('permission denied') || lower.includes('notallowederror')) {
+    return 'Microphone permission was denied. Allow microphone access in your browser and try again.'
+  }
+  if (lower.includes('token request failed') || lower.includes('missing clientsecret')) {
+    return 'Failed to initialize the OpenAI realtime session token. Verify backend auth/token configuration.'
+  }
+  if (lower.includes('google_api_key') || lower.includes('api key')) {
+    return 'Google Live requires a valid API key. Set VITE_GOOGLE_API_KEY and retry.'
+  }
+  if (lower.includes('timed out') || lower.includes('websocket connection error')) {
+    return 'Realtime connection timed out. Check network connectivity and model availability, then retry.'
+  }
+  if (lower.includes('closed before open')) {
+    return 'Realtime connection closed during startup. Retry, and verify the selected model is available.'
+  }
+  return normalized
+}
+
 function renderInlineMarkdown(text: string): ReactNode[] {
   const nodes: ReactNode[] = []
   const tokenRegex = /(`[^`]+`|\*\*[^*]+\*\*)/g
@@ -207,9 +244,12 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
   const pendingAssistantTranscriptRef = useRef('')
   const userFlushTimerRef = useRef<number | null>(null)
   const assistantFlushTimerRef = useRef<number | null>(null)
+  const userPendingSinceRef = useRef<number | null>(null)
+  const assistantPendingSinceRef = useRef<number | null>(null)
   const runIdRef = useRef<string | null>(null)
   const runEventSourceRef = useRef<EventSource | null>(null)
   const manualEndRef = useRef(false)
+  const activeSessionIdRef = useRef<string | null>(null)
 
   const [isSessionActive, setIsSessionActive] = useState(false)
   const [sessionElapsedMs, setSessionElapsedMs] = useState(0)
@@ -373,13 +413,22 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
     }
   }, [audioConfig.reasoningModel, audioConfig.systemInstructions, audioConfig.voiceModel, postRunStep])
 
-  const flushTranscript = useCallback((role: 'USER' | 'ASSISTANT') => {
+  const flushTranscript = useCallback((role: 'USER' | 'ASSISTANT', force = false): boolean => {
     const now = Date.now()
     const timestamp = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     const rawText = role === 'USER' ? pendingUserTranscriptRef.current : pendingAssistantTranscriptRef.current
     const text = rawText.trim()
     const trimmed = text.trim()
-    if (!trimmed) return
+    if (!trimmed) return false
+
+    const pendingSince = role === 'USER' ? userPendingSinceRef.current : assistantPendingSinceRef.current
+    const holdMs = pendingSince ? now - pendingSince : 0
+    const canEmit =
+      force
+      || transcriptWordCount(trimmed) >= TRANSCRIPT_MIN_WORDS
+      || looksLikeCompletedSentence(trimmed)
+      || holdMs >= TRANSCRIPT_MAX_HOLD_MS
+    if (!canEmit) return false
 
     if (role === 'ASSISTANT') {
       const blocks = parseAssistantOutput(trimmed)
@@ -418,32 +467,39 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
 
     if (role === 'USER') {
       pendingUserTranscriptRef.current = ''
+      userPendingSinceRef.current = null
     } else {
       pendingAssistantTranscriptRef.current = ''
+      assistantPendingSinceRef.current = null
     }
+    return true
   }, [onAddMessage, postRunArtifact])
+
+  const scheduleTranscriptFlush = useCallback((role: 'USER' | 'ASSISTANT') => {
+    const timerRef = role === 'USER' ? userFlushTimerRef : assistantFlushTimerRef
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => {
+      const emitted = flushTranscript(role, false)
+      timerRef.current = null
+      if (!emitted) scheduleTranscriptFlush(role)
+    }, TRANSCRIPT_DEBOUNCE_MS)
+  }, [flushTranscript])
 
   const queueTranscript = useCallback((role: 'USER' | 'ASSISTANT', incomingText: string) => {
     const normalized = incomingText.trim()
     if (!normalized) return
 
     if (role === 'USER') {
+      if (!pendingUserTranscriptRef.current) userPendingSinceRef.current = Date.now()
       pendingUserTranscriptRef.current = mergeTranscriptFragment(pendingUserTranscriptRef.current, normalized)
-      if (userFlushTimerRef.current !== null) window.clearTimeout(userFlushTimerRef.current)
-      userFlushTimerRef.current = window.setTimeout(() => {
-        flushTranscript('USER')
-        userFlushTimerRef.current = null
-      }, 320)
+      scheduleTranscriptFlush('USER')
       return
     }
 
+    if (!pendingAssistantTranscriptRef.current) assistantPendingSinceRef.current = Date.now()
     pendingAssistantTranscriptRef.current = mergeTranscriptFragment(pendingAssistantTranscriptRef.current, normalized)
-    if (assistantFlushTimerRef.current !== null) window.clearTimeout(assistantFlushTimerRef.current)
-    assistantFlushTimerRef.current = window.setTimeout(() => {
-      flushTranscript('ASSISTANT')
-      assistantFlushTimerRef.current = null
-    }, 320)
-  }, [flushTranscript])
+    scheduleTranscriptFlush('ASSISTANT')
+  }, [scheduleTranscriptFlush])
 
   useEffect(() => {
     return () => {
@@ -461,12 +517,13 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
     switch (event.type) {
       case 'session_started':
         setConnectionState('connected')
+        setConnectionError(null)
         setIsSessionActive(true)
         void startRunTracking()
         break
       case 'session_ended':
-        flushTranscript('USER')
-        flushTranscript('ASSISTANT')
+        flushTranscript('USER', true)
+        flushTranscript('ASSISTANT', true)
         clearTranscriptTimers()
         setConnectionState('idle')
         setIsSessionActive(false)
@@ -485,8 +542,8 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
         queueTranscript('ASSISTANT', event.text)
         break
       case 'tool_start': {
-        flushTranscript('USER')
-        flushTranscript('ASSISTANT')
+        flushTranscript('USER', true)
+        flushTranscript('ASSISTANT', true)
         void postRunStep('tool_call', 'running', `Calling ${formatToolName(event.toolName)}`, { toolName: event.toolName })
         const id = `tool-${now}-${event.toolName}`
         activeToolIds.current.set(event.toolName, id)
@@ -518,9 +575,9 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
         break
       }
       case 'error':
-        flushTranscript('USER')
-        flushTranscript('ASSISTANT')
-        setConnectionError(event.message)
+        flushTranscript('USER', true)
+        flushTranscript('ASSISTANT', true)
+        setConnectionError(formatConnectionError(event.message))
         setConnectionState('error')
         if (runIdRef.current) {
           void postRunStep('artifact', 'failed', 'Realtime error', { message: event.message })
@@ -534,6 +591,8 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
   // ---------------------------------------------------------------------------
 
   const handleStartSession = async () => {
+    if (connectionState === 'connecting' || isSessionActive) return
+
     manualEndRef.current = false
     setConnectionError(null)
 
@@ -544,7 +603,10 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
 
     setConnectionState('connecting')
     setSessionElapsedMs(0)
+    activeToolIds.current.clear()
 
+    const sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    activeSessionIdRef.current = sessionId
     const client = new CTOAgentSession(TOKEN_URL, {
       model: audioConfig.voiceModel,
       reasoningModel: audioConfig.reasoningModel,
@@ -556,7 +618,10 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
       silenceDuration: audioConfig.silenceDuration,
       transcriptModel: audioConfig.transcriptModel,
       maxTokens: audioConfig.maxTokens,
-    }, handleAgentEvent)
+    }, (event) => {
+      if (activeSessionIdRef.current !== sessionId) return
+      handleAgentEvent(event)
+    })
     clientRef.current = client
 
     try {
@@ -567,7 +632,7 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
           setIsMicActive(true)
         } catch (micError) {
           const micMsg = micError instanceof Error ? micError.message : 'Microphone access failed'
-          setConnectionError(micMsg)
+          setConnectionError(formatConnectionError(micMsg))
           setIsMicActive(false)
         }
       } else {
@@ -575,16 +640,19 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Connection failed'
-      setConnectionError(msg)
+      setConnectionError(formatConnectionError(msg))
       setConnectionState('error')
+      if (activeSessionIdRef.current === sessionId) activeSessionIdRef.current = null
+      client.disconnect()
       clientRef.current = null
     }
   }
 
   const handleEndSession = () => {
     manualEndRef.current = true
-    flushTranscript('USER')
-    flushTranscript('ASSISTANT')
+    activeSessionIdRef.current = null
+    flushTranscript('USER', true)
+    flushTranscript('ASSISTANT', true)
     clearTranscriptTimers()
     clientRef.current?.disconnect()
     if (runIdRef.current) void stopRunTracking('complete', 'Session ended by user')
@@ -600,7 +668,7 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
 
   const handleMicToggle = async () => {
     const client = clientRef.current
-    if (!client) return
+    if (!client || !isSessionActive) return
     if (!isVoiceMode) {
       setConnectionError('Microphone is only available for Voice (Realtime) models. Use text input for this model.')
       return
@@ -614,7 +682,7 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
         setIsMicActive(true)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Microphone access failed'
-        setConnectionError(msg)
+        setConnectionError(formatConnectionError(msg))
       }
     }
   }
