@@ -236,6 +236,24 @@ function renderMessageContent(msg: AudioMessage, onCopy: (text: string, key: str
   return renderMessageText(msg.text)
 }
 
+function renderRoleLabel(role: AudioMessage['role']): ReactNode {
+  if (role === 'ASSISTANT') {
+    return (
+      <span className="audio-role-opencto">
+        <svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <rect width="18" height="18" rx="4" fill="currentColor" />
+          <path d="M4.2 13.8a4.8 4.8 0 1 1 9.6-4.2" stroke="#0b0b0d" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="4.2" cy="13.8" r="0.9" fill="#0b0b0d" />
+          <circle cx="13.8" cy="9.6" r="0.9" fill="#0b0b0d" />
+        </svg>
+        <span>OpenCTO</span>
+      </span>
+    )
+  }
+  if (role === 'TOOL') return 'TOOL'
+  return role
+}
+
 export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: AudioRealtimeViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLInputElement>(null)
@@ -796,7 +814,7 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
               <div className="audio-message-time">{msg.timestamp}</div>
               <div className="audio-message-body">
                 <div className={`audio-message-role audio-role-${msg.role.toLowerCase()}`}>
-                  {msg.role === 'TOOL' ? 'TOOL' : msg.role}
+                  {renderRoleLabel(msg.role)}
                 </div>
                 <div className="audio-message-text">{renderMessageContent(msg, handleCopy, copiedKey)}</div>
               </div>

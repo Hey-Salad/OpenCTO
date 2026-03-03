@@ -78,6 +78,12 @@ export function CodebasePanel({
   const connectedUpdated = status?.updatedAt
     ? new Date(status.updatedAt).toLocaleString()
     : 'Not synced yet'
+  const recentlyPushedRepos = repos.filter((repo) => {
+    if (!repo.pushedAt) return false
+    return Date.now() - new Date(repo.pushedAt).getTime() <= 1000 * 60 * 60 * 24 * 30
+  }).length
+  const privateRepos = repos.filter((repo) => repo.private).length
+  const archivedRepos = repos.filter((repo) => repo.archived).length
 
   const selectedRun = useMemo(
     () => runs.find((run) => run.id === selectedRunId) ?? null,
@@ -279,6 +285,39 @@ export function CodebasePanel({
         )}
         {syncMessage ? <p className="muted">{syncMessage}</p> : null}
       </div>
+
+      <section className="codebase-runs-panel codebase-github-kpi-panel">
+        <header className="codebase-runs-header">
+          <h3>GitHub Overview</h3>
+          <p className="muted">KPI snapshot for synced organizations and repositories in the current filter.</p>
+        </header>
+        <div className="codebase-metrics-grid">
+          <div className="codebase-metric-card">
+            <span className="muted">Organizations</span>
+            <strong>{orgs.length}</strong>
+          </div>
+          <div className="codebase-metric-card">
+            <span className="muted">Repositories</span>
+            <strong>{repos.length}</strong>
+          </div>
+          <div className="codebase-metric-card">
+            <span className="muted">Private Repos</span>
+            <strong>{privateRepos}</strong>
+          </div>
+          <div className="codebase-metric-card">
+            <span className="muted">Active (30d)</span>
+            <strong>{recentlyPushedRepos}</strong>
+          </div>
+          <div className="codebase-metric-card">
+            <span className="muted">Archived</span>
+            <strong>{archivedRepos}</strong>
+          </div>
+          <div className="codebase-metric-card">
+            <span className="muted">Last GitHub Sync</span>
+            <strong>{connectedUpdated}</strong>
+          </div>
+        </div>
+      </section>
 
       <div className="codebase-grid">
         <article>

@@ -88,6 +88,7 @@ function App() {
   const [activeSection, setActiveSection] = useState<'launchpad' | 'codebase' | 'settings' | 'billing'>('launchpad')
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+  const [isExportingData, setIsExportingData] = useState(false)
   const [billingSummary, setBillingSummary] = useState<BillingSummaryResponse | null>(null)
   const [billingInvoices, setBillingInvoices] = useState<Invoice[]>([])
   const [billingLoading, setBillingLoading] = useState(false)
@@ -376,6 +377,69 @@ function App() {
     }
   }
 
+  const handleSignOut = () => {
+    authApi.signOut?.()
+    setSession({
+      isAuthenticated: false,
+      trustedDevice: false,
+      mfaRequired: false,
+      user: null,
+    })
+    setAudioMessages([])
+    setActiveChatId(null)
+    setOnboardingState(null)
+    setGitHubStatus(null)
+    setGitHubOrgs([])
+    setGitHubRepos([])
+    setSelectedOrg('')
+    setActiveSection('launchpad')
+    setAccountMenuOpen(false)
+    setErrorMessage(null)
+  }
+
+  const handleExportData = () => {
+    if (!session?.user) return
+    setIsExportingData(true)
+    try {
+      const exportPayload = {
+        exportedAt: new Date().toISOString(),
+        product: 'OpenCTO Dashboard',
+        account: {
+          id: session.user.id,
+          email: session.user.email,
+          displayName: session.user.displayName,
+          role: session.user.role,
+          authProvider: session.user.authProvider ?? 'unknown',
+        },
+        workspace: onboardingState,
+        preferences: {
+          audioConfig,
+        },
+        chatHistory: {
+          activeChatId,
+          messageCount: audioMessages.length,
+          messages: audioMessages,
+        },
+      }
+
+      const json = JSON.stringify(exportPayload, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      const stamp = new Date().toISOString().slice(0, 10)
+      anchor.href = url
+      anchor.download = `opencto-export-${stamp}.json`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setErrorMessage(normalizeApiError(error, 'Failed to export account data').message)
+    } finally {
+      setIsExportingData(false)
+    }
+  }
+
   const showWorkspaceLoader = !minimumLoaderComplete || authLoading || (session?.isAuthenticated && onboardingLoading)
   const loaderStatusMessage = authLoading
     ? 'Checking secure session state'
@@ -520,6 +584,15 @@ function App() {
                         <span>Billing</span>
                       </span>
                     </button>
+                    <button type="button" role="menuitem" onClick={handleSignOut}>
+                      <span className="account-menu-item-content">
+                        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path d="M10 2.5H4.6A1.6 1.6 0 0 0 3 4.1v7.8a1.6 1.6 0 0 0 1.6 1.6H10" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                          <path d="M8.5 8h6M12.2 5.2L15 8l-2.8 2.8" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span>Logout</span>
+                      </span>
+                    </button>
                     <button type="button" role="menuitem" className="account-menu-danger" onClick={() => void handleDeleteAccount()} disabled={isDeletingAccount}>
                       <span className="account-menu-item-content">
                         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -583,14 +656,46 @@ function App() {
             />
           )}
           {activeSection === 'settings' && (
-            <section className="panel">
-              <h2>Settings</h2>
-              <p className="muted">Manage your OpenCTO account profile and workspace preferences.</p>
-              <div className="settings-summary">
-                <p><strong>Name:</strong> {session?.user?.displayName ?? 'OpenCTO User'}</p>
-                <p><strong>Email:</strong> {session?.user?.email ?? '-'}</p>
-                <p><strong>Workspace:</strong> {onboardingState?.companyName ?? 'Not set'}</p>
-                <p><strong>Team Size:</strong> {onboardingState?.teamSize || 'Not set'}</p>
+            <section className="panel settings-panel">
+              <div className="settings-panel-header">
+                <div>
+                  <h2>Settings</h2>
+                  <p className="muted">Manage your OpenCTO account profile and workspace preferences.</p>
+                </div>
+                <button type="button" className="secondary-button" onClick={handleSignOut}>
+                  Logout
+                </button>
+              </div>
+
+              <div className="settings-layout">
+                <article className="settings-card">
+                  <h3>Account</h3>
+                  <div className="settings-summary">
+                    <p><strong>Name:</strong> {session?.user?.displayName ?? 'OpenCTO User'}</p>
+                    <p><strong>Email:</strong> {session?.user?.email ?? '-'}</p>
+                    <p><strong>Role:</strong> {session?.user?.role ?? '-'}</p>
+                    <p><strong>Provider:</strong> {session?.user?.authProvider ?? 'Unknown'}</p>
+                  </div>
+                </article>
+
+                <article className="settings-card">
+                  <h3>Workspace</h3>
+                  <div className="settings-summary">
+                    <p><strong>Workspace:</strong> {onboardingState?.companyName ?? 'Not set'}</p>
+                    <p><strong>Team Size:</strong> {onboardingState?.teamSize || 'Not set'}</p>
+                    <p><strong>Terms Accepted:</strong> {onboardingState?.termsAccepted ? 'Yes' : 'No'}</p>
+                  </div>
+                </article>
+
+                <article className="settings-card settings-card-actions">
+                  <h3>Data Actions</h3>
+                  <p className="muted">Export your workspace data as a local JSON file.</p>
+                  <div className="settings-action-row">
+                    <button type="button" className="secondary-button" onClick={handleExportData} disabled={isExportingData}>
+                      {isExportingData ? 'Exporting...' : 'Export Data'}
+                    </button>
+                  </div>
+                </article>
               </div>
             </section>
           )}
