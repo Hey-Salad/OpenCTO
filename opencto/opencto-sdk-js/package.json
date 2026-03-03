@@ -1,6 +1,6 @@
 {
   "name": "@heysalad/opencto",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenCTO JavaScript SDK for auth, chats, runs, and realtime token APIs.",
   "type": "module",
   "license": "Apache-2.0",
