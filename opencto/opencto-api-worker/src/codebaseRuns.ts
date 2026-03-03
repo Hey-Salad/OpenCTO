@@ -25,6 +25,12 @@ interface ContainerExecutionResult {
   errorMessage?: string
 }
 
+interface PullRequestSummary {
+  number: number
+  title: string
+  url: string
+}
+
 type ContainerDispatchFn = (
   runId: string,
   payload: { repoUrl: string; baseBranch: string; targetBranch: string; commands: string[]; timeoutSeconds: number },
@@ -102,6 +108,16 @@ const getContainerUnsafe = getContainer as unknown as (
 
 function nowIso(): string {
   return new Date().toISOString()
+}
+
+function extractRepoFullName(repoUrl: string, repoFullName: string | null): string | null {
+  if (repoFullName && repoFullName.trim()) return repoFullName.trim()
+  const sanitized = repoUrl
+    .replace(/^https?:\/\/github.com\//i, '')
+    .replace(/\.git$/i, '')
+    .trim()
+  if (!sanitized.includes('/')) return null
+  return sanitized
 }
 
 function parsePositiveInt(input: string | undefined, fallback: number): number {
@@ -210,6 +226,56 @@ function mapRun(row: CodebaseRunRow) {
     completedAt: row.completed_at,
     canceledAt: row.canceled_at,
     errorMessage: row.error_message ? redactSecrets(row.error_message) : null,
+  }
+}
+
+async function getGitHubAccessToken(ctx: RequestContext): Promise<string | null> {
+  try {
+    const row = await ctx.env.DB.prepare(
+      'SELECT access_token FROM github_connections WHERE user_id = ? LIMIT 1',
+    ).bind(ctx.userId).first<{ access_token: string }>()
+    return row?.access_token ?? null
+  } catch {
+    return null
+  }
+}
+
+async function findOpenPullRequestForRun(
+  run: { repoUrl: string; repoFullName: string | null; targetBranch: string },
+  ctx: RequestContext,
+): Promise<PullRequestSummary | null> {
+  const repoFullName = extractRepoFullName(run.repoUrl, run.repoFullName)
+  if (!repoFullName) return null
+  const [owner] = repoFullName.split('/')
+  if (!owner || !run.targetBranch) return null
+
+  const token = await getGitHubAccessToken(ctx)
+  if (!token) return null
+
+  const url = new URL(`https://api.github.com/repos/${encodeURIComponent(repoFullName)}/pulls`)
+  url.searchParams.set('state', 'open')
+  url.searchParams.set('head', `${owner}:${run.targetBranch}`)
+  url.searchParams.set('per_page', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'opencto-api-worker',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  })
+
+  if (!response.ok) return null
+  const pulls = await response.json().catch(() => []) as Array<{ number?: number; title?: string; html_url?: string }>
+  const first = pulls[0]
+  if (!first || typeof first.number !== 'number' || typeof first.title !== 'string' || typeof first.html_url !== 'string') {
+    return null
+  }
+  return {
+    number: first.number,
+    title: first.title,
+    url: first.html_url,
   }
 }
 
@@ -578,9 +644,11 @@ export async function getCodebaseRun(runId: string, ctx: RequestContext): Promis
   const artifactCount = await ctx.env.DB.prepare('SELECT COUNT(*) AS count FROM codebase_run_artifacts WHERE run_id = ?')
     .bind(runId)
     .first<{ count: number }>()
+  const pr = await findOpenPullRequestForRun(mapRun(row), ctx)
 
   return jsonResponse({
     run: mapRun(row),
+    pullRequest: pr,
     metrics: {
       eventCount: eventCount?.count ?? 0,
       artifactCount: artifactCount?.count ?? 0,
@@ -736,6 +804,44 @@ export async function getCodebaseMetrics(ctx: RequestContext): Promise<Response>
   })
 }
 
+// GET /api/v1/codebase/runs
+export async function listCodebaseRuns(request: Request, ctx: RequestContext): Promise<Response> {
+  await ensureSchema(ctx)
+  const url = new URL(request.url)
+  const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit') ?? '20', 10) || 20))
+  const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') ?? '0', 10) || 0)
+  const repoUrl = (url.searchParams.get('repoUrl') ?? '').trim()
+
+  const query = repoUrl
+    ? ctx.env.DB.prepare(
+      `SELECT id, user_id, repo_url, repo_full_name, base_branch, target_branch, status, requested_commands_json,
+              command_allowlist_version, timeout_seconds, created_at, started_at, completed_at, canceled_at, error_message
+       FROM codebase_runs
+       WHERE user_id = ? AND repo_url = ?
+       ORDER BY created_at DESC
+       LIMIT ?
+       OFFSET ?`,
+    ).bind(ctx.userId, repoUrl, limit, offset)
+    : ctx.env.DB.prepare(
+      `SELECT id, user_id, repo_url, repo_full_name, base_branch, target_branch, status, requested_commands_json,
+              command_allowlist_version, timeout_seconds, created_at, started_at, completed_at, canceled_at, error_message
+       FROM codebase_runs
+       WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT ?
+       OFFSET ?`,
+    ).bind(ctx.userId, limit, offset)
+
+  const rows = await query.all<CodebaseRunRow>()
+  const runs = (rows.results ?? []).map(mapRun)
+  const nextOffset = runs.length === limit ? offset + limit : null
+
+  return jsonResponse({
+    runs,
+    nextOffset,
+  })
+}
+
 // GET /api/v1/codebase/runs/:id/artifacts
 export async function listCodebaseRunArtifacts(runId: string, ctx: RequestContext): Promise<Response> {
   await getRunRow(runId, ctx)
@@ -850,4 +956,107 @@ export async function cancelCodebaseRun(runId: string, ctx: RequestContext): Pro
 
   const updated = await getRunRow(runId, ctx)
   return jsonResponse({ run: mapRun(updated) })
+}
+
+// GET /api/v1/codebase/runs/:id/pr
+export async function getCodebaseRunPullRequest(runId: string, ctx: RequestContext): Promise<Response> {
+  const row = await getRunRow(runId, ctx)
+  const pr = await findOpenPullRequestForRun(mapRun(row), ctx)
+  return jsonResponse({ pullRequest: pr })
+}
+
+// POST /api/v1/codebase/runs/:id/post-to-pr
+export async function postCodebaseRunToPullRequest(runId: string, ctx: RequestContext): Promise<Response> {
+  const run = mapRun(await getRunRow(runId, ctx))
+  const pr = await findOpenPullRequestForRun(run, ctx)
+  if (!pr) {
+    throw new NotFoundException('No open pull request found for this run branch')
+  }
+
+  const token = await getGitHubAccessToken(ctx)
+  if (!token) {
+    throw new BadRequestException('GitHub is not connected for this user')
+  }
+
+  const eventsRes = await ctx.env.DB.prepare(
+    `SELECT id, run_id, seq, level, event_type, message, payload_json, created_at
+     FROM codebase_run_events
+     WHERE run_id = ?
+     ORDER BY seq ASC
+     LIMIT 500`,
+  ).bind(runId).all<CodebaseRunEventRow>()
+  const events = (eventsRes.results ?? []).map(mapEvent)
+
+  const started = run.startedAt ? new Date(run.startedAt).getTime() : new Date(run.createdAt).getTime()
+  const ended = run.completedAt
+    ? new Date(run.completedAt).getTime()
+    : run.canceledAt
+      ? new Date(run.canceledAt).getTime()
+      : Date.now()
+  const duration = Math.max(0, Math.round((ended - started) / 1000))
+  const errorCount = events.filter((event) => event.level === 'error').length
+  const firstError = events.find((event) => event.level === 'error')?.message ?? null
+
+  const verdict = run.status === 'succeeded'
+    ? 'PASSED'
+    : run.status === 'failed'
+      ? 'FAILED'
+      : run.status === 'canceled'
+        ? 'CANCELLED'
+        : run.status === 'timed_out'
+          ? 'TIMEOUT'
+          : 'RUNNING'
+
+  const summaryLines = [
+    `OpenCTO Codebase Run: ${verdict}`,
+    `Run ID: ${run.id}`,
+    `Repo: ${extractRepoFullName(run.repoUrl, run.repoFullName) ?? run.repoUrl}`,
+    `Branch: ${run.targetBranch}`,
+    `Command: ${run.requestedCommands[0] ?? 'Custom'}`,
+    `Duration: ${duration}s`,
+    `Errors: ${errorCount}`,
+  ]
+  if (firstError) {
+    summaryLines.push(`First error: ${firstError}`)
+  }
+  summaryLines.push(`Timestamp: ${new Date().toISOString()}`)
+  const body = summaryLines.join('\n')
+
+  const [owner, repo] = (extractRepoFullName(run.repoUrl, run.repoFullName) ?? '').split('/')
+  if (!owner || !repo) {
+    throw new BadRequestException('Invalid repository metadata for PR posting')
+  }
+
+  const commentRes = await fetch(
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${pr.number}/comments`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'opencto-api-worker',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify({ body }),
+    },
+  )
+
+  if (commentRes.status === 403) {
+    return jsonResponse({
+      error: 'Requires repo write access',
+      code: 'FORBIDDEN',
+      status: 403,
+    }, 403)
+  }
+
+  if (!commentRes.ok) {
+    return jsonResponse({
+      error: 'Failed to post PR comment',
+      code: 'UPSTREAM_ERROR',
+      status: commentRes.status,
+    }, 502)
+  }
+
+  return jsonResponse({ posted: true, pullRequest: pr })
 }
