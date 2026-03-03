@@ -1217,6 +1217,44 @@ p { margin: 0; }
   gap: 8px;
 }
 
+.settings-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-card {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-surface-2);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.settings-card-actions {
+  grid-column: 1 / -1;
+}
+
+.settings-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .codebase-panel {
   display: grid;
   gap: 14px;
@@ -1561,6 +1599,15 @@ button:disabled {
 }
 
 @media (max-width: 1200px) {
+  .settings-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
   .settings-grid {
     grid-template-columns: 1fr;
   }
@@ -1710,6 +1757,18 @@ button:disabled {
   margin-bottom: 4px;
 }
 
+.audio-role-opencto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.audio-role-opencto svg {
+  width: 14px;
+  height: 14px;
+  color: var(--brand-primary);
+}
+
 .audio-role-user {
   color: var(--brand-secondary);
 }
@@ -1809,6 +1868,10 @@ button:disabled {
 .audio-code-card .hljs {
   background: transparent;
   padding: 0;
+}
+
+.codebase-github-kpi-panel {
+  margin-top: 2px;
 }
 
 .audio-code-kw {
