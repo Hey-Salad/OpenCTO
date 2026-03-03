@@ -1,6 +1,6 @@
 # @heysalad/opencto
 
-TypeScript SDK for OpenCTO APIs.
+TypeScript SDK for OpenCTO APIs and MQTT transport.
 
 ## Install
 
@@ -8,7 +8,7 @@ TypeScript SDK for OpenCTO APIs.
 npm install @heysalad/opencto
 ```
 
-## Quick Start
+## Quick Start (HTTP API)
 
 ```ts
 import { createOpenCtoClient } from '@heysalad/opencto'
@@ -22,8 +22,36 @@ const session = await client.auth.getSession()
 console.log(session.user?.email)
 ```
 
+## Quick Start (MQTT agent transport)
+
+```ts
+import { createMqttAgentTransport } from '@heysalad/opencto'
+
+const transport = createMqttAgentTransport({
+  brokerUrl: 'mqtt://localhost:1883',
+  workspaceId: 'ws_dev',
+  agentId: 'agent_content_01',
+  role: 'content',
+})
+
+transport.onTask(async ({ payload }) => {
+  await transport.publishTaskAssigned({ taskId: payload.taskId })
+  await transport.publishTaskComplete({
+    taskId: payload.taskId,
+    output: { ok: true },
+  })
+})
+
+await transport.start()
+```
+
 ## API Surface
 
+- `createOpenCtoClient(options)`
+- `createMqttAgentTransport(options)`
+- `createMqttOrchestratorTransport(options)`
+
+HTTP clients:
 - `client.auth.getSession()`
 - `client.auth.deleteAccount()`
 - `client.chats.list()`
@@ -36,6 +64,10 @@ console.log(session.user?.email)
 - `client.runs.artifacts(runId)`
 - `client.runs.artifactUrl(runId, artifactId)`
 - `client.realtime.createToken(model?)`
+
+## Protocol Docs
+
+- MQTT contract: [docs/mqtt-protocol-v1.md](./docs/mqtt-protocol-v1.md)
 
 ## React Native Example
 
@@ -70,7 +102,7 @@ console.log(run.run.id)
 ## Development
 
 ```bash
-npm ci
+npm install
 npm run lint
 npm run test
 npm run build
