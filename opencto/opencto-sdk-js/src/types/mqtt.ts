@@ -74,6 +74,7 @@ export interface MqttTransportOptions {
   token?: string
   topicPrefix?: string
   dedupe?: MqttTransportDedupeOptions
+  delivery?: MqttTransportDeliveryOptions
 }
 
 export interface MqttTransportDedupeOptions {
@@ -81,4 +82,16 @@ export interface MqttTransportDedupeOptions {
   ttlMs?: number
   maxEntries?: number
   now?: () => number
+}
+
+export interface MqttTransportDeliveryOptions {
+  enabled?: boolean
+  maxAttempts?: number
+  ackTimeoutMs?: number
+  initialBackoffMs?: number
+  maxBackoffMs?: number
+  backoffMultiplier?: number
+  jitterRatio?: number
+  sleep?: (ms: number) => Promise<void>
+  random?: () => number
 }

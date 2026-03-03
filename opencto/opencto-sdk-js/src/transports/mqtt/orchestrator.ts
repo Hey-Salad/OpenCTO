@@ -10,6 +10,7 @@ import type {
 } from '../../types/mqtt'
 import { createMqttWireClient, type MqttWireClient } from './client'
 import { createMqttEnvelopeDedupe } from './dedupe'
+import { publishWithRetry } from './retry'
 import {
   createEnvelope,
   isEnvelopeType,
@@ -90,7 +91,10 @@ export function createMqttOrchestratorTransport(
         correlationId: context?.correlationId,
         idempotencyKey: context?.idempotencyKey,
       })
-      await client.publish(topicTasksNew(topicOptions), JSON.stringify(envelope))
+      await publishWithRetry(
+        () => client.publish(topicTasksNew(topicOptions), JSON.stringify(envelope)),
+        options.delivery,
+      )
     },
 
     onTaskAssigned(handler) {

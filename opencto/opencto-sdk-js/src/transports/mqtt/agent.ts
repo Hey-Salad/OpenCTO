@@ -12,6 +12,7 @@ import type {
 import { createMqttWireClient, type MqttWireClient } from './client'
 import { createMqttEnvelopeDedupe } from './dedupe'
 import { createEnvelope, isEnvelopeType, parseEnvelope } from './protocol'
+import { publishWithRetry } from './retry'
 import {
   topicTasksAssigned,
   topicTasksComplete,
@@ -50,7 +51,10 @@ export function createMqttAgentTransport(
     : createMqttEnvelopeDedupe(options.dedupe)
 
   async function publishEnvelope(topic: string, envelope: MqttEnvelope): Promise<void> {
-    await client.publish(topic, JSON.stringify(envelope))
+    await publishWithRetry(
+      () => client.publish(topic, JSON.stringify(envelope)),
+      options.delivery,
+    )
   }
 
   return {

@@ -32,6 +32,10 @@ const transport = createMqttAgentTransport({
   workspaceId: 'ws_dev',
   agentId: 'agent_content_01',
   role: 'content',
+  delivery: {
+    maxAttempts: 3,
+    ackTimeoutMs: 5000,
+  },
 })
 
 transport.onTask(async ({ payload }) => {
@@ -44,6 +48,8 @@ transport.onTask(async ({ payload }) => {
 
 await transport.start()
 ```
+
+`delivery` controls publish reliability (ack timeout + retry backoff). `dedupe` controls inbound duplicate suppression.
 
 ## Auth Device Flow (CLI/headless)
 
