@@ -26,3 +26,5 @@ opencto workflow run engineering-ci --workspace ws_demo --repo-url https://githu
 - `OPENCTO_TOKEN_PATH` (default: `~/.opencto/tokens.json`)
 - `OPENCTO_WORKFLOWS_FILE` (optional path to JSON/YAML workflow directory file)
 - `OPENCTO_TOKEN` (optional override for run commands)
+
+Release runbook: [`../OPENCTO_PACKAGES_RELEASE.md`](../OPENCTO_PACKAGES_RELEASE.md)

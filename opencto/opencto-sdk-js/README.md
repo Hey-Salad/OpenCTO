@@ -172,3 +172,5 @@ Publish when ready:
 npm login
 npm publish
 ```
+
+Release runbook: [`../OPENCTO_PACKAGES_RELEASE.md`](../OPENCTO_PACKAGES_RELEASE.md)
