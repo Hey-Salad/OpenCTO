@@ -31,6 +31,7 @@ export interface AuthSession {
 }
 
 export type ChatRole = 'USER' | 'ASSISTANT' | 'TOOL';
+export type LaunchpadMessageKind = 'speech' | 'code' | 'command' | 'output' | 'artifact' | 'plan';
 
 export interface ChatMessage {
   id: string;
@@ -38,6 +39,16 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   createdAt: string;
+  kind?: LaunchpadMessageKind;
+  metadata?: {
+    language?: string;
+    command?: string;
+    exitCode?: number;
+    source?: string;
+    title?: string;
+    eventId?: string;
+    runId?: string;
+  };
 }
 
 export interface ChatSummary {
@@ -69,10 +80,12 @@ export interface CodebaseRunEvent {
   type: string;
   message: string;
   createdAt: string;
+  payload?: Record<string, unknown>;
 }
 
 export interface RealtimeTokenPayload {
   token: string;
   websocketUrl?: string;
   model?: string;
+  expiresAt?: number;
 }

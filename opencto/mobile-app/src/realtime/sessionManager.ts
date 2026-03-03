@@ -12,11 +12,18 @@ export interface RealtimeSessionSnapshot {
   errorMessage?: string;
 }
 
+export interface RealtimeTranscriptEvent {
+  role: 'USER' | 'ASSISTANT';
+  text: string;
+}
+
 type Listener = (snapshot: RealtimeSessionSnapshot) => void;
+type TranscriptListener = (event: RealtimeTranscriptEvent) => void;
 
 export class RealtimeSessionManager {
   private ws: WebSocket | null = null;
   private listeners = new Set<Listener>();
+  private transcriptListeners = new Set<TranscriptListener>();
   private reconnectAttempted = false;
   private snapshot: RealtimeSessionSnapshot = {
     state: 'idle',
@@ -24,12 +31,20 @@ export class RealtimeSessionManager {
     fallbackToText: false
   };
 
-  constructor(private readonly client: ApiClient) {}
+  constructor(
+    private readonly client: ApiClient,
+    private readonly workspaceId?: string
+  ) {}
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     listener(this.snapshot);
     return () => this.listeners.delete(listener);
+  }
+
+  subscribeTranscripts(listener: TranscriptListener): () => void {
+    this.transcriptListeners.add(listener);
+    return () => this.transcriptListeners.delete(listener);
   }
 
   getSnapshot(): RealtimeSessionSnapshot {
@@ -53,7 +68,7 @@ export class RealtimeSessionManager {
     await configureAudioSession();
 
     try {
-      const tokenPayload = await getRealtimeToken(this.client);
+      const tokenPayload = await getRealtimeToken(this.client, this.workspaceId);
       const model = tokenPayload.model ?? 'gpt-4o-realtime-preview';
       const url = tokenPayload.websocketUrl ?? `wss://api.openai.com/v1/realtime?model=${model}`;
 
@@ -114,6 +129,13 @@ export class RealtimeSessionManager {
       this.handleDisconnect(url, token);
     };
 
+    this.ws.onmessage = (message) => {
+      const transcriptEvent = this.extractTranscriptEvent(message.data);
+      if (transcriptEvent) {
+        this.emitTranscript(transcriptEvent);
+      }
+    };
+
     this.ws.onerror = () => {
       this.snapshot = {
         ...this.snapshot,
@@ -150,5 +172,46 @@ export class RealtimeSessionManager {
 
   private emit(): void {
     this.listeners.forEach((listener) => listener(this.snapshot));
+  }
+
+  private emitTranscript(event: RealtimeTranscriptEvent): void {
+    this.transcriptListeners.forEach((listener) => listener(event));
+  }
+
+  private extractTranscriptEvent(raw: unknown): RealtimeTranscriptEvent | null {
+    if (typeof raw !== 'string') {
+      return null;
+    }
+
+    try {
+      const payload = JSON.parse(raw) as {
+        type?: string;
+        transcript?: string;
+        text?: string;
+      };
+
+      const text = (payload.transcript ?? payload.text ?? '').trim();
+      if (!text) {
+        return null;
+      }
+
+      const type = payload.type ?? '';
+
+      if (type === 'conversation.item.input_audio_transcription.completed') {
+        return { role: 'USER', text };
+      }
+
+      if (
+        type === 'response.audio_transcript.done' ||
+        type === 'response.output_text.done' ||
+        type === 'response.output_text.final'
+      ) {
+        return { role: 'ASSISTANT', text };
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
   }
 }

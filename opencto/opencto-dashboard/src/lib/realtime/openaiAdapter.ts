@@ -10,6 +10,7 @@ import {
   type CTOAgentConfig,
 } from './shared'
 import { getAuthHeaders } from '../authToken'
+import { getWorkspaceId } from '../workspace'
 
 export class OpenAIRealtimeAdapter {
   private ws: WebSocket | null = null
@@ -39,7 +40,10 @@ export class OpenAIRealtimeAdapter {
         ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ model: this.config.model }),
+      body: JSON.stringify({
+        model: this.config.model,
+        workspaceId: getWorkspaceId(),
+      }),
     })
 
     if (!res.ok) {

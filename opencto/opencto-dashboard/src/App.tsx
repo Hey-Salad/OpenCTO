@@ -20,10 +20,12 @@ import { AuthLoginPanel } from './components/auth/AuthLoginPanel'
 import { OnboardingPanel } from './components/auth/OnboardingPanel'
 import { CodebasePanel } from './components/codebase/CodebasePanel'
 import { BillingHttpClient } from './api/billingClient'
+import { deleteProviderKey, listProviderKeys, saveProviderKey, type ProviderKeySummary } from './api/llmKeysClient'
 import { BillingDashboard } from './components/billing/BillingDashboard'
 import { getApiBaseUrl } from './config/apiBase'
 import type { OnboardingState } from './types/onboarding'
 import type { BillingSummaryResponse, Invoice } from './types/billing'
+import { getWorkspaceId, setWorkspaceId as persistWorkspaceId } from './lib/workspace'
 import './index.css'
 
 const DEFAULT_AUDIO_CONFIG: AudioConfig = {
@@ -87,7 +89,6 @@ function App() {
   const [selectedOrg, setSelectedOrg] = useState('')
   const [activeSection, setActiveSection] = useState<'launchpad' | 'codebase' | 'settings' | 'billing'>('launchpad')
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [isExportingData, setIsExportingData] = useState(false)
   const [billingSummary, setBillingSummary] = useState<BillingSummaryResponse | null>(null)
   const [billingInvoices, setBillingInvoices] = useState<Invoice[]>([])
@@ -96,6 +97,12 @@ function App() {
   const [isBillingConfigured, setIsBillingConfigured] = useState(true)
   const [minimumLoaderComplete, setMinimumLoaderComplete] = useState(false)
   const [routeTransitionActive, setRouteTransitionActive] = useState(false)
+  const [workspaceId, setWorkspaceId] = useState<string>(() => getWorkspaceId())
+  const [providerKeys, setProviderKeys] = useState<ProviderKeySummary[]>([])
+  const [providerKeyDrafts, setProviderKeyDrafts] = useState<Record<string, string>>({ openai: '', github: '' })
+  const [providerKeysLoading, setProviderKeysLoading] = useState(false)
+  const [providerKeysBusy, setProviderKeysBusy] = useState<string | null>(null)
+  const [providerKeysMessage, setProviderKeysMessage] = useState<string | null>(null)
   const accountMenuRef = useRef<HTMLDivElement | null>(null)
 
   const billingApi = useMemo(
@@ -222,6 +229,24 @@ function App() {
     }
   }, [onboardingLoading, onboardingState?.completed, session?.isAuthenticated])
 
+  const refreshProviderKeys = useCallback(async () => {
+    if (!session?.isAuthenticated) return
+    setProviderKeysLoading(true)
+    try {
+      const keys = await listProviderKeys(workspaceId)
+      setProviderKeys(keys)
+      setProviderKeysMessage(null)
+    } catch (error) {
+      setProviderKeysMessage(normalizeApiError(error, 'Failed to load provider keys').message)
+    } finally {
+      setProviderKeysLoading(false)
+    }
+  }, [session?.isAuthenticated, workspaceId])
+
+  useEffect(() => {
+    void refreshProviderKeys()
+  }, [refreshProviderKeys])
+
   useEffect(() => {
     if (!session?.isAuthenticated || !onboardingState?.completed || audioMessages.length === 0) return
     const timeout = window.setTimeout(() => {
@@ -254,6 +279,44 @@ function App() {
   const handleOnboardingSubmit = async (payload: Parameters<typeof saveOnboardingState>[0]) => {
     const saved = await saveOnboardingState(payload)
     setOnboardingState(saved)
+  }
+
+  const handleWorkspaceIdChange = (nextWorkspaceId: string) => {
+    const normalized = nextWorkspaceId.trim() || 'default'
+    setWorkspaceId(normalized)
+    persistWorkspaceId(normalized)
+  }
+
+  const handleSaveProviderKey = async (provider: 'openai' | 'github') => {
+    const apiKey = providerKeyDrafts[provider]?.trim() ?? ''
+    if (!apiKey) {
+      setProviderKeysMessage(`Enter a ${provider.toUpperCase()} key before saving.`)
+      return
+    }
+    setProviderKeysBusy(provider)
+    try {
+      await saveProviderKey(provider, apiKey, workspaceId)
+      setProviderKeyDrafts((prev) => ({ ...prev, [provider]: '' }))
+      setProviderKeysMessage(`${provider.toUpperCase()} key saved for workspace ${workspaceId}.`)
+      await refreshProviderKeys()
+    } catch (error) {
+      setProviderKeysMessage(normalizeApiError(error, `Failed to save ${provider} key`).message)
+    } finally {
+      setProviderKeysBusy(null)
+    }
+  }
+
+  const handleDeleteProviderKey = async (provider: 'openai' | 'github') => {
+    setProviderKeysBusy(`delete:${provider}`)
+    try {
+      await deleteProviderKey(provider, workspaceId)
+      setProviderKeysMessage(`${provider.toUpperCase()} key removed from workspace ${workspaceId}.`)
+      await refreshProviderKeys()
+    } catch (error) {
+      setProviderKeysMessage(normalizeApiError(error, `Failed to delete ${provider} key`).message)
+    } finally {
+      setProviderKeysBusy(null)
+    }
   }
 
   const handleSyncGitHub = async () => {
@@ -355,27 +418,6 @@ function App() {
       cancelled = true
     }
   }, [activeSection, billingApi, session?.isAuthenticated])
-
-  const handleDeleteAccount = async () => {
-    if (!window.confirm('Delete your OpenCTO account and all associated data? This cannot be undone.')) return
-    setIsDeletingAccount(true)
-    setAccountMenuOpen(false)
-    try {
-      await authApi.deleteAccount?.()
-      setSession({
-        isAuthenticated: false,
-        trustedDevice: false,
-        mfaRequired: false,
-        user: null,
-      })
-      setAudioMessages([])
-      setOnboardingState(null)
-    } catch (error) {
-      setErrorMessage(normalizeApiError(error, 'Failed to delete account').message)
-    } finally {
-      setIsDeletingAccount(false)
-    }
-  }
 
   const handleSignOut = () => {
     authApi.signOut?.()
@@ -593,14 +635,6 @@ function App() {
                         <span>Logout</span>
                       </span>
                     </button>
-                    <button type="button" role="menuitem" className="account-menu-danger" onClick={() => void handleDeleteAccount()} disabled={isDeletingAccount}>
-                      <span className="account-menu-item-content">
-                        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                          <path d="M3.5 4.2h9M6.1 1.8h3.8M5 4.2v8.3M8 4.2v8.3M11 4.2v8.3M4.3 14h7.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-                        </svg>
-                        <span>{isDeletingAccount ? 'Deleting...' : 'Delete Account'}</span>
-                      </span>
-                    </button>
                   </div>
                 )}
               </div>
@@ -695,6 +729,69 @@ function App() {
                       {isExportingData ? 'Exporting...' : 'Export Data'}
                     </button>
                   </div>
+                </article>
+
+                <article className="settings-card settings-card-actions">
+                  <h3>Model Provider Keys (BYOK)</h3>
+                  <p className="muted">
+                    Store provider keys per workspace. These keys override shared backend defaults for your requests.
+                  </p>
+                  <div className="settings-summary">
+                    <label className="settings-key-label" htmlFor="workspace-id-input">
+                      Workspace ID
+                    </label>
+                    <input
+                      id="workspace-id-input"
+                      className="audio-text-input"
+                      value={workspaceId}
+                      onChange={(event) => handleWorkspaceIdChange(event.target.value)}
+                      placeholder="default"
+                    />
+                  </div>
+                  <div className="settings-key-grid">
+                    {(['openai', 'github'] as const).map((provider) => {
+                      const existing = providerKeys.find((item) => item.provider === provider)
+                      const saving = providerKeysBusy === provider
+                      const deleting = providerKeysBusy === `delete:${provider}`
+                      return (
+                        <div key={provider} className="settings-key-row">
+                          <div className="settings-key-row-header">
+                            <strong>{provider.toUpperCase()}</strong>
+                            <span className="muted">{existing ? `Saved: ${existing.keyHint}` : 'No key saved'}</span>
+                          </div>
+                          <input
+                            className="audio-text-input"
+                            value={providerKeyDrafts[provider] ?? ''}
+                            onChange={(event) => {
+                              const next = event.target.value
+                              setProviderKeyDrafts((prev) => ({ ...prev, [provider]: next }))
+                            }}
+                            placeholder={`Paste ${provider.toUpperCase()} API key`}
+                          />
+                          <div className="settings-action-row">
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => { void handleSaveProviderKey(provider) }}
+                              disabled={saving || providerKeysLoading}
+                            >
+                              {saving ? 'Saving...' : 'Save Key'}
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => { void handleDeleteProviderKey(provider) }}
+                              disabled={deleting || providerKeysLoading || !existing}
+                            >
+                              {deleting ? 'Removing...' : 'Remove Key'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {providerKeysLoading && <p className="muted">Loading provider keys...</p>}
+                  {providerKeysMessage && <p className="muted">{providerKeysMessage}</p>}
                 </article>
               </div>
             </section>
