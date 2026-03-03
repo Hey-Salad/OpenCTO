@@ -3,9 +3,9 @@ import {
   pollDeviceToken,
   startDeviceAuthorization,
 } from '@heysalad/opencto'
-import type { ParsedArgs } from '../args'
-import { getFlag } from '../args'
-import type { CliConfig } from '../config'
+import type { ParsedArgs } from '../args.js'
+import { getFlag } from '../args.js'
+import type { CliConfig } from '../config.js'
 
 export async function handleLogin(parsed: ParsedArgs, config: CliConfig): Promise<void> {
   const clientId = getFlag(parsed, 'client-id') ?? 'opencto-cli'

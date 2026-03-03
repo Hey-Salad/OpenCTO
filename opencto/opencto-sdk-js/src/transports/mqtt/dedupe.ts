@@ -1,4 +1,4 @@
-import type { MqttEnvelope, MqttTransportDedupeOptions } from '../../types/mqtt'
+import type { MqttEnvelope, MqttTransportDedupeOptions } from '../../types/mqtt.js'
 
 export interface MqttEnvelopeDedupe {
   seen(envelope: MqttEnvelope): boolean

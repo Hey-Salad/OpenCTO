@@ -6,7 +6,7 @@ import {
   type CodebaseRunStatus,
   type OpenCtoClient,
 } from '@heysalad/opencto'
-import type { CliConfig } from '../config'
+import type { CliConfig } from '../config.js'
 
 const TERMINAL_STATUSES: CodebaseRunStatus[] = ['succeeded', 'failed', 'canceled', 'timed_out']
 

@@ -1,6 +1,6 @@
-import type { ChatRecord, ChatSummary, SaveChatPayload } from '../types/chats'
-import type { HttpClientOptions } from '../core/http'
-import { createHttpClient } from '../core/http'
+import type { ChatRecord, ChatSummary, SaveChatPayload } from '../types/chats.js'
+import type { HttpClientOptions } from '../core/http.js'
+import { createHttpClient } from '../core/http.js'
 
 export interface ChatsClient {
   list(): Promise<ChatSummary[]>

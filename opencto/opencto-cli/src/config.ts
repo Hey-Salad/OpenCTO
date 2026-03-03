@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { ParsedArgs } from './args'
-import { getFlag } from './args'
+import type { ParsedArgs } from './args.js'
+import { getFlag } from './args.js'
 
 export interface CliConfig {
   apiBaseUrl: string

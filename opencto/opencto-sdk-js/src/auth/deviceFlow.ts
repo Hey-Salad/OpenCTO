@@ -7,8 +7,8 @@ import type {
   DeviceTokenPendingResponse,
   DeviceTokenSuccessResponse,
   OpenCtoTokenSet,
-} from '../types/deviceAuth'
-import type { FetchLike } from '../types/common'
+} from '../types/deviceAuth.js'
+import type { FetchLike } from '../types/common.js'
 
 function getFetch(fetchImpl?: FetchLike): FetchLike {
   return fetchImpl ?? globalThis.fetch.bind(globalThis)

@@ -2,8 +2,8 @@ import { access, readFile } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import type { CliConfig } from '../config'
-import { type WorkflowDefinition, listBuiltinWorkflows } from './catalog'
+import type { CliConfig } from '../config.js'
+import { type WorkflowDefinition, listBuiltinWorkflows } from './catalog.js'
 
 interface WorkflowRegistryFile {
   workflows: WorkflowDefinition[]

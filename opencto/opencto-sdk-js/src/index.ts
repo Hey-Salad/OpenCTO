@@ -1,13 +1,13 @@
-import { createAuthClient, type AuthClient } from './clients/auth'
-import { createChatsClient, type ChatsClient } from './clients/chats'
-import { createRunsClient, type RunsClient } from './clients/runs'
-import { createRealtimeClient, type RealtimeClient } from './clients/realtime'
-import type { FetchLike } from './types/common'
+import { createAuthClient, type AuthClient } from './clients/auth.js'
+import { createChatsClient, type ChatsClient } from './clients/chats.js'
+import { createRunsClient, type RunsClient } from './clients/runs.js'
+import { createRealtimeClient, type RealtimeClient } from './clients/realtime.js'
+import type { FetchLike } from './types/common.js'
 
-export * from './types'
-export * from './transports/mqtt'
-export * from './auth'
-export { codeFromStatus, createOpenCtoError, normalizeError } from './core/errors'
+export * from './types/index.js'
+export * from './transports/mqtt/index.js'
+export * from './auth/index.js'
+export { codeFromStatus, createOpenCtoError, normalizeError } from './core/errors.js'
 export { createAuthClient, createChatsClient, createRunsClient, createRealtimeClient }
 
 export interface OpenCtoClientOptions {

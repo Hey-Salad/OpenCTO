@@ -1,4 +1,4 @@
-import type { MqttTransportDeliveryOptions } from '../../types/mqtt'
+import type { MqttTransportDeliveryOptions } from '../../types/mqtt.js'
 
 const DEFAULT_MAX_ATTEMPTS = 3
 const DEFAULT_ACK_TIMEOUT_MS = 5_000

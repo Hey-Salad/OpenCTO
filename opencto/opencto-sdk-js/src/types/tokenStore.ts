@@ -1,4 +1,4 @@
-import type { OpenCtoTokenSet } from './deviceAuth'
+import type { OpenCtoTokenSet } from './deviceAuth.js'
 
 export interface TokenStore {
   get(key: string): Promise<OpenCtoTokenSet | null>

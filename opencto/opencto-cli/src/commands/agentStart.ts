@@ -1,7 +1,7 @@
 import { createMqttAgentTransport } from '@heysalad/opencto'
-import type { ParsedArgs } from '../args'
-import { getFlag, hasFlag } from '../args'
-import type { CliConfig } from '../config'
+import type { ParsedArgs } from '../args.js'
+import { getFlag, hasFlag } from '../args.js'
+import type { CliConfig } from '../config.js'
 
 export async function handleAgentStart(parsed: ParsedArgs, config: CliConfig): Promise<void> {
   const brokerUrl = getFlag(parsed, 'broker-url')

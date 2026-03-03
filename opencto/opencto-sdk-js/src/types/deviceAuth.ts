@@ -1,4 +1,4 @@
-import type { FetchLike } from './common'
+import type { FetchLike } from './common.js'
 
 export interface DeviceAuthorizationResponse {
   device_code: string

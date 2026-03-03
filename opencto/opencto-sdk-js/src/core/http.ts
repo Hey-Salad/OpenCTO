@@ -1,5 +1,5 @@
-import { codeFromStatus, createOpenCtoError, parseApiErrorBody } from './errors'
-import type { FetchLike } from '../types/common'
+import { codeFromStatus, createOpenCtoError, parseApiErrorBody } from './errors.js'
+import type { FetchLike } from '../types/common.js'
 
 export interface HttpClientOptions {
   baseUrl: string

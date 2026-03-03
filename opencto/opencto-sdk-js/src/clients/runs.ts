@@ -3,9 +3,9 @@ import type {
   GetCodebaseRunResponse,
   GetCodebaseRunEventsResponse,
   ListCodebaseRunArtifactsResponse,
-} from '../types/runs'
-import type { HttpClientOptions } from '../core/http'
-import { createHttpClient } from '../core/http'
+} from '../types/runs.js'
+import type { HttpClientOptions } from '../core/http.js'
+import { createHttpClient } from '../core/http.js'
 
 export interface RunsClient {
   create(payload: CreateCodebaseRunPayload): Promise<GetCodebaseRunResponse>

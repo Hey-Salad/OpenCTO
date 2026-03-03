@@ -1,7 +1,7 @@
-import type { ParsedArgs } from '../args'
-import { getFlag, getFlagList, hasFlag } from '../args'
-import type { CliConfig } from '../config'
-import { createClient, executeRun } from './runCore'
+import type { ParsedArgs } from '../args.js'
+import { getFlag, getFlagList, hasFlag } from '../args.js'
+import type { CliConfig } from '../config.js'
+import { createClient, executeRun } from './runCore.js'
 
 export async function handleRun(parsed: ParsedArgs, config: CliConfig): Promise<void> {
   const repoUrl = getFlag(parsed, 'repo-url')

@@ -1,8 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { homedir } from 'node:os'
-import type { OpenCtoTokenSet } from '../types/deviceAuth'
-import type { TokenStore } from '../types/tokenStore'
+import type { OpenCtoTokenSet } from '../types/deviceAuth.js'
+import type { TokenStore } from '../types/tokenStore.js'
 
 type TokenStoreFile = {
   version: 1

@@ -1,5 +1,5 @@
-import type { CliConfig } from '../config'
-import { resolveWorkflowRegistry } from '../workflows/registry'
+import type { CliConfig } from '../config.js'
+import { resolveWorkflowRegistry } from '../workflows/registry.js'
 
 export async function handleWorkflowList(config: CliConfig): Promise<void> {
   const workflows = await resolveWorkflowRegistry(config)

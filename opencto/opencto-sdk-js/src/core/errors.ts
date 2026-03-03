@@ -1,4 +1,4 @@
-import type { ApiErrorShape, OpenCtoError } from '../types/common'
+import type { ApiErrorShape, OpenCtoError } from '../types/common.js'
 
 export function codeFromStatus(status: number): string {
   if (status === 400) return 'BAD_REQUEST'

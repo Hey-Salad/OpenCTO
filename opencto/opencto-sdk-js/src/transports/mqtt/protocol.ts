@@ -8,7 +8,7 @@ import type {
   MqttTaskNewPayload,
   MqttAgentHeartbeatPayload,
   MqttRunEventPayload,
-} from '../../types/mqtt'
+} from '../../types/mqtt.js'
 
 export const MQTT_PROTOCOL_VERSION: MqttProtocolVersion = 'mqtt-v1'
 

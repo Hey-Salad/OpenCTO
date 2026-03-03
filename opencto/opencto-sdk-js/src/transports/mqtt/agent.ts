@@ -8,11 +8,11 @@ import type {
   MqttTaskFailedPayload,
   MqttAgentHeartbeatPayload,
   MqttRunEventPayload,
-} from '../../types/mqtt'
-import { createMqttWireClient, type MqttWireClient } from './client'
-import { createMqttEnvelopeDedupe } from './dedupe'
-import { createEnvelope, isEnvelopeType, parseEnvelope } from './protocol'
-import { publishWithRetry } from './retry'
+} from '../../types/mqtt.js'
+import { createMqttWireClient, type MqttWireClient } from './client.js'
+import { createMqttEnvelopeDedupe } from './dedupe.js'
+import { createEnvelope, isEnvelopeType, parseEnvelope } from './protocol.js'
+import { publishWithRetry } from './retry.js'
 import {
   topicTasksAssigned,
   topicTasksComplete,
@@ -20,7 +20,7 @@ import {
   topicTasksNew,
   topicRunsEvents,
   topicAgentsHeartbeat,
-} from './topics'
+} from './topics.js'
 
 export interface MqttAgentTransport {
   start(): Promise<void>

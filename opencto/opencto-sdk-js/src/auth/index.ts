@@ -1,2 +1,2 @@
-export * from './deviceFlow'
-export * from './tokenStore'
+export * from './deviceFlow.js'
+export * from './tokenStore.js'

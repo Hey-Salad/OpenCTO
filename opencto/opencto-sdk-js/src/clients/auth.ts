@@ -1,6 +1,6 @@
-import type { AuthSession } from '../types/auth'
-import type { HttpClientOptions } from '../core/http'
-import { createHttpClient } from '../core/http'
+import type { AuthSession } from '../types/auth.js'
+import type { HttpClientOptions } from '../core/http.js'
+import { createHttpClient } from '../core/http.js'
 
 export interface AuthClient {
   getSession(): Promise<AuthSession>

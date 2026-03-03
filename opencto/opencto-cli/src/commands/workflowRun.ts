@@ -1,9 +1,9 @@
-import type { ParsedArgs } from '../args'
-import { getFlag, getFlagList, hasFlag } from '../args'
-import type { CliConfig } from '../config'
-import { renderCommandTemplates } from '../workflows/catalog'
-import { resolveWorkflowRegistry } from '../workflows/registry'
-import { createClient, executeRun } from './runCore'
+import type { ParsedArgs } from '../args.js'
+import { getFlag, getFlagList, hasFlag } from '../args.js'
+import type { CliConfig } from '../config.js'
+import { renderCommandTemplates } from '../workflows/catalog.js'
+import { resolveWorkflowRegistry } from '../workflows/registry.js'
+import { createClient, executeRun } from './runCore.js'
 
 export async function handleWorkflowRun(parsed: ParsedArgs, config: CliConfig): Promise<void> {
   const workflowId = parsed.command[2]

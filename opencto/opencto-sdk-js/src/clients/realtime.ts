@@ -1,6 +1,6 @@
-import type { RealtimeTokenResponse } from '../types/realtime'
-import type { HttpClientOptions } from '../core/http'
-import { createHttpClient } from '../core/http'
+import type { RealtimeTokenResponse } from '../types/realtime.js'
+import type { HttpClientOptions } from '../core/http.js'
+import { createHttpClient } from '../core/http.js'
 
 export interface RealtimeClient {
   createToken(model?: string): Promise<RealtimeTokenResponse>
