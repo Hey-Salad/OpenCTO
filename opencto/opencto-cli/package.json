@@ -1,0 +1,29 @@
+{
+  "name": "@heysalad/opencto-cli",
+  "version": "0.1.1",
+  "description": "CLI for OpenCTO workflows powered by @heysalad/opencto",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "opencto": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@heysalad/opencto": "^0.1.1",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

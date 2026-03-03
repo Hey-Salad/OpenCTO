@@ -1,0 +1,73 @@
+{
+  "workflows": [
+    {
+      "id": "engineering-ci",
+      "name": "Engineering CI",
+      "description": "Install, lint, test, and build with pnpm defaults.",
+      "commandTemplates": [
+        "pnpm install --frozen-lockfile",
+        "pnpm lint",
+        "pnpm test",
+        "pnpm build"
+      ]
+    },
+    {
+      "id": "founder-landing-launch",
+      "name": "Founder Landing Launch",
+      "description": "Validate and build landing page plus dashboard for deployment.",
+      "commandTemplates": [
+        "cd opencto/opencto-landing && npm ci",
+        "cd opencto/opencto-landing && npm run build",
+        "cd opencto/opencto-dashboard && npm ci",
+        "cd opencto/opencto-dashboard && npm run lint",
+        "cd opencto/opencto-dashboard && npm run build"
+      ]
+    },
+    {
+      "id": "founder-content-seo",
+      "name": "Founder Content SEO",
+      "description": "Generate SEO assets and validate output artifacts.",
+      "commandTemplates": [
+        "npm run content:plan -- --topic \"{{topic}}\"",
+        "npm run content:draft -- --topic \"{{topic}}\" --persona \"{{persona}}\"",
+        "npm run content:publish -- --topic \"{{topic}}\""
+      ]
+    },
+    {
+      "id": "founder-sales-outreach",
+      "name": "Founder Sales Outreach",
+      "description": "Generate lead list and outbound sequence assets.",
+      "commandTemplates": [
+        "npm run sales:leads -- --segment \"{{segment}}\"",
+        "npm run sales:sequence -- --segment \"{{segment}}\" --offer \"{{offer}}\"",
+        "npm run sales:send -- --segment \"{{segment}}\""
+      ]
+    },
+    {
+      "id": "founder-demo-pack",
+      "name": "Founder Demo Pack",
+      "description": "Assemble product + GTM demo artifacts for judges or customers.",
+      "commandTemplates": [
+        "npm run demo:product",
+        "npm run demo:marketing",
+        "npm run demo:ops",
+        "npm run demo:bundle"
+      ]
+    },
+    {
+      "id": "sdk-release-check",
+      "name": "SDK Release Check",
+      "description": "Quality gates for sdk and cli packages before publish.",
+      "commandTemplates": [
+        "cd opencto/opencto-sdk-js && npm ci",
+        "cd opencto/opencto-sdk-js && npm run lint",
+        "cd opencto/opencto-sdk-js && npm run test",
+        "cd opencto/opencto-sdk-js && npm run build",
+        "cd opencto/opencto-cli && npm ci",
+        "cd opencto/opencto-cli && npm run lint",
+        "cd opencto/opencto-cli && npm run test",
+        "cd opencto/opencto-cli && npm run build"
+      ]
+    }
+  ]
+}

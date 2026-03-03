@@ -12,11 +12,18 @@ import * as chats from './chats'
 import * as onboarding from './onboarding'
 import * as github from './github'
 import * as codebaseRuns from './codebaseRuns'
+import * as providerKeys from './providerKeys'
+import { enforceRateLimit } from './rateLimit'
 
 export class CodebaseExecutorContainer extends Container {
   defaultPort = 4000
   sleepAfter = '10m'
 }
+
+const DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE = 30
+const DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE = 120
+const DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE = 90
+const DEFAULT_CTO_GITHUB_CHAT_RATE_LIMIT_PER_MINUTE = 60
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -139,6 +146,21 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await auth.deleteAccount(ctx)
   }
 
+  // BYOK provider key endpoints
+  if (path === '/api/v1/llm/keys' && method === 'GET') {
+    return await providerKeys.listProviderKeys(request, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/llm\/keys\/([^/]+)$/) && method === 'PUT') {
+    const provider = path.split('/')[5] ?? ''
+    return await providerKeys.upsertProviderKey(provider, request, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/llm\/keys\/([^/]+)$/) && method === 'DELETE') {
+    const provider = path.split('/')[5] ?? ''
+    return await providerKeys.deleteProviderKey(provider, request, ctx)
+  }
+
   // Compliance endpoints
   if (path === '/api/v1/compliance/checks' && method === 'POST') {
     const body = await request.json() as { jobId: string; checkType: ComplianceCheckType }
@@ -185,6 +207,10 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   }
 
   // Codebase run execution endpoints
+  if (path === '/api/v1/codebase/runs' && method === 'GET') {
+    return await codebaseRuns.listCodebaseRuns(request, ctx)
+  }
+
   if (path === '/api/v1/codebase/runs' && method === 'POST') {
     const body = await request.json().catch(() => ({})) as {
       repoUrl?: string
@@ -232,6 +258,16 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await codebaseRuns.cancelCodebaseRun(runId, ctx)
   }
 
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/pr$/) && method === 'GET') {
+    const runId = path.split('/')[5] ?? ''
+    return await codebaseRuns.getCodebaseRunPullRequest(runId, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/post-to-pr$/) && method === 'POST') {
+    const runId = path.split('/')[5] ?? ''
+    return await codebaseRuns.postCodebaseRunToPullRequest(runId, ctx)
+  }
+
   // Onboarding endpoints
   if (path === '/api/v1/onboarding' && method === 'GET') {
     return await onboarding.getOnboarding(ctx)
@@ -263,6 +299,12 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
 
   // Realtime token endpoint — mints a short-lived ephemeral key for the browser WebSocket
   if (path === '/api/v1/realtime/token' && method === 'POST') {
+    const body = await request.clone().json().catch(() => ({})) as { workspaceId?: string }
+    await enforceRateLimit(ctx, 'realtime_token', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_REALTIME_PER_MINUTE, DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId: body.workspaceId,
+    })
     return await mintRealtimeToken(request, ctx)
   }
 
@@ -287,28 +329,34 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   // CTO agent proxy routes — forward to external APIs using server-side tokens
 
   if (path === '/api/v1/cto/vercel/projects' && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     return await proxyVercel('/v9/projects?limit=20', ctx.env)
   }
 
   if (path.match(/^\/api\/v1\/cto\/vercel\/projects\/([^/]+)\/deployments$/) && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const projectId = path.split('/')[6] ?? ''
     return await proxyVercel(`/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=10`, ctx.env)
   }
 
   if (path.match(/^\/api\/v1\/cto\/vercel\/deployments\/([^/]+)$/) && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const deploymentId = path.split('/')[6] ?? ''
     return await proxyVercel(`/v13/deployments/${encodeURIComponent(deploymentId)}`, ctx.env)
   }
 
   if (path === '/api/v1/cto/cloudflare/workers' && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     return await proxyCF(`/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/workers/scripts`, ctx.env)
   }
 
   if (path === '/api/v1/cto/cloudflare/pages' && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     return await proxyCF(`/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/pages/projects`, ctx.env)
   }
 
   if (path.match(/^\/api\/v1\/cto\/cloudflare\/workers\/([^/]+)\/usage$/) && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const scriptName = path.split('/')[6] ?? ''
     const now = new Date()
     const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -319,26 +367,41 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   }
 
   if (path === '/api/v1/cto/openai/models' && method === 'GET') {
-    return await proxyOpenAI('/v1/models', ctx.env)
+    const workspaceId = new URL(request.url).searchParams.get('workspaceId') ?? undefined
+    await enforceRateLimit(ctx, 'cto_openai_proxy', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_OPENAI_PER_MINUTE, DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId,
+    })
+    return await proxyOpenAI('/v1/models', request, ctx)
   }
 
   if (path === '/api/v1/cto/openai/usage' && method === 'GET') {
+    const workspaceId = new URL(request.url).searchParams.get('workspaceId') ?? undefined
+    await enforceRateLimit(ctx, 'cto_openai_proxy', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_OPENAI_PER_MINUTE, DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId,
+    })
     const url = new URL(request.url)
     const start = url.searchParams.get('start') ?? ''
     const end = url.searchParams.get('end') ?? ''
-    return await proxyOpenAI(`/v1/usage?start_time=${start}&end_time=${end}`, ctx.env)
+    return await proxyOpenAI(`/v1/usage?start_time=${start}&end_time=${end}`, request, ctx)
   }
 
   if (path === '/api/v1/cto/github/orgs' && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     return await proxyGitHub('/user/orgs?per_page=50', ctx.env)
   }
 
   if (path.match(/^\/api\/v1\/cto\/github\/orgs\/([^/]+)\/repos$/) && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const org = path.split('/')[6] ?? ''
     return await proxyGitHub(`/orgs/${encodeURIComponent(org)}/repos?sort=updated&per_page=50`, ctx.env)
   }
 
   if (path.match(/^\/api\/v1\/cto\/github\/repos\/([^/]+)\/([^/]+)\/pulls$/) && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const owner = path.split('/')[6] ?? ''
     const repo = path.split('/')[7] ?? ''
     return await proxyGitHub(
@@ -348,6 +411,7 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   }
 
   if (path.match(/^\/api\/v1\/cto\/github\/repos\/([^/]+)\/([^/]+)\/actions\/runs$/) && method === 'GET') {
+    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const owner = path.split('/')[6] ?? ''
     const repo = path.split('/')[7] ?? ''
     return await proxyGitHub(
@@ -357,7 +421,13 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   }
 
   if (path === '/api/v1/cto/github/chat/completions' && method === 'POST') {
-    return await proxyGitHubChatCompletions(request, ctx.env)
+    const body = await request.clone().json().catch(() => ({})) as { workspaceId?: string }
+    await enforceRateLimit(ctx, 'cto_github_chat', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_GITHUB_CHAT_PER_MINUTE, DEFAULT_CTO_GITHUB_CHAT_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId: body.workspaceId,
+    })
+    return await proxyGitHubChatCompletions(request, ctx)
   }
 
   if (path === '/api/v1/agent/respond' && method === 'POST') {
@@ -366,6 +436,13 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
 
   // 404 Not Found
   return jsonResponse({ error: 'Not found', code: 'NOT_FOUND' }, 404)
+}
+
+function parseRateLimit(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return parsed
 }
 
 // ---------------------------------------------------------------------------
@@ -406,12 +483,22 @@ async function proxyCF(apiPath: string, env: Env): Promise<Response> {
   })
 }
 
-async function proxyOpenAI(apiPath: string, env: Env): Promise<Response> {
-  if (!env.OPENAI_API_KEY) {
+async function proxyOpenAI(apiPath: string, request: Request, ctx: RequestContext): Promise<Response> {
+  const workspaceId = new URL(request.url).searchParams.get('workspaceId')
+  let apiKey = ''
+  try {
+    apiKey = await providerKeys.resolveProviderApiKey('openai', workspaceId, ctx, ctx.env.OPENAI_API_KEY)
+  } catch {
+    if (!ctx.env.OPENAI_API_KEY) {
+      return jsonResponse({ error: 'OPENAI_API_KEY is not configured', code: 'CONFIG_ERROR' }, 500)
+    }
+    throw new Error('Unable to resolve OpenAI API key')
+  }
+  if (!apiKey) {
     return jsonResponse({ error: 'OPENAI_API_KEY is not configured', code: 'CONFIG_ERROR' }, 500)
   }
   const res = await fetch(`https://api.openai.com${apiPath}`, {
-    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+    headers: { Authorization: `Bearer ${apiKey}` },
   })
   const body = await res.text()
   return new Response(body, {
@@ -423,16 +510,31 @@ async function proxyOpenAI(apiPath: string, env: Env): Promise<Response> {
   })
 }
 
-async function proxyGitHubChatCompletions(request: Request, env: Env): Promise<Response> {
-  if (!env.GITHUB_TOKEN) {
-    return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
-  }
-
+async function proxyGitHubChatCompletions(request: Request, ctx: RequestContext): Promise<Response> {
   const body = await request.json().catch(() => ({})) as {
     model?: string
     messages?: Array<{ role: string; content: string }>
     max_tokens?: number
     temperature?: number
+    workspaceId?: string
+  }
+
+  let githubToken = ''
+  try {
+    githubToken = await providerKeys.resolveProviderApiKey(
+      'github',
+      body.workspaceId,
+      ctx,
+      ctx.env.GITHUB_TOKEN,
+    )
+  } catch {
+    if (!ctx.env.GITHUB_TOKEN) {
+      return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
+    }
+    throw new Error('Unable to resolve GitHub API key')
+  }
+  if (!githubToken) {
+    return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
   }
 
   if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) {
@@ -452,7 +554,7 @@ async function proxyGitHubChatCompletions(request: Request, env: Env): Promise<R
   const res = await fetch('https://models.github.ai/inference/chat/completions', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Authorization: `Bearer ${githubToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
@@ -530,19 +632,34 @@ async function proxySupervisorResponse(request: Request, env: Env): Promise<Resp
 }
 
 async function mintRealtimeToken(_request: Request, ctx: RequestContext): Promise<Response> {
-  if (!ctx.env.OPENAI_API_KEY) {
+  const body = await _request.json().catch(() => ({})) as { model?: string; workspaceId?: string }
+  let apiKey = ''
+  try {
+    apiKey = await providerKeys.resolveProviderApiKey(
+      'openai',
+      body.workspaceId,
+      ctx,
+      ctx.env.OPENAI_API_KEY,
+    )
+  } catch {
+    if (!ctx.env.OPENAI_API_KEY) {
+      return jsonResponse({ error: 'OPENAI_API_KEY secret is not configured on this Worker', code: 'CONFIG_ERROR' }, 500)
+    }
+    throw new Error('Unable to resolve OpenAI API key')
+  }
+
+  if (!apiKey) {
     return jsonResponse({ error: 'OPENAI_API_KEY secret is not configured on this Worker', code: 'CONFIG_ERROR' }, 500)
   }
 
   let rawBody: string
   try {
     // Realtime GA requires client secrets minted from this endpoint.
-    const body = await _request.json().catch(() => ({})) as { model?: string }
     const requestedModel = body.model ?? 'gpt-realtime-1.5'
     const res = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${ctx.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

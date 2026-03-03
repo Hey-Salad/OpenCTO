@@ -64,24 +64,28 @@ Expected ingress:
 ## 6) Operations Commands
 
 Service status:
+
 ```bash
 sudo systemctl status opencto-voice-backend --no-pager -n 50
 sudo systemctl status cloudflared --no-pager -n 50
 ```
 
 Restart services:
+
 ```bash
 sudo systemctl restart opencto-voice-backend
 sudo systemctl restart cloudflared
 ```
 
 Tail logs:
+
 ```bash
 journalctl -u opencto-voice-backend -f
 journalctl -u cloudflared -f
 ```
 
 Port checks:
+
 ```bash
 ss -ltnp | rg '8090|cloudflared|uvicorn'
 ```
@@ -89,16 +93,19 @@ ss -ltnp | rg '8090|cloudflared|uvicorn'
 ## 7) Smoke Tests
 
 Local app health:
+
 ```bash
 curl -sS http://127.0.0.1:8090/health
 ```
 
 Public health:
+
 ```bash
 curl -sS https://cloud-services-api.opencto.works/health
 ```
 
 Local response:
+
 ```bash
 curl -sS -X POST http://127.0.0.1:8090/v1/respond \
   -H 'Content-Type: application/json' \
@@ -106,6 +113,7 @@ curl -sS -X POST http://127.0.0.1:8090/v1/respond \
 ```
 
 Public response:
+
 ```bash
 curl -sS -X POST https://cloud-services-api.opencto.works/v1/respond \
   -H 'Content-Type: application/json' \
@@ -132,10 +140,12 @@ curl -sS -X POST https://cloud-services-api.opencto.works/v1/respond \
 ## 10) Migration to Repo-Managed Deployment (Recommended)
 
 1. Clone repo:
+
 ```bash
 cd /home/hs-chilu/heysalad-ai-projects
 git clone git@github.com:Hey-Salad/CTO-AI.git
 ```
+
 2. Create backend runtime dir from repo source (or update service `WorkingDirectory`).
 3. Validate with local health check.
 4. Switch systemd `WorkingDirectory` + `ExecStart` to repo-managed path.

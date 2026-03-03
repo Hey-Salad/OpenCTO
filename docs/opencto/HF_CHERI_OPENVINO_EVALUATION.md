@@ -18,6 +18,7 @@ On the server:
 - Hugging Face token with access to the model (`HF_TOKEN`)
 
 Set token:
+
 ```bash
 export HF_TOKEN='hf_...'
 ```
@@ -53,6 +54,7 @@ pip install "torch>=2.3" "transformers>=4.50" "accelerate>=0.34" "huggingface_hu
 ```
 
 Quick latency check:
+
 ```bash
 python3 - <<'PY'
 import os, time
@@ -74,12 +76,14 @@ PY
 ## 5) OpenVINO Export + Runtime
 
 Install:
+
 ```bash
 source .venv-cheri/bin/activate
 pip install -U "optimum-intel[openvino]" "openvino>=2024.4"
 ```
 
 Export (try int8 first, then int4 if supported):
+
 ```bash
 optimum-cli export openvino \
   --model HeySalad/Cheri-ML-1.3B \
@@ -89,6 +93,7 @@ optimum-cli export openvino \
 ```
 
 If int8 fails or is too slow, try:
+
 ```bash
 optimum-cli export openvino \
   --model HeySalad/Cheri-ML-1.3B \
@@ -98,6 +103,7 @@ optimum-cli export openvino \
 ```
 
 Run OpenVINO inference benchmark:
+
 ```bash
 python3 - <<'PY'
 import time
