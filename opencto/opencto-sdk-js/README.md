@@ -1,6 +1,6 @@
 # @heysalad/opencto
 
-TypeScript SDK for OpenCTO APIs and MQTT transport.
+TypeScript SDK for OpenCTO APIs, MQTT transport, and auth helpers.
 
 ## Install
 
@@ -45,11 +45,55 @@ transport.onTask(async ({ payload }) => {
 await transport.start()
 ```
 
+## Auth Device Flow (CLI/headless)
+
+```ts
+import {
+  startDeviceAuthorization,
+  pollDeviceToken,
+  FileTokenStore,
+  createTokenGetter,
+  createOpenCtoClient,
+} from '@heysalad/opencto'
+
+const clientId = 'opencto-cli'
+const workspaceKey = 'workspace_demo'
+
+const device = await startDeviceAuthorization({
+  deviceAuthorizationUrl: 'https://auth.example.com/oauth/device/code',
+  clientId,
+  scope: 'openid profile offline_access',
+})
+
+console.log(`Open: ${device.verification_uri}`)
+console.log(`Code: ${device.user_code}`)
+
+const { tokenSet } = await pollDeviceToken({
+  tokenUrl: 'https://auth.example.com/oauth/token',
+  clientId,
+  deviceCode: device.device_code,
+  expiresInSeconds: device.expires_in,
+  intervalSeconds: device.interval,
+})
+
+const store = new FileTokenStore()
+await store.set(workspaceKey, tokenSet)
+
+const sdk = createOpenCtoClient({
+  baseUrl: 'https://api.opencto.works',
+  getToken: createTokenGetter(store, workspaceKey),
+})
+```
+
 ## API Surface
 
 - `createOpenCtoClient(options)`
 - `createMqttAgentTransport(options)`
 - `createMqttOrchestratorTransport(options)`
+- `startDeviceAuthorization(options)`
+- `pollDeviceToken(options)`
+- `runDeviceFlow(options)`
+- `MemoryTokenStore` / `FileTokenStore`
 
 HTTP clients:
 - `client.auth.getSession()`

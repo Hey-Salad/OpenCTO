@@ -6,6 +6,7 @@ import type { FetchLike } from './types/common'
 
 export * from './types'
 export * from './transports/mqtt'
+export * from './auth'
 export { codeFromStatus, createOpenCtoError, normalizeError } from './core/errors'
 export { createAuthClient, createChatsClient, createRunsClient, createRealtimeClient }
 
