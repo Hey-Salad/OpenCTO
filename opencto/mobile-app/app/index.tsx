@@ -1,11 +1,12 @@
 import { Redirect } from 'expo-router';
+import { BrandLoader } from '@/components/ui';
 import { useAuthGate } from '@/hooks/useAuthGate';
 
 export default function Index() {
   const { shouldWait, isAuthenticated } = useAuthGate();
 
   if (shouldWait) {
-    return null;
+    return <BrandLoader />;
   }
 
   if (!isAuthenticated) {

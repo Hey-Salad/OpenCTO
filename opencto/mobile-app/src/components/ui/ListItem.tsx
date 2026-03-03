@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors } from '@/theme/colors';
 
 interface ListItemProps {
   title: string;
@@ -25,7 +26,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#EEF2F7',
+    borderBottomColor: colors.border,
     gap: 10
   },
   copy: {
@@ -35,10 +36,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#111827'
+    color: colors.textBody
   },
   subtitle: {
     fontSize: 13,
-    color: '#64748B'
+    color: colors.textMuted
   }
 });

@@ -4,6 +4,7 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { RunStatusBadge } from '@/components/runs/RunStatusBadge';
 import { Button, Card, EmptyState, ErrorState } from '@/components/ui';
 import { useRuns } from '@/hooks/useRuns';
+import { colors } from '@/theme/colors';
 import { CodebaseRun } from '@/types/models';
 
 const cancellableStates = new Set(['queued', 'in_progress']);
@@ -92,7 +93,7 @@ export default function RunDetailScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F8FAFC'
+    backgroundColor: colors.bgApp
   },
   container: {
     flex: 1,
@@ -102,15 +103,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A'
+    color: colors.textBody
   },
   runTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827'
+    color: colors.textBody
   },
   meta: {
-    color: '#64748B'
+    color: colors.textMuted
   },
   events: {
     gap: 8,
@@ -118,13 +119,13 @@ const styles = StyleSheet.create({
   },
   eventType: {
     fontWeight: '700',
-    color: '#0F172A'
+    color: colors.textBody
   },
   eventMessage: {
-    color: '#1F2937'
+    color: colors.textBody
   },
   eventTime: {
-    color: '#64748B',
+    color: colors.textMuted,
     fontSize: 12
   }
 });

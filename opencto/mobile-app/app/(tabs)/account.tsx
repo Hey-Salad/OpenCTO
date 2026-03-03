@@ -4,6 +4,7 @@ import { InfoRow } from '@/components/account/InfoRow';
 import { Button, Card, ErrorState } from '@/components/ui';
 import { PRIVACY_URL, TERMS_URL } from '@/config/env';
 import { useAuth } from '@/hooks/useAuth';
+import { colors } from '@/theme/colors';
 
 export default function AccountScreen() {
   const { session, signOut, deleteOwnAccount, error } = useAuth();
@@ -38,7 +39,7 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F8FAFC'
+    backgroundColor: colors.bgApp
   },
   container: {
     flex: 1,
@@ -48,6 +49,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A'
+    color: colors.textBody
   }
 });

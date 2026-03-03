@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { colors } from '@/theme/colors';
 
 interface ButtonProps {
   label: string;
@@ -8,10 +9,10 @@ interface ButtonProps {
   style?: ViewStyle;
 }
 
-const colors = {
-  primary: '#0B5FFF',
-  secondary: '#E9EEF7',
-  danger: '#C62828'
+const palette = {
+  primary: colors.brandPrimary,
+  secondary: colors.bgSurface2,
+  danger: colors.error
 };
 
 export const Button = ({ label, onPress, variant = 'primary', disabled, style }: ButtonProps) => (
@@ -21,7 +22,8 @@ export const Button = ({ label, onPress, variant = 'primary', disabled, style }:
     disabled={disabled}
     style={({ pressed }) => [
       styles.base,
-      { backgroundColor: colors[variant], opacity: pressed || disabled ? 0.7 : 1 },
+      { backgroundColor: palette[variant], opacity: pressed || disabled ? 0.7 : 1 },
+      variant === 'secondary' ? styles.secondaryBorder : null,
       style
     ]}
   >
@@ -36,12 +38,16 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     alignItems: 'center'
   },
+  secondaryBorder: {
+    borderWidth: 1,
+    borderColor: colors.border
+  },
   label: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600'
   },
   secondaryLabel: {
-    color: '#0F172A'
+    color: colors.textBody
   }
 });

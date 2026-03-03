@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { colors } from '@/theme/colors';
 
 interface EmptyStateProps {
   title: string;
@@ -15,18 +16,18 @@ export const EmptyState = ({ title, description }: EmptyStateProps) => (
 const styles = StyleSheet.create({
   root: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 16,
     gap: 6,
-    backgroundColor: '#FFFFFF'
+    backgroundColor: colors.bgSurface
   },
   title: {
     fontWeight: '700',
     fontSize: 15,
-    color: '#0F172A'
+    color: colors.textBody
   },
   description: {
-    color: '#475569'
+    color: colors.textMuted
   }
 });

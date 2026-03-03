@@ -1,15 +1,16 @@
 import { memo } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { ChatMessage } from '@/types/models';
+import { colors } from '@/theme/colors';
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
 }
 
 const roleColor: Record<ChatMessage['role'], string> = {
-  USER: '#0B5FFF',
-  ASSISTANT: '#065F46',
-  TOOL: '#7C2D12'
+  USER: colors.brandPrimary,
+  ASSISTANT: colors.success,
+  TOOL: colors.warning
 };
 
 const MessageItem = memo(function MessageItem({ item }: { item: ChatMessage }) {
@@ -36,10 +37,10 @@ const styles = StyleSheet.create({
     paddingBottom: 12
   },
   item: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.bgSurface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     padding: 12,
     gap: 6
   },
@@ -48,7 +49,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   content: {
-    color: '#1F2937',
+    color: colors.textBody,
     fontSize: 14,
     lineHeight: 20
   }

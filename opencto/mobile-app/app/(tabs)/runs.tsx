@@ -4,6 +4,7 @@ import { RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from
 import { RunListItem } from '@/components/runs/RunListItem';
 import { EmptyState, ErrorState } from '@/components/ui';
 import { useRuns } from '@/hooks/useRuns';
+import { colors } from '@/theme/colors';
 
 export default function RunsScreen() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function RunsScreen() {
         <Text style={styles.title}>Codebase Runs</Text>
         {error ? <ErrorState message={error} /> : null}
         <ScrollView
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refreshRuns} />}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={refreshRuns} tintColor={colors.brandPrimary} />}
           contentContainerStyle={styles.scroll}
         >
           {runs.length === 0 ? (
@@ -42,7 +43,7 @@ export default function RunsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F8FAFC'
+    backgroundColor: colors.bgApp
   },
   container: {
     flex: 1,
@@ -52,7 +53,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A'
+    color: colors.textBody
   },
   scroll: {
     paddingBottom: 16

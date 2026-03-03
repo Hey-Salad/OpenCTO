@@ -1,11 +1,13 @@
 import { Redirect, Tabs } from 'expo-router';
+import { BrandLoader } from '@/components/ui';
 import { useAuthGate } from '@/hooks/useAuthGate';
+import { colors } from '@/theme/colors';
 
 export default function TabsLayout() {
   const { shouldWait, isAuthenticated } = useAuthGate();
 
   if (shouldWait) {
-    return null;
+    return <BrandLoader />;
   }
 
   if (!isAuthenticated) {
@@ -16,7 +18,11 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerTitleAlign: 'left',
-        tabBarActiveTintColor: '#0B5FFF'
+        headerStyle: { backgroundColor: colors.bgSurface },
+        headerTintColor: colors.textBody,
+        tabBarActiveTintColor: colors.brandPrimary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: { backgroundColor: colors.bgSurface, borderTopColor: colors.border }
       }}
     >
       <Tabs.Screen name="chat" options={{ title: 'Chat' }} />

@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { colors } from '@/theme/colors';
 
 interface InfoRowProps {
   label: string;
@@ -19,10 +20,10 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   label: {
-    color: '#64748B'
+    color: colors.textMuted
   },
   value: {
-    color: '#0F172A',
+    color: colors.textBody,
     fontWeight: '600',
     maxWidth: '70%',
     textAlign: 'right'

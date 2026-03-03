@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { RealtimeConnectionState } from '@/types/models';
 import { Badge, Button } from '@/components/ui';
+import { colors } from '@/theme/colors';
 
 interface VoiceControlBarProps {
   state: RealtimeConnectionState;
@@ -41,9 +42,9 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF'
+    backgroundColor: colors.bgSurface
   },
   statusRow: {
     flexDirection: 'row',
@@ -51,7 +52,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   timer: {
-    color: '#334155',
+    color: colors.textBody,
     fontWeight: '600'
   },
   controls: {

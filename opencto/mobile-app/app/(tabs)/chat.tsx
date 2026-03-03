@@ -5,6 +5,7 @@ import { VoiceControlBar } from '@/components/chat/VoiceControlBar';
 import { EmptyState, ErrorState } from '@/components/ui';
 import { useChat } from '@/hooks/useChat';
 import { useRealtime } from '@/hooks/useRealtime';
+import { colors } from '@/theme/colors';
 
 export default function ChatScreen() {
   const { messages, sendTextMessage, error } = useChat();
@@ -47,7 +48,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F8FAFC'
+    backgroundColor: colors.bgApp
   },
   container: {
     flex: 1,
@@ -57,7 +58,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A'
+    color: colors.textBody
   },
   messagesWrap: {
     flex: 1

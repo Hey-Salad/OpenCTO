@@ -1,23 +1,24 @@
 import { StyleSheet, TextInput, TextInputProps } from 'react-native';
+import { colors } from '@/theme/colors';
 
 export const TextInputField = (props: TextInputProps) => (
   <TextInput
     {...props}
     autoCapitalize="none"
     style={[styles.input, props.style]}
-    placeholderTextColor="#94A3B8"
+    placeholderTextColor={colors.textMuted}
   />
 );
 
 const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#FFFFFF'
+    color: colors.textBody,
+    backgroundColor: colors.bgSurface2
   }
 });

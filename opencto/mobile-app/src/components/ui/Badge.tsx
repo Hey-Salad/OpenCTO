@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { colors } from '@/theme/colors';
 
 interface BadgeProps {
   label: string;
@@ -15,11 +16,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#E5EDFF'
+    borderWidth: 1,
+    borderColor: 'rgba(250,160,154,0.35)',
+    backgroundColor: 'rgba(237,76,76,0.12)'
   },
   text: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1D4ED8'
+    color: colors.brandSecondary
   }
 });

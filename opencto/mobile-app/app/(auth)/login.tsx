@@ -4,6 +4,7 @@ import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, ErrorState, TextInputField } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthGate } from '@/hooks/useAuthGate';
+import { colors } from '@/theme/colors';
 
 export default function LoginScreen() {
   const { signIn, error } = useAuth();
@@ -37,7 +38,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F8FAFC'
+    backgroundColor: colors.bgApp
   },
   container: {
     flex: 1,
@@ -47,9 +48,9 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#0F172A'
+    color: colors.textBody
   },
   subtitle: {
-    color: '#334155'
+    color: colors.textMuted
   }
 });
