@@ -22,6 +22,7 @@ Notes:
 - Keys are stored per `user + workspace + provider`.
 - Keys are encrypted at rest using AES-GCM with a key derived from `JWT_SECRET` and user identity.
 - API responses never return raw secrets (only masked key hints).
+- Workspace access is enforced when onboarding workspace tables are present. Non-members receive `403 FORBIDDEN`.
 
 ## Provider resolution order
 
@@ -47,3 +48,5 @@ Default limits are per minute and configurable via env:
 - `RATE_LIMIT_CTO_GITHUB_CHAT_PER_MINUTE` (default `60`)
 
 When exceeded, API returns `429` with `QUOTA_EXCEEDED` and retry metadata.
+
+For workspace-aware routes (`realtime/token`, OpenAI proxy routes, GitHub chat proxy), limiter scope includes `workspaceId` when provided.

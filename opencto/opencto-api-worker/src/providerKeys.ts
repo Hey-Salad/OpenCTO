@@ -1,5 +1,5 @@
 import type { RequestContext } from './types'
-import { BadRequestException, InternalServerException, NotFoundException, jsonResponse } from './errors'
+import { BadRequestException, ForbiddenException, InternalServerException, NotFoundException, jsonResponse } from './errors'
 import { redactSecrets } from './redaction'
 
 interface ProviderKeyRow {
@@ -20,6 +20,7 @@ export async function listProviderKeys(request: Request, ctx: RequestContext): P
   await ensureSchema(ctx)
   const url = new URL(request.url)
   const workspaceId = sanitizeWorkspaceId(url.searchParams.get('workspaceId') ?? 'default')
+  await ensureWorkspaceAccess(workspaceId, ctx)
 
   const { results } = await ctx.env.DB.prepare(
     `SELECT id, user_id, workspace_id, provider, key_hint, encrypted_key_b64, iv_b64, created_at, updated_at
@@ -49,6 +50,7 @@ export async function upsertProviderKey(providerRaw: string, request: Request, c
   }
 
   const workspaceId = sanitizeWorkspaceId(body.workspaceId ?? 'default')
+  await ensureWorkspaceAccess(workspaceId, ctx)
   const { encryptedB64, ivB64 } = await encryptForUser(apiKey, ctx.userId, ctx.env.JWT_SECRET)
   const now = new Date().toISOString()
   const id = `${ctx.userId}:${workspaceId}:${provider}`
@@ -77,6 +79,7 @@ export async function deleteProviderKey(providerRaw: string, request: Request, c
   await ensureSchema(ctx)
   const provider = sanitizeProvider(providerRaw)
   const workspaceId = sanitizeWorkspaceId(new URL(request.url).searchParams.get('workspaceId') ?? 'default')
+  await ensureWorkspaceAccess(workspaceId, ctx)
   const id = `${ctx.userId}:${workspaceId}:${provider}`
 
   const result = await ctx.env.DB.prepare(
@@ -98,6 +101,7 @@ export async function resolveProviderApiKey(
 ): Promise<string> {
   const provider = sanitizeProvider(providerRaw)
   const workspaceId = sanitizeWorkspaceId(workspaceIdRaw ?? 'default')
+  await ensureWorkspaceAccess(workspaceId, ctx)
   if (!hasD1Binding(ctx)) {
     if (fallbackKey) return fallbackKey
     throw new InternalServerException(`No API key configured for provider ${provider}`)
@@ -155,6 +159,44 @@ async function ensureSchema(ctx: RequestContext): Promise<void> {
 function hasD1Binding(ctx: RequestContext): boolean {
   const db = ctx.env.DB as unknown
   return Boolean(db && typeof db === 'object' && typeof (db as { prepare?: unknown }).prepare === 'function')
+}
+
+async function ensureWorkspaceAccess(workspaceId: string, ctx: RequestContext): Promise<void> {
+  if (!hasD1Binding(ctx)) return
+  if (workspaceId === 'default') return
+
+  // Enforce membership/ownership when onboarding workspace tables are available.
+  try {
+    const membership = await ctx.env.DB.prepare(
+      `SELECT COUNT(*) AS count
+       FROM workspace_members
+       WHERE workspace_id = ? AND user_id = ?`,
+    ).bind(workspaceId, ctx.userId).first<{ count: number }>()
+
+    if ((membership?.count ?? 0) > 0) return
+
+    const ownership = await ctx.env.DB.prepare(
+      `SELECT COUNT(*) AS count
+       FROM workspaces
+       WHERE id = ? AND owner_user_id = ?`,
+    ).bind(workspaceId, ctx.userId).first<{ count: number }>()
+
+    if ((ownership?.count ?? 0) > 0) return
+
+    const profile = await ctx.env.DB.prepare(
+      `SELECT COUNT(*) AS count
+       FROM user_profiles
+       WHERE user_id = ? AND workspace_id = ?`,
+    ).bind(ctx.userId, workspaceId).first<{ count: number }>()
+
+    if ((profile?.count ?? 0) > 0) return
+
+    throw new ForbiddenException('Workspace access denied', { workspaceId })
+  } catch (error) {
+    if (error instanceof ForbiddenException) throw error
+    // Legacy/self-hosted installs may not have onboarding tables yet.
+    return
+  }
 }
 
 function sanitizeProvider(providerRaw: string): string {

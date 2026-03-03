@@ -8,7 +8,9 @@ describe('BYOK and rate limiting', () => {
   })
 
   it('supports provider key CRUD with masked key hints', async () => {
-    const env = createMockEnv()
+    const db = new MockD1Database()
+    db.setWorkspaceAccess('ws_demo', true)
+    const env = createMockEnv({ DB: db as unknown as D1Database })
 
     const upsertRes = await worker.fetch(
       new Request('https://api.opencto.works/api/v1/llm/keys/openai', {
@@ -52,6 +54,32 @@ describe('BYOK and rate limiting', () => {
     expect(deleteBody.deleted).toBe(true)
   })
 
+  it('denies BYOK writes for inaccessible workspaces', async () => {
+    const db = new MockD1Database()
+    db.setWorkspaceAccess('other_workspace', false)
+    const env = createMockEnv({ DB: db as unknown as D1Database })
+
+    const res = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/llm/keys/openai', {
+        method: 'PUT',
+        headers: {
+          Authorization: 'Bearer demo-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          apiKey: 'sk-openai-test-99999999',
+          workspaceId: 'other_workspace',
+        }),
+      }),
+      env,
+    )
+    const body = await res.json() as { code?: string; status?: number; error?: string }
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('FORBIDDEN')
+    expect(body.status).toBe(403)
+    expect(body.error).toContain('Workspace access denied')
+  })
+
   it('enforces realtime token mint rate limit', async () => {
     const env = createMockEnv({
       RATE_LIMIT_REALTIME_PER_MINUTE: '1',
@@ -93,6 +121,11 @@ describe('BYOK and rate limiting', () => {
 class MockD1Database {
   private providerKeys = new Map<string, ProviderKeyRow>()
   private buckets = new Map<string, { count: number; expiresAt: string }>()
+  private workspaceAccess = new Map<string, boolean>()
+
+  setWorkspaceAccess(workspaceId: string, allowed: boolean): void {
+    this.workspaceAccess.set(workspaceId, allowed)
+  }
 
   prepare(sql: string): MockD1Statement {
     return new MockD1Statement(this, normalizeSql(sql))
@@ -176,6 +209,24 @@ class MockD1Database {
       const key = String(args[0] ?? '')
       const row = this.buckets.get(key)
       return { count: row?.count ?? 0 } as T
+    }
+
+    if (sql.startsWith('select count(*) as count from workspace_members where workspace_id = ? and user_id = ?')) {
+      const workspaceId = String(args[0] ?? '')
+      const allowed = this.workspaceAccess.get(workspaceId)
+      return { count: allowed === true ? 1 : 0 } as T
+    }
+
+    if (sql.startsWith('select count(*) as count from workspaces where id = ? and owner_user_id = ?')) {
+      const workspaceId = String(args[0] ?? '')
+      const allowed = this.workspaceAccess.get(workspaceId)
+      return { count: allowed === true ? 1 : 0 } as T
+    }
+
+    if (sql.startsWith('select count(*) as count from user_profiles where user_id = ? and workspace_id = ?')) {
+      const workspaceId = String(args[1] ?? '')
+      const allowed = this.workspaceAccess.get(workspaceId)
+      return { count: allowed === true ? 1 : 0 } as T
     }
 
     throw new Error(`Unhandled first SQL: ${sql}`)

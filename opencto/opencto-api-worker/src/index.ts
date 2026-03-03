@@ -299,7 +299,12 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
 
   // Realtime token endpoint — mints a short-lived ephemeral key for the browser WebSocket
   if (path === '/api/v1/realtime/token' && method === 'POST') {
-    await enforceRateLimit(ctx, 'realtime_token', { limit: parseRateLimit(ctx.env.RATE_LIMIT_REALTIME_PER_MINUTE, DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
+    const body = await request.clone().json().catch(() => ({})) as { workspaceId?: string }
+    await enforceRateLimit(ctx, 'realtime_token', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_REALTIME_PER_MINUTE, DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId: body.workspaceId,
+    })
     return await mintRealtimeToken(request, ctx)
   }
 
@@ -362,12 +367,22 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   }
 
   if (path === '/api/v1/cto/openai/models' && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_openai_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_OPENAI_PER_MINUTE, DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
+    const workspaceId = new URL(request.url).searchParams.get('workspaceId') ?? undefined
+    await enforceRateLimit(ctx, 'cto_openai_proxy', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_OPENAI_PER_MINUTE, DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId,
+    })
     return await proxyOpenAI('/v1/models', request, ctx)
   }
 
   if (path === '/api/v1/cto/openai/usage' && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_openai_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_OPENAI_PER_MINUTE, DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
+    const workspaceId = new URL(request.url).searchParams.get('workspaceId') ?? undefined
+    await enforceRateLimit(ctx, 'cto_openai_proxy', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_OPENAI_PER_MINUTE, DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId,
+    })
     const url = new URL(request.url)
     const start = url.searchParams.get('start') ?? ''
     const end = url.searchParams.get('end') ?? ''
@@ -406,7 +421,12 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   }
 
   if (path === '/api/v1/cto/github/chat/completions' && method === 'POST') {
-    await enforceRateLimit(ctx, 'cto_github_chat', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_GITHUB_CHAT_PER_MINUTE, DEFAULT_CTO_GITHUB_CHAT_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
+    const body = await request.clone().json().catch(() => ({})) as { workspaceId?: string }
+    await enforceRateLimit(ctx, 'cto_github_chat', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_GITHUB_CHAT_PER_MINUTE, DEFAULT_CTO_GITHUB_CHAT_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId: body.workspaceId,
+    })
     return await proxyGitHubChatCompletions(request, ctx)
   }
 
