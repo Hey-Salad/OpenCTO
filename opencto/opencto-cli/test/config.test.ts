@@ -8,6 +8,7 @@ describe('config', () => {
       'run',
       '--workspace', 'ws_cli',
       '--api-base-url', 'https://api.example.com/',
+      '--workflows-file', '~/opencto.workflows.yaml',
     ])
 
     const config = resolveConfig(parsed, {
@@ -19,5 +20,6 @@ describe('config', () => {
     expect(config.apiBaseUrl).toBe('https://api.example.com')
     expect(config.authBaseUrl).toBe('https://auth.example.com')
     expect(config.tokenPath).toBe('/tmp/tokens.json')
+    expect(config.workflowsFile).toContain('opencto.workflows.yaml')
   })
 })

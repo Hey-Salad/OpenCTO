@@ -33,7 +33,7 @@ export async function runCli(argv: string[]): Promise<void> {
   }
 
   if (parsed.command[0] === 'workflow' && parsed.command[1] === 'list') {
-    await handleWorkflowList()
+    await handleWorkflowList(config)
     return
   }
 

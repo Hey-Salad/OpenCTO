@@ -1,14 +1,16 @@
 import type { ParsedArgs } from '../args'
 import { getFlag, getFlagList, hasFlag } from '../args'
 import type { CliConfig } from '../config'
-import { getWorkflow, renderCommandTemplates } from '../workflows/catalog'
+import { renderCommandTemplates } from '../workflows/catalog'
+import { resolveWorkflowRegistry } from '../workflows/registry'
 import { createClient, executeRun } from './runCore'
 
 export async function handleWorkflowRun(parsed: ParsedArgs, config: CliConfig): Promise<void> {
   const workflowId = parsed.command[2]
   if (!workflowId) throw new Error('Missing workflow id. Usage: opencto workflow run <workflow-id>')
 
-  const workflow = getWorkflow(workflowId)
+  const workflows = await resolveWorkflowRegistry(config)
+  const workflow = workflows.find((item) => item.id === workflowId) ?? null
   if (!workflow) {
     throw new Error(`Unknown workflow id: ${workflowId}. Use 'opencto workflow list' to view available workflows.`)
   }

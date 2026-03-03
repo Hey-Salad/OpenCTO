@@ -9,6 +9,7 @@ export interface CliConfig {
   workspaceKey: string
   tokenPath: string
   tokenOverride?: string
+  workflowsFile?: string
 }
 
 export function resolveConfig(parsed: ParsedArgs, env: NodeJS.ProcessEnv = process.env): CliConfig {
@@ -17,6 +18,7 @@ export function resolveConfig(parsed: ParsedArgs, env: NodeJS.ProcessEnv = proce
   const workspaceKey = getFlag(parsed, 'workspace') ?? env.OPENCTO_WORKSPACE ?? 'default'
   const tokenPathRaw = getFlag(parsed, 'token-path') ?? env.OPENCTO_TOKEN_PATH ?? '~/.opencto/tokens.json'
   const tokenOverride = getFlag(parsed, 'token') ?? env.OPENCTO_TOKEN
+  const workflowsFileRaw = getFlag(parsed, 'workflows-file') ?? env.OPENCTO_WORKFLOWS_FILE
 
   return {
     apiBaseUrl: stripSlash(apiBaseUrl),
@@ -24,6 +26,7 @@ export function resolveConfig(parsed: ParsedArgs, env: NodeJS.ProcessEnv = proce
     workspaceKey,
     tokenPath: expandHome(tokenPathRaw),
     tokenOverride,
+    workflowsFile: workflowsFileRaw ? expandHome(workflowsFileRaw) : undefined,
   }
 }
 

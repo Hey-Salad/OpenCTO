@@ -38,8 +38,12 @@ const WORKFLOWS: WorkflowDefinition[] = [
   },
 ]
 
-export function listWorkflows(): WorkflowDefinition[] {
+export function listBuiltinWorkflows(): WorkflowDefinition[] {
   return [...WORKFLOWS]
+}
+
+export function listWorkflows(): WorkflowDefinition[] {
+  return listBuiltinWorkflows()
 }
 
 export function getWorkflow(id: string): WorkflowDefinition | null {

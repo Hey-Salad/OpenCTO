@@ -11,6 +11,7 @@ Commands:
 Global flags:
   --workspace <key>
   --token-path <path>
+  --workflows-file <path>
   --token <access_token>
   --help
 `
