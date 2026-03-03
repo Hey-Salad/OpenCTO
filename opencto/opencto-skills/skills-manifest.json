@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "generatedBy": "opencto-skills-bootstrap",
+  "skills": [
+    {
+      "id": "cto-playbook",
+      "name": "CTO & Engineering Excellence Playbook",
+      "path": "opencto/opencto-skills/cto-playbook/SKILL.md",
+      "description": "CTO-grade guardrails for architecture, engineering quality, delivery, and agent security.",
+      "category": "engineering-leadership",
+      "required_env": [],
+      "safety": {
+        "scan_required": true,
+        "scan_command": "uvx snyk-agent-scan@latest --skills opencto/opencto-skills/cto-playbook/SKILL.md"
+      },
+      "compatibility": {
+        "codex": true,
+        "openclaw": true
+      },
+      "recommended_commands": [
+        "npm run lint",
+        "npm run test",
+        "npm run build"
+      ]
+    }
+  ]
+}
