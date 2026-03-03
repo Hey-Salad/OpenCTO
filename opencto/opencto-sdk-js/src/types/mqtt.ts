@@ -73,4 +73,12 @@ export interface MqttTransportOptions {
   password?: string
   token?: string
   topicPrefix?: string
+  dedupe?: MqttTransportDedupeOptions
+}
+
+export interface MqttTransportDedupeOptions {
+  enabled?: boolean
+  ttlMs?: number
+  maxEntries?: number
+  now?: () => number
 }

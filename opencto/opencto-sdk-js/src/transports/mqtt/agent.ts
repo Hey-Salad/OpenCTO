@@ -10,6 +10,7 @@ import type {
   MqttRunEventPayload,
 } from '../../types/mqtt'
 import { createMqttWireClient, type MqttWireClient } from './client'
+import { createMqttEnvelopeDedupe } from './dedupe'
 import { createEnvelope, isEnvelopeType, parseEnvelope } from './protocol'
 import {
   topicTasksAssigned,
@@ -44,6 +45,9 @@ export function createMqttAgentTransport(
   })
 
   let taskHandler: ((envelope: MqttEnvelope<MqttTaskNewPayload>) => void) | null = null
+  const dedupe = options.dedupe?.enabled === false
+    ? null
+    : createMqttEnvelopeDedupe(options.dedupe)
 
   async function publishEnvelope(topic: string, envelope: MqttEnvelope): Promise<void> {
     await client.publish(topic, JSON.stringify(envelope))
@@ -62,6 +66,7 @@ export function createMqttAgentTransport(
         }
 
         if (isEnvelopeType(envelope, 'tasks.new')) {
+          if (dedupe?.seen(envelope)) return
           taskHandler?.(envelope)
         }
       })

@@ -9,6 +9,7 @@ import type {
   MqttTransportOptions,
 } from '../../types/mqtt'
 import { createMqttWireClient, type MqttWireClient } from './client'
+import { createMqttEnvelopeDedupe } from './dedupe'
 import {
   createEnvelope,
   isEnvelopeType,
@@ -48,6 +49,9 @@ export function createMqttOrchestratorTransport(
   let onComplete: ((envelope: MqttEnvelope<MqttTaskCompletePayload>) => void) | null = null
   let onFailed: ((envelope: MqttEnvelope<MqttTaskFailedPayload>) => void) | null = null
   let onHeartbeat: ((envelope: MqttEnvelope<MqttAgentHeartbeatPayload>) => void) | null = null
+  const dedupe = options.dedupe?.enabled === false
+    ? null
+    : createMqttEnvelopeDedupe(options.dedupe)
 
   return {
     async start() {
@@ -66,6 +70,7 @@ export function createMqttOrchestratorTransport(
         } catch {
           return
         }
+        if (dedupe?.seen(envelope)) return
 
         if (isEnvelopeType(envelope, 'tasks.assigned')) onAssigned?.(envelope)
         if (isEnvelopeType(envelope, 'tasks.complete')) onComplete?.(envelope)
