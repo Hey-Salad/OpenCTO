@@ -14,6 +14,8 @@ npm install -g @heysalad/opencto-cli
 opencto login --workspace ws_demo
 opencto run --workspace ws_demo --repo-url https://github.com/org/repo --command "npm test" --wait
 opencto agent start --workspace ws_demo --agent-id agent_01 --broker-url mqtt://localhost:1883
+opencto workflow list
+opencto workflow run engineering-ci --workspace ws_demo --repo-url https://github.com/org/repo --wait
 ```
 
 ## Environment

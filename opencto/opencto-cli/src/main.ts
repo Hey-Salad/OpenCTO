@@ -3,6 +3,8 @@ import { resolveConfig } from './config'
 import { handleAgentStart } from './commands/agentStart'
 import { handleLogin } from './commands/login'
 import { handleRun } from './commands/run'
+import { handleWorkflowList } from './commands/workflowList'
+import { handleWorkflowRun } from './commands/workflowRun'
 import { USAGE } from './usage'
 
 export async function runCli(argv: string[]): Promise<void> {
@@ -27,6 +29,16 @@ export async function runCli(argv: string[]): Promise<void> {
 
   if (parsed.command[0] === 'agent' && parsed.command[1] === 'start') {
     await handleAgentStart(parsed, config)
+    return
+  }
+
+  if (parsed.command[0] === 'workflow' && parsed.command[1] === 'list') {
+    await handleWorkflowList()
+    return
+  }
+
+  if (parsed.command[0] === 'workflow' && parsed.command[1] === 'run') {
+    await handleWorkflowRun(parsed, config)
     return
   }
 
