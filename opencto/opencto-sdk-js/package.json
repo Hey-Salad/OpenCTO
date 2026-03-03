@@ -1,0 +1,47 @@
+{
+  "name": "@heysalad/opencto",
+  "version": "0.1.0",
+  "description": "OpenCTO JavaScript SDK for auth, chats, runs, and realtime token APIs.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hey-Salad/CTO-AI.git",
+    "directory": "opencto/opencto-sdk-js"
+  },
+  "keywords": [
+    "opencto",
+    "heysalad",
+    "sdk",
+    "api-client"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run clean && npm run lint && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
