@@ -9,12 +9,13 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
     "build": "expo export --platform ios --output-dir dist",
     "test": "vitest run"
   },
   "dependencies": {
     "@expo-google-fonts/grandstander": "^0.4.1",
-    "@react-navigation/native": "^7.1.28",
+    "@react-navigation/native": "^7.1.8",
     "expo": "~54.0.0",
     "expo-av": "^16.0.8",
     "expo-constants": "~18.0.13",
