@@ -811,6 +811,10 @@ function normalizeInfobipBaseUrl(env: Env) {
   return (env.OPENCTO_INFOBIP_BASE_URL || "").replace(/\/+$/, "");
 }
 
+function normalizeInfobipAddress(value: string) {
+  return value.replace(/[^\d]/g, "");
+}
+
 function parseInfobipText(result: Record<string, unknown>) {
   if (typeof result.text === "string" && result.text.trim()) return result.text.trim();
   const content = result.content as Record<string, unknown> | undefined;
@@ -861,7 +865,7 @@ async function sendInfobipMessage(
   to: string,
   text: string,
 ) {
-  const destination = to.startsWith("+") ? to : `+${to}`;
+  const destination = normalizeInfobipAddress(to);
   const baseUrl = normalizeInfobipBaseUrl(env);
   const headers = {
     Authorization: `App ${env.OPENCTO_INFOBIP_API_KEY || ""}`,
@@ -870,11 +874,12 @@ async function sendInfobipMessage(
   };
 
   if (channel === "whatsapp") {
+    const from = normalizeInfobipAddress(env.OPENCTO_INFOBIP_WHATSAPP_FROM || "");
     const response = await fetch(`${baseUrl}/whatsapp/1/message/text`, {
       method: "POST",
       headers,
       body: JSON.stringify({
-        from: env.OPENCTO_INFOBIP_WHATSAPP_FROM,
+        from,
         to: destination,
         content: { text: text.slice(0, 4096) },
       }),
@@ -894,7 +899,7 @@ async function sendInfobipMessage(
     body: JSON.stringify({
       messages: [
         {
-          from: env.OPENCTO_INFOBIP_SMS_FROM,
+          from: normalizeInfobipAddress(env.OPENCTO_INFOBIP_SMS_FROM || ""),
           destinations: [{ to: destination }],
           text: text.slice(0, 1530),
         },
