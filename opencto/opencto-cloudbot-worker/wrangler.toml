@@ -6,7 +6,13 @@ account_id = "67a17ada4efeee4480283035cc0c5f90"
 [vars]
 OPENCTO_AGENT_MODEL = "gpt-4.1-mini"
 OPENCTO_APPROVAL_REQUIRED = "true"
+OPENCTO_VECTOR_RAG_ENABLED = "true"
+OPENCTO_EMBED_MODEL = "text-embedding-3-small"
 
 [[kv_namespaces]]
 binding = "OPENCTO_KV"
 id = "f19afd3b1d954361ab56e2fb9eda21be"
+
+[[vectorize]]
+binding = "OPENCTO_VECTOR_INDEX"
+index_name = "opencto-memory-index"

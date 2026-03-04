@@ -6,10 +6,13 @@ interface Env {
   OPENCTO_SLACK_BOT_TOKEN?: string;
   OPENCTO_SLACK_SIGNING_SECRET?: string;
   OPENCTO_SLACK_ALLOWED_CHANNELS?: string;
+  OPENCTO_VECTOR_RAG_ENABLED?: string;
+  OPENCTO_EMBED_MODEL?: string;
   OPENCTO_AGENT_MODEL?: string;
   OPENCTO_APPROVAL_REQUIRED?: string;
   OPENCTO_ADMIN_TOKEN?: string;
   OPENCTO_KV: KVNamespace;
+  OPENCTO_VECTOR_INDEX?: VectorizeIndex;
 }
 
 type TelegramUpdate = {
@@ -50,6 +53,7 @@ const SESSION_LIMIT = 12;
 const MEMORY_LIMIT = 300;
 const TASK_LIMIT = 300;
 const DAY_ACTIVITY_LIMIT = 500;
+const VECTOR_TOP_K = 6;
 
 function tgSendUrl(token: string) {
   return `https://api.telegram.org/bot${token}/sendMessage`;
@@ -75,6 +79,7 @@ type MemoryItem = {
   source: string;
   createdAt: string;
 };
+type MemoryRetrievalItem = MemoryItem & { score?: number; retrieval: "lexical" | "semantic" };
 type MemoryIndexItem = {
   id: string;
   preview: string;
@@ -175,6 +180,30 @@ function makeId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}${rand}`;
 }
 
+function scopeToString(chatId: ChatScope) {
+  return String(chatId);
+}
+
+function scopeNamespace(chatId: ChatScope) {
+  const raw = scopeToString(chatId).replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `scope_${raw.slice(0, 48)}`;
+}
+
+function vectorEnabled(env: Env) {
+  const flag = (env.OPENCTO_VECTOR_RAG_ENABLED || "true").toLowerCase();
+  return flag !== "false" && Boolean(env.OPENCTO_VECTOR_INDEX);
+}
+
+async function embedText(env: Env, text: string) {
+  const model = env.OPENCTO_EMBED_MODEL || "text-embedding-3-small";
+  const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+  const res = await openai.embeddings.create({
+    model,
+    input: sanitizeText(text, 3000),
+  });
+  return res.data?.[0]?.embedding || [];
+}
+
 async function getJson<T>(env: Env, key: string, fallback: T): Promise<T> {
   const raw = await env.OPENCTO_KV.get(key);
   if (!raw) return fallback;
@@ -187,6 +216,35 @@ async function getJson<T>(env: Env, key: string, fallback: T): Promise<T> {
 
 async function putJson(env: Env, key: string, value: unknown) {
   await env.OPENCTO_KV.put(key, JSON.stringify(value));
+}
+
+async function upsertMemoryVector(
+  env: Env,
+  chatId: ChatScope,
+  item: MemoryItem,
+) {
+  if (!vectorEnabled(env)) return;
+  try {
+    const embedding = await embedText(env, item.text);
+    if (!embedding.length) return;
+    await env.OPENCTO_VECTOR_INDEX?.upsert([
+      {
+        id: `mem:${scopeToString(chatId)}:${item.id}`,
+        namespace: scopeNamespace(chatId),
+        values: embedding,
+        metadata: {
+          scope: scopeToString(chatId),
+          memoryId: item.id,
+          source: item.source,
+          tags: item.tags,
+          text: item.text.slice(0, 1500),
+          createdAt: item.createdAt,
+        },
+      },
+    ]);
+  } catch {
+    // Non-blocking: memory stays in KV even if vector indexing fails.
+  }
 }
 
 async function markSlackThreadActive(
@@ -232,6 +290,7 @@ async function addMemory(
     updatedAt: createdAt,
   });
   await putJson(env, memoryIndexKey(chatId), index.slice(-MEMORY_LIMIT));
+  await upsertMemoryVector(env, chatId, item);
   return item;
 }
 
@@ -351,15 +410,75 @@ async function retrieveMemories(env: Env, chatId: ChatScope, query: string) {
   return out;
 }
 
+async function retrieveSemanticMemories(
+  env: Env,
+  chatId: ChatScope,
+  query: string,
+): Promise<MemoryRetrievalItem[]> {
+  if (!vectorEnabled(env)) return [];
+  try {
+    const embedding = await embedText(env, query);
+    if (!embedding.length) return [];
+    const matches = await env.OPENCTO_VECTOR_INDEX?.query(embedding, {
+      namespace: scopeNamespace(chatId),
+      topK: VECTOR_TOP_K,
+      returnMetadata: "all",
+    });
+    const rows = matches?.matches || [];
+    return rows
+      .map((m) => {
+        const md = (m.metadata || {}) as Record<string, string | number | boolean | string[]>;
+        const text = typeof md.text === "string" ? md.text : "";
+        const memoryId = typeof md.memoryId === "string" ? md.memoryId : m.id;
+        const source = typeof md.source === "string" ? md.source : "semantic";
+        const createdAt = typeof md.createdAt === "string" ? md.createdAt : nowIso();
+        const tags = Array.isArray(md.tags)
+          ? md.tags.filter((x): x is string => typeof x === "string")
+          : [];
+        if (!text) return null;
+        return {
+          id: memoryId,
+          text,
+          tags,
+          source,
+          createdAt,
+          score: m.score,
+          retrieval: "semantic" as const,
+        };
+      })
+      .filter((x): x is MemoryRetrievalItem => Boolean(x));
+  } catch {
+    return [];
+  }
+}
+
+function mergeMemories(
+  lexical: MemoryItem[],
+  semantic: MemoryRetrievalItem[],
+): MemoryRetrievalItem[] {
+  const map = new Map<string, MemoryRetrievalItem>();
+  for (const m of semantic) {
+    map.set(m.id, m);
+  }
+  for (const m of lexical) {
+    if (!map.has(m.id)) {
+      map.set(m.id, { ...m, retrieval: "lexical" });
+    }
+  }
+  return Array.from(map.values()).slice(0, 6);
+}
+
 async function buildContext(env: Env, chatId: ChatScope, text: string) {
-  const memories = await retrieveMemories(env, chatId, text);
+  const lexicalMemories = await retrieveMemories(env, chatId, text);
+  const semanticMemories = await retrieveSemanticMemories(env, chatId, text);
+  const memories = mergeMemories(lexicalMemories, semanticMemories);
   const openTasks = await listTasks(env, chatId, "open");
   const today = await getDailyActivity(env, chatId, dayKey(), 12);
   const lines: string[] = [];
   if (memories.length) {
     lines.push("Relevant persistent memory:");
     for (const m of memories.slice(0, 4)) {
-      lines.push(`- [${m.id}] ${m.text.slice(0, 260)}`);
+      lines.push(`- [${m.id}] (${m.retrieval}) ${m.text.slice(0, 260)}`);
     }
   }
   if (openTasks.length) {
@@ -701,6 +820,9 @@ export default {
         slack_configured: Boolean(
           env.OPENCTO_SLACK_BOT_TOKEN && env.OPENCTO_SLACK_SIGNING_SECRET,
         ),
+        vector_rag_enabled: vectorEnabled(env),
+        vector_bound: Boolean(env.OPENCTO_VECTOR_INDEX),
+        embed_model: env.OPENCTO_EMBED_MODEL || "text-embedding-3-small",
       });
     }
 

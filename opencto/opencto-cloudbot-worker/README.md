@@ -2,6 +2,7 @@
 
 Cloudflare Worker that exposes a Telegram webhook and uses OpenAI Responses API.
 Now includes KV-backed persistent memory, task tracking, and daily activity logs with lightweight RAG retrieval.
+Optional semantic RAG is supported via OpenAI embeddings + Cloudflare Vectorize.
 
 ## Setup
 
@@ -22,19 +23,42 @@ wrangler secret put OPENCTO_SLACK_BOT_TOKEN
 wrangler secret put OPENCTO_SLACK_SIGNING_SECRET
 ```
 
-4. Deploy:
+4. (Optional) Enable semantic RAG with Vectorize:
+
+```bash
+# create index once (example dimensions for text-embedding-3-small)
+wrangler vectorize create opencto-memory-index --dimensions=1536 --metric=cosine
+```
+
+Add binding in `wrangler.toml`:
+
+```toml
+[[vectorize]]
+binding = "OPENCTO_VECTOR_INDEX"
+index_name = "opencto-memory-index"
+```
+
+Optional vars:
+
+```toml
+[vars]
+OPENCTO_VECTOR_RAG_ENABLED = "true"
+OPENCTO_EMBED_MODEL = "text-embedding-3-small"
+```
+
+5. Deploy:
 
 ```bash
 npm run deploy
 ```
 
-5. Set Telegram webhook:
+6. Set Telegram webhook:
 
 ```bash
 curl "https://api.telegram.org/bot<token>/setWebhook?url=https://<worker-domain>/webhook/telegram"
 ```
 
-6. Configure Slack Events API webhook:
+7. Configure Slack Events API webhook:
 
 - Request URL: `https://<worker-domain>/webhook/slack`
 - Subscribe to bot events:
@@ -81,5 +105,6 @@ If `OPENCTO_ADMIN_TOKEN` is set, send `x-opencto-admin-token` header on `/api/*`
 
 ## Notes
 
-- This is still intentionally lightweight (KV + lexical retrieval) so it stays fast and cheap.
-- For stronger RAG, add embeddings + vector index (Cloudflare Vectorize, pgvector, Pinecone).
+- KV lexical retrieval works out of the box.
+- If `OPENCTO_VECTOR_INDEX` is bound, memory writes are embedded and upserted to Vectorize.
+- Queries then combine semantic matches (`Vectorize`) + lexical matches (`KV`) for context.
