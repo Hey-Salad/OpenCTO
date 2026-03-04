@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenCTO System Monitor</title>
+    <style>
+      :root {
+        --bg: #0f1418;
+        --panel: #1a232c;
+        --text: #e9f1f8;
+        --muted: #8ea4b8;
+        --ok: #1eb980;
+        --warn: #f2a541;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        background: radial-gradient(circle at top right, #223445 0%, var(--bg) 50%);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .title {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .muted { color: var(--muted); }
+      .ok { color: var(--ok); }
+      .warn-text { color: var(--warn); }
+      .error-text { color: #ff6f7d; }
+      .grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .card {
+        background: color-mix(in oklab, var(--panel), #000 10%);
+        border: 1px solid #2a3845;
+        border-radius: 12px;
+        padding: 14px;
+      }
+      .kpi {
+        font-size: 1.6rem;
+        font-weight: 700;
+      }
+      .agent-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 10px;
+        border: 1px solid #2a3845;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        margin-bottom: 8px;
+      }
+      .pulse {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--warn);
+        box-shadow: 0 0 0 rgba(242, 165, 65, 0.5);
+        animation: pulse 1.8s infinite;
+      }
+      .pulse.live {
+        background: var(--ok);
+        box-shadow: 0 0 0 rgba(30, 185, 128, 0.45);
+      }
+      @keyframes pulse {
+        0% { transform: scale(0.9); box-shadow: 0 0 0 0; }
+        70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(30, 185, 128, 0); }
+        100% { transform: scale(0.9); box-shadow: 0 0 0 0; }
+      }
+      .bar {
+        margin-top: 8px;
+        height: 10px;
+        background: #10202e;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .bar > span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--ok), var(--warn));
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        text-align: left;
+        padding: 6px;
+        border-bottom: 1px solid #2a3845;
+        font-size: 0.92rem;
+      }
+      .list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .list li {
+        border-bottom: 1px solid #2a3845;
+        padding: 8px 0;
+      }
+      .list li:last-child { border-bottom: 0; }
+      .event-type {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      a {
+        color: #77b7ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="title">
+        <h1>OpenCTO Machine Monitor</h1>
+        <p class="muted" id="last-updated">Loading...</p>
+      </section>
+      <section class="grid">
+        <article class="card">
+          <div class="muted">Uptime</div>
+          <div class="kpi" id="uptime">-</div>
+        </article>
+        <article class="card">
+          <div class="muted">CPU (1m load)</div>
+          <div class="kpi" id="cpu-load">-</div>
+          <div class="bar"><span id="cpu-bar" style="width:0%"></span></div>
+        </article>
+        <article class="card">
+          <div class="muted">Memory Used</div>
+          <div class="kpi" id="mem-used">-</div>
+          <div class="bar"><span id="mem-bar" style="width:0%"></span></div>
+        </article>
+        <article class="card">
+          <div class="muted">Disk Used (/)</div>
+          <div class="kpi" id="disk-used">-</div>
+          <div class="bar"><span id="disk-bar" style="width:0%"></span></div>
+        </article>
+      </section>
+      <section class="card" style="margin-top:12px">
+        <h3>Host</h3>
+        <p id="host"></p>
+      </section>
+      <section class="card" style="margin-top:12px">
+        <h3>Orchestrator</h3>
+        <div class="agent-badge">
+          <span id="agent-pulse" class="pulse"></span>
+          <span id="agent-label">Agent waiting...</span>
+        </div>
+        <p id="orch-summary" class="muted">Loading...</p>
+        <table>
+          <tbody>
+            <tr><th>Mode</th><td id="orch-mode">-</td></tr>
+            <tr><th>Last Cycle</th><td id="orch-cycle">-</td></tr>
+            <tr><th>GitHub Target</th><td id="orch-github">-</td></tr>
+            <tr><th>Tracked Incidents</th><td id="orch-incidents">-</td></tr>
+            <tr><th>Pending Approvals</th><td id="orch-approvals">-</td></tr>
+            <tr><th>Telegram</th><td id="orch-telegram">-</td></tr>
+            <tr><th>Error</th><td id="orch-error">-</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="card" style="margin-top:12px">
+        <h3>Agent Activity</h3>
+        <ul id="agent-events" class="list">
+          <li class="muted">No activity yet.</li>
+        </ul>
+      </section>
+      <section class="card" style="margin-top:12px">
+        <h3>GitHub Incident Updates</h3>
+        <ul id="incident-updates" class="list">
+          <li class="muted">No incidents tracked yet.</li>
+        </ul>
+      </section>
+      <section class="card" style="margin-top:12px">
+        <h3>Top Processes by CPU</h3>
+        <table>
+          <thead>
+            <tr><th>PID</th><th>Name</th><th>CPU%</th><th>MEM%</th></tr>
+          </thead>
+          <tbody id="procs"></tbody>
+        </table>
+      </section>
+    </main>
+    <script>
+      function bytesToGiB(bytes) {
+        return (bytes / (1024 ** 3)).toFixed(2) + " GiB";
+      }
+      function formatDuration(sec) {
+        const s = Math.floor(sec);
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        return `${d}d ${h}h ${m}m`;
+      }
+      function text(id, value) { document.getElementById(id).textContent = value; }
+      function classForMode(mode) {
+        return mode === "LIVE" ? "ok" : "warn-text";
+      }
+      function heartbeatState(timestamp) {
+        if (!timestamp) return "stale";
+        const diffMs = Math.abs(Date.now() - new Date(timestamp).getTime());
+        return diffMs <= 90000 ? "live" : "stale";
+      }
+      function shortTime(ts) {
+        return new Date(ts).toLocaleTimeString();
+      }
+      function renderEvents(events) {
+        const root = document.getElementById("agent-events");
+        root.innerHTML = "";
+        if (!Array.isArray(events) || events.length === 0) {
+          root.innerHTML = '<li class="muted">No activity yet.</li>';
+          return;
+        }
+        events.slice(0, 8).forEach((event) => {
+          const li = document.createElement("li");
+          li.innerHTML = `
+            <div>${event.message || "Event"}</div>
+            <div class="event-type">${event.type || "unknown"} • ${shortTime(event.timestamp)}</div>
+          `;
+          root.appendChild(li);
+        });
+      }
+      function renderIncidents(incidents) {
+        const root = document.getElementById("incident-updates");
+        root.innerHTML = "";
+        if (!Array.isArray(incidents) || incidents.length === 0) {
+          root.innerHTML = '<li class="muted">No incidents tracked yet.</li>';
+          return;
+        }
+        incidents.slice(0, 8).forEach((incident) => {
+          const li = document.createElement("li");
+          const issue = incident.issueUrl
+            ? `<a href="${incident.issueUrl}" target="_blank" rel="noreferrer">#${incident.issueNumber}</a>`
+            : "No issue yet";
+          const priority = incident.lastPriority || "unknown";
+          const summary = incident.lastSummary || "-";
+          li.innerHTML = `
+            <div><strong>${incident.title || incident.key}</strong> • ${issue}</div>
+            <div class="event-type">Priority: ${priority} • Updates: ${incident.updates || 0}</div>
+            <div>${summary}</div>
+          `;
+          root.appendChild(li);
+        });
+      }
+      async function refresh() {
+        const [metricsRes, orchestratorRes] = await Promise.all([
+          fetch("/api/metrics", { cache: "no-store" }),
+          fetch("/api/orchestrator", { cache: "no-store" }),
+        ]);
+        const m = await metricsRes.json();
+        const o = await orchestratorRes.json();
+        text("last-updated", `Updated ${new Date(m.timestamp).toLocaleTimeString()}`);
+        text("uptime", formatDuration(m.uptime_seconds));
+        text("cpu-load", `${m.cpu.load_1m} / ${m.cpu.cores} cores`);
+        document.getElementById("cpu-bar").style.width = `${m.cpu.load_pct_1m}%`;
+        text("mem-used", `${m.memory.used_pct}% (${bytesToGiB(m.memory.used_bytes)})`);
+        document.getElementById("mem-bar").style.width = `${m.memory.used_pct}%`;
+        text("disk-used", `${m.disk.used_pct}% (${bytesToGiB(m.disk.used_bytes)})`);
+        document.getElementById("disk-bar").style.width = `${m.disk.used_pct}%`;
+        text("host", `${m.host.hostname} • ${m.host.platform} • kernel ${m.host.kernel} • py ${m.host.python}`);
+        const tbody = document.getElementById("procs");
+        tbody.innerHTML = "";
+        for (const p of m.top_processes) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${p.pid}</td><td>${p.name}</td><td>${p.cpu.toFixed(1)}</td><td>${p.mem.toFixed(1)}</td>`;
+          tbody.appendChild(tr);
+        }
+
+        const mode = o.available ? (o.dryRun ? "DRY_RUN" : "LIVE") : "UNAVAILABLE";
+        text("orch-summary", o.available ? `Status timestamp: ${new Date(o.timestamp).toLocaleTimeString()}` : "Orchestrator status unavailable");
+        text("orch-mode", mode);
+        text("orch-cycle", o.lastCycle || "unknown");
+        text("orch-github", o.githubTarget || "unknown");
+        text("orch-incidents", `${o.incidentsTracked ?? 0}`);
+        text("orch-approvals", `${o.pendingApprovals ?? 0}`);
+        text(
+          "orch-telegram",
+          o.telegram?.enabled
+            ? o.telegram?.configured
+              ? `Enabled (${o.telegram.chatCount} chat target(s), bot ${o.telegram.botMode ? "on" : "off"})`
+              : "Enabled but not fully configured"
+            : "Disabled"
+        );
+        text("orch-error", o.error || "-");
+
+        const modeEl = document.getElementById("orch-mode");
+        modeEl.className = classForMode(mode);
+        const pulseEl = document.getElementById("agent-pulse");
+        const labelEl = document.getElementById("agent-label");
+        const heartbeat = heartbeatState(o.timestamp);
+        pulseEl.classList.toggle("live", heartbeat === "live" && o.lastCycle === "ok");
+        labelEl.textContent =
+          heartbeat === "live"
+            ? `Agent ${mode === "LIVE" ? "active" : "in dry-run"}`
+            : "Agent stale";
+        labelEl.className = heartbeat === "live" ? "ok" : "warn-text";
+        if (o.error) {
+          labelEl.textContent = "Agent error state";
+          labelEl.className = "error-text";
+        }
+        renderEvents(o.events || []);
+        renderIncidents(o.incidents || []);
+      }
+      refresh().catch(console.error);
+      setInterval(() => refresh().catch(console.error), 3000);
+    </script>
+  </body>
+</html>
