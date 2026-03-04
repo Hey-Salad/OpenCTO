@@ -21,6 +21,8 @@ wrangler secret put OPENAI_API_KEY
 wrangler secret put TELEGRAM_BOT_TOKEN
 wrangler secret put OPENCTO_SLACK_BOT_TOKEN
 wrangler secret put OPENCTO_SLACK_SIGNING_SECRET
+wrangler secret put OPENCTO_INFOBIP_API_KEY
+wrangler secret put OPENCTO_INFOBIP_WEBHOOK_TOKEN
 ```
 
 4. (Optional) Enable semantic RAG with Vectorize:
@@ -44,6 +46,15 @@ Optional vars:
 [vars]
 OPENCTO_VECTOR_RAG_ENABLED = "true"
 OPENCTO_EMBED_MODEL = "text-embedding-3-small"
+```
+
+Infobip vars (`wrangler.toml`):
+
+```toml
+[vars]
+OPENCTO_INFOBIP_BASE_URL = "https://<your-subdomain>.api.infobip.com"
+OPENCTO_INFOBIP_WHATSAPP_FROM = "<approved_whatsapp_sender>"
+OPENCTO_INFOBIP_SMS_FROM = "<sms_sender_id>"
 ```
 
 5. Deploy:
@@ -74,6 +85,17 @@ Optional `wrangler.toml` vars:
 [vars]
 OPENCTO_SLACK_ALLOWED_CHANNELS = "C12345,C67890"
 ```
+
+8. Configure Infobip webhooks:
+
+- WhatsApp inbound URL:
+  - `https://<worker-domain>/webhook/infobip/whatsapp?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
+- SMS inbound URL:
+  - `https://<worker-domain>/webhook/infobip/sms?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
+
+Supported channels in this phase:
+- WhatsApp text
+- SMS text
 
 ## Telegram Commands
 
@@ -108,3 +130,6 @@ If `OPENCTO_ADMIN_TOKEN` is set, send `x-opencto-admin-token` header on `/api/*`
 - KV lexical retrieval works out of the box.
 - If `OPENCTO_VECTOR_INDEX` is bound, memory writes are embedded and upserted to Vectorize.
 - Queries then combine semantic matches (`Vectorize`) + lexical matches (`KV`) for context.
+- Infobip replies are sent through:
+  - WhatsApp: `/whatsapp/1/message/text`
+  - SMS: `/sms/2/text/advanced`

@@ -6,6 +6,11 @@ interface Env {
   OPENCTO_SLACK_BOT_TOKEN?: string;
   OPENCTO_SLACK_SIGNING_SECRET?: string;
   OPENCTO_SLACK_ALLOWED_CHANNELS?: string;
+  OPENCTO_INFOBIP_BASE_URL?: string;
+  OPENCTO_INFOBIP_API_KEY?: string;
+  OPENCTO_INFOBIP_WHATSAPP_FROM?: string;
+  OPENCTO_INFOBIP_SMS_FROM?: string;
+  OPENCTO_INFOBIP_WEBHOOK_TOKEN?: string;
   OPENCTO_VECTOR_RAG_ENABLED?: string;
   OPENCTO_EMBED_MODEL?: string;
   OPENCTO_AGENT_MODEL?: string;
@@ -40,6 +45,13 @@ type SlackEventEnvelope = {
     bot_id?: string;
     subtype?: string;
   };
+};
+
+type InfobipInboundMessage = {
+  from: string;
+  to?: string;
+  text: string;
+  messageId?: string;
 };
 
 const SYSTEM_PROMPT = [
@@ -573,6 +585,10 @@ function unauthorized() {
   return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
 }
 
+function forbidden(message: string) {
+  return Response.json({ ok: false, error: message }, { status: 403 });
+}
+
 function adminAuthorized(request: Request, env: Env) {
   if (!env.OPENCTO_ADMIN_TOKEN) return true;
   const got = request.headers.get("x-opencto-admin-token") || "";
@@ -647,6 +663,132 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate): Promise<R
   const answer = await generateAssistantReply(env, chatId, text);
   await sendTelegram(env, chatId, answer);
   await addActivity(env, chatId, "telegram.bot", answer.slice(0, 300));
+
+  return new Response("ok", { status: 200 });
+}
+
+function infobipConfigured(env: Env, channel: "whatsapp" | "sms") {
+  if (!env.OPENCTO_INFOBIP_BASE_URL || !env.OPENCTO_INFOBIP_API_KEY) return false;
+  if (channel === "whatsapp") return Boolean(env.OPENCTO_INFOBIP_WHATSAPP_FROM);
+  return Boolean(env.OPENCTO_INFOBIP_SMS_FROM);
+}
+
+function normalizeInfobipBaseUrl(env: Env) {
+  return (env.OPENCTO_INFOBIP_BASE_URL || "").replace(/\/+$/, "");
+}
+
+function parseInfobipText(result: Record<string, unknown>) {
+  if (typeof result.text === "string" && result.text.trim()) return result.text.trim();
+  const content = result.content as Record<string, unknown> | undefined;
+  if (content && typeof content.text === "string" && content.text.trim()) {
+    return content.text.trim();
+  }
+  const message = result.message as Record<string, unknown> | undefined;
+  if (message && typeof message.text === "string" && message.text.trim()) {
+    return message.text.trim();
+  }
+  return "";
+}
+
+function extractInfobipMessages(body: unknown): InfobipInboundMessage[] {
+  if (!body || typeof body !== "object") return [];
+  const payload = body as Record<string, unknown>;
+  const candidates = [
+    ...(Array.isArray(payload.results) ? payload.results : []),
+    ...(Array.isArray(payload.messages) ? payload.messages : []),
+  ];
+
+  return candidates
+    .map((raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const result = raw as Record<string, unknown>;
+      const from = typeof result.from === "string" ? result.from : "";
+      const to = typeof result.to === "string" ? result.to : undefined;
+      const text = parseInfobipText(result);
+      const messageId = typeof result.messageId === "string" ? result.messageId : undefined;
+      if (!from || !text) return null;
+      return { from, to, text, messageId };
+    })
+    .filter((x): x is InfobipInboundMessage => Boolean(x));
+}
+
+function infobipWebhookAuthorized(request: Request, env: Env) {
+  const expected = (env.OPENCTO_INFOBIP_WEBHOOK_TOKEN || "").trim();
+  if (!expected) return true;
+  const gotHeader = (request.headers.get("x-opencto-infobip-token") || "").trim();
+  if (gotHeader && gotHeader === expected) return true;
+  const token = new URL(request.url).searchParams.get("token") || "";
+  return token.trim() === expected;
+}
+
+async function sendInfobipMessage(
+  env: Env,
+  channel: "whatsapp" | "sms",
+  to: string,
+  text: string,
+) {
+  const baseUrl = normalizeInfobipBaseUrl(env);
+  const headers = {
+    Authorization: `App ${env.OPENCTO_INFOBIP_API_KEY || ""}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  if (channel === "whatsapp") {
+    await fetch(`${baseUrl}/whatsapp/1/message/text`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        from: env.OPENCTO_INFOBIP_WHATSAPP_FROM,
+        to,
+        content: { text: text.slice(0, 4096) },
+      }),
+    });
+    return;
+  }
+
+  await fetch(`${baseUrl}/sms/2/text/advanced`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      messages: [
+        {
+          from: env.OPENCTO_INFOBIP_SMS_FROM,
+          destinations: [{ to }],
+          text: text.slice(0, 1530),
+        },
+      ],
+    }),
+  });
+}
+
+async function handleInfobipWebhook(
+  request: Request,
+  env: Env,
+  channel: "whatsapp" | "sms",
+): Promise<Response> {
+  if (!infobipConfigured(env, channel)) {
+    return Response.json(
+      { ok: false, error: `infobip ${channel} not configured` },
+      { status: 503 },
+    );
+  }
+  if (!infobipWebhookAuthorized(request, env)) {
+    return forbidden("invalid infobip webhook token");
+  }
+
+  const payload = (await request.json()) as unknown;
+  const messages = extractInfobipMessages(payload);
+  if (!messages.length) return new Response("ok", { status: 200 });
+
+  for (const msg of messages) {
+    const scope = `infobip:${channel}:${msg.from}`;
+    await addActivity(env, scope, `infobip.${channel}.user`, msg.text.slice(0, 300));
+    const commandReply = isCommand(msg.text) ? await handleCommand(env, scope, msg.text) : null;
+    const answer = commandReply || (await generateAssistantReply(env, scope, msg.text));
+    await sendInfobipMessage(env, channel, msg.from, answer);
+    await addActivity(env, scope, `infobip.${channel}.bot`, answer.slice(0, 300));
+  }
 
   return new Response("ok", { status: 200 });
 }
@@ -823,6 +965,8 @@ export default {
         vector_rag_enabled: vectorEnabled(env),
         vector_bound: Boolean(env.OPENCTO_VECTOR_INDEX),
         embed_model: env.OPENCTO_EMBED_MODEL || "text-embedding-3-small",
+        infobip_whatsapp_configured: infobipConfigured(env, "whatsapp"),
+        infobip_sms_configured: infobipConfigured(env, "sms"),
       });
     }
 
@@ -832,6 +976,12 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/webhook/slack") {
       return handleSlackWebhook(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/webhook/infobip/whatsapp") {
+      return handleInfobipWebhook(request, env, "whatsapp");
+    }
+    if (request.method === "POST" && url.pathname === "/webhook/infobip/sms") {
+      return handleInfobipWebhook(request, env, "sms");
     }
 
     if (url.pathname.startsWith("/api/")) {
