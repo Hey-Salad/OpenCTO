@@ -44,9 +44,20 @@ npm run test
 ## iOS Build and Submit
 ```bash
 eas login
+# Physical iPhone internal build (device install)
+eas device:create
+eas build --platform ios --profile development
+
+# TestFlight/App Store build
 eas build --platform ios --profile production
 eas submit --platform ios --profile production
 ```
+
+If you see "This app cannot be installed because its integrity could not be verified":
+- Verify you installed a device build profile (`development`, `preview`, or `production`).
+- Re-register the device with `eas device:create` and rebuild.
+- Delete old copies of the app before reinstalling.
+- Use TestFlight for production distribution to avoid ad-hoc trust/provisioning issues.
 
 ## Security
 - Auth tokens stored with `expo-secure-store`
