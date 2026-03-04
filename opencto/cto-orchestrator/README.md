@@ -80,6 +80,9 @@ curl "https://api.telegram.org/bot<token>/getUpdates"
   - bot queues approval and returns an `approval_id`
   - user must run `/approve <approval_id>` or `/deny <approval_id>`
 
+Default is approval-gated (`OPENCTO_REQUIRE_APPROVALS=true`).
+Set `OPENCTO_REQUIRE_APPROVALS=false` only if you explicitly want full-autonomous execution mode.
+
 ## Autonomous governance loop
 
 The orchestrator can run a continuous GitHub governance cycle:
@@ -97,7 +100,7 @@ OPENCTO_AUTONOMY_CYCLE_SECONDS=300
 OPENCTO_AUTONOMY_ROADMAP_PATH=/home/hs-chilu/heysalad-ai-projects/CTO-AI/docs/opencto/IOS_APP_ROADMAP.md
 OPENCTO_AUTONOMY_MAX_ISSUE_COMMENTS=3
 OPENCTO_AUTONOMY_MAX_PR_REVIEWS=3
-OPENCTO_AUTONOMY_AUTO_MERGE=true
+OPENCTO_AUTONOMY_AUTO_MERGE=false
 OPENCTO_AUTONOMY_MERGE_LABEL=auto-merge
 ```
 

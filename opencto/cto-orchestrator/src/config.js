@@ -44,6 +44,7 @@ export function loadConfig() {
     telegramBotMode: optionalBool("OPENCTO_TELEGRAM_BOT_MODE", true),
     telegramPollSeconds: optionalInt("OPENCTO_TELEGRAM_POLL_SECONDS", 3),
     agentModel: process.env.OPENCTO_AGENT_MODEL || process.env.OPENCTO_OPENAI_MODEL || "gpt-4.1-mini",
+    requireApprovals: optionalBool("OPENCTO_REQUIRE_APPROVALS", true),
     autonomyEnabled: optionalBool("OPENCTO_AUTONOMY_ENABLED", true),
     autonomyCycleSeconds: optionalInt("OPENCTO_AUTONOMY_CYCLE_SECONDS", 300),
     autonomyRoadmapPath:
@@ -51,7 +52,7 @@ export function loadConfig() {
       "/home/hs-chilu/heysalad-ai-projects/CTO-AI/docs/opencto/IOS_APP_ROADMAP.md",
     autonomyMaxIssueCommentsPerCycle: optionalInt("OPENCTO_AUTONOMY_MAX_ISSUE_COMMENTS", 3),
     autonomyMaxPrReviewsPerCycle: optionalInt("OPENCTO_AUTONOMY_MAX_PR_REVIEWS", 3),
-    autonomyAutoMerge: optionalBool("OPENCTO_AUTONOMY_AUTO_MERGE", true),
+    autonomyAutoMerge: optionalBool("OPENCTO_AUTONOMY_AUTO_MERGE", false),
     autonomyMergeLabel: process.env.OPENCTO_AUTONOMY_MERGE_LABEL || "auto-merge",
     statusPath:
       process.env.OPENCTO_STATUS_PATH ||
