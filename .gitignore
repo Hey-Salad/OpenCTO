@@ -60,3 +60,6 @@ Thumbs.db
 .env
 .env.*
 \!.env.example
+
+# Agent local settings (may contain local tokens/permissions)
+**/.claude/settings.local.json
