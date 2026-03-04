@@ -53,16 +53,13 @@ eas login
 eas device:create
 eas build --platform ios --profile development
 
-# Simulator-only build (cannot be installed on iPhone)
-eas build --platform ios --profile development-simulator
-
 # TestFlight/App Store build
 eas build --platform ios --profile production
 eas submit --platform ios --profile production
 ```
 
 If you see "This app cannot be installed because its integrity could not be verified":
-- Verify you installed a device build profile (`development`, `preview`, or `production`) not a simulator profile.
+- Verify you installed a device build profile (`development`, `preview`, or `production`).
 - Re-register the device with `eas device:create` and rebuild.
 - Delete old copies of the app before reinstalling.
 - Use TestFlight for production distribution to avoid ad-hoc trust/provisioning issues.
