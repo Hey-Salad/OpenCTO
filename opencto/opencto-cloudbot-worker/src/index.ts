@@ -16,6 +16,9 @@ interface Env {
   OPENCTO_AGENT_MODEL?: string;
   OPENCTO_APPROVAL_REQUIRED?: string;
   OPENCTO_ADMIN_TOKEN?: string;
+  OPENCTO_ANYWAY_ENABLED?: string;
+  OPENCTO_ANYWAY_API_KEY?: string;
+  OPENCTO_ANYWAY_ENDPOINT?: string;
   OPENCTO_KV: KVNamespace;
   OPENCTO_VECTOR_INDEX?: VectorizeIndex;
 }
@@ -66,6 +69,88 @@ const MEMORY_LIMIT = 300;
 const TASK_LIMIT = 300;
 const DAY_ACTIVITY_LIMIT = 500;
 const VECTOR_TOP_K = 6;
+const ANYWAY_INGEST_DEFAULT = "https://api.anyway.sh/v1/ingest";
+
+type AnywaySpanStatus = {
+  code: "OK" | "ERROR";
+  message?: string;
+};
+
+type AnywaySpan = {
+  span_id: string;
+  parent_span_id?: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  attributes?: Record<string, unknown>;
+  status?: AnywaySpanStatus;
+};
+
+function randomHex(length: number) {
+  const bytes = new Uint8Array(Math.ceil(length / 2));
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, length);
+}
+
+function anywayEnabled(env: Env) {
+  const flag = (env.OPENCTO_ANYWAY_ENABLED || "").toLowerCase();
+  return flag === "true" && Boolean(env.OPENCTO_ANYWAY_API_KEY);
+}
+
+class AnywayTraceBuffer {
+  private traceId: string;
+  private spans: AnywaySpan[] = [];
+  private enabled: boolean;
+
+  constructor(private env: Env) {
+    this.traceId = randomHex(32);
+    this.enabled = anywayEnabled(env);
+  }
+
+  start(name: string, attributes?: Record<string, unknown>) {
+    const spanId = randomHex(16);
+    const start = nowIso();
+    return {
+      spanId,
+      end: (result?: {
+        status?: AnywaySpanStatus;
+        attributes?: Record<string, unknown>;
+        parentSpanId?: string;
+      }) => {
+        this.spans.push({
+          span_id: spanId,
+          parent_span_id: result?.parentSpanId,
+          name,
+          start_time: start,
+          end_time: nowIso(),
+          attributes: { ...(attributes || {}), ...(result?.attributes || {}) },
+          status: result?.status || { code: "OK" },
+        });
+      },
+    };
+  }
+
+  async flush() {
+    if (!this.enabled || !this.spans.length || !this.env.OPENCTO_ANYWAY_API_KEY) return;
+    const endpoint = this.env.OPENCTO_ANYWAY_ENDPOINT || ANYWAY_INGEST_DEFAULT;
+    const traces = [{ trace_id: this.traceId, spans: this.spans }];
+    try {
+      await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.env.OPENCTO_ANYWAY_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ traces, metrics: [] }),
+      });
+    } catch {
+      // Fail open: telemetry must not affect bot behavior.
+    }
+  }
+}
 
 function tgSendUrl(token: string) {
   return `https://api.telegram.org/bot${token}/sendMessage`;
@@ -405,9 +490,20 @@ function overlapScore(a: Set<string>, b: Set<string>) {
   return count;
 }
 
-async function retrieveMemories(env: Env, chatId: ChatScope, query: string) {
+async function retrieveMemories(
+  env: Env,
+  chatId: ChatScope,
+  query: string,
+  trace?: AnywayTraceBuffer,
+) {
+  const span = trace?.start("rag.retrieve.lexical", {
+    "chat.scope": scopeToString(chatId),
+  });
   const index = await getJson<MemoryIndexItem[]>(env, memoryIndexKey(chatId), []);
-  if (!index.length) return [];
+  if (!index.length) {
+    span?.end({ attributes: { "rag.lexical.count": 0 } });
+    return [];
+  }
   const q = tokenSet(query);
   const ranked = index
     .map((m) => ({ ...m, score: overlapScore(q, tokenSet(`${m.preview} ${m.tags.join(" ")}`)) }))
@@ -419,6 +515,7 @@ async function retrieveMemories(env: Env, chatId: ChatScope, query: string) {
     const item = await getJson<MemoryItem | null>(env, memoryItemKey(chatId, m.id), null);
     if (item) out.push(item);
   }
+  span?.end({ attributes: { "rag.lexical.count": out.length } });
   return out;
 }
 
@@ -426,18 +523,29 @@ async function retrieveSemanticMemories(
   env: Env,
   chatId: ChatScope,
   query: string,
+  trace?: AnywayTraceBuffer,
 ): Promise<MemoryRetrievalItem[]> {
-  if (!vectorEnabled(env)) return [];
+  const span = trace?.start("rag.retrieve.semantic", {
+    "chat.scope": scopeToString(chatId),
+    "rag.vector.enabled": vectorEnabled(env),
+  });
+  if (!vectorEnabled(env)) {
+    span?.end({ attributes: { "rag.semantic.count": 0 } });
+    return [];
+  }
   try {
     const embedding = await embedText(env, query);
-    if (!embedding.length) return [];
+    if (!embedding.length) {
+      span?.end({ attributes: { "rag.semantic.count": 0 } });
+      return [];
+    }
     const matches = await env.OPENCTO_VECTOR_INDEX?.query(embedding, {
       namespace: scopeNamespace(chatId),
       topK: VECTOR_TOP_K,
       returnMetadata: "all",
     });
     const rows = matches?.matches || [];
-    return rows
+    const result = rows
       .map((m) => {
         const md = (m.metadata || {}) as Record<string, string | number | boolean | string[]>;
         const text = typeof md.text === "string" ? md.text : "";
@@ -459,7 +567,10 @@ async function retrieveSemanticMemories(
         };
       })
       .filter((x): x is MemoryRetrievalItem => Boolean(x));
+    span?.end({ attributes: { "rag.semantic.count": result.length } });
+    return result;
   } catch {
+    span?.end({ status: { code: "ERROR", message: "semantic retrieval failed" } });
     return [];
   }
 }
@@ -480,9 +591,14 @@ function mergeMemories(
   return Array.from(map.values()).slice(0, 6);
 }
 
-async function buildContext(env: Env, chatId: ChatScope, text: string) {
-  const lexicalMemories = await retrieveMemories(env, chatId, text);
-  const semanticMemories = await retrieveSemanticMemories(env, chatId, text);
+async function buildContext(
+  env: Env,
+  chatId: ChatScope,
+  text: string,
+  trace?: AnywayTraceBuffer,
+) {
+  const lexicalMemories = await retrieveMemories(env, chatId, text, trace);
+  const semanticMemories = await retrieveSemanticMemories(env, chatId, text, trace);
   const memories = mergeMemories(lexicalMemories, semanticMemories);
   const openTasks = await listTasks(env, chatId, "open");
   const today = await getDailyActivity(env, chatId, dayKey(), 12);
@@ -644,10 +760,16 @@ async function handleApi(request: Request, env: Env, url: URL) {
   return new Response("Not Found", { status: 404 });
 }
 
-async function handleTelegramUpdate(env: Env, update: TelegramUpdate): Promise<Response> {
+async function handleTelegramUpdate(
+  env: Env,
+  update: TelegramUpdate,
+  trace?: AnywayTraceBuffer,
+): Promise<Response> {
+  const root = trace?.start("telegram.webhook.handle");
   const chatId = update.message?.chat?.id;
   const text = update.message?.text?.trim();
   if (!chatId || !text) {
+    root?.end({ attributes: { "telegram.empty": true } });
     return new Response("ok", { status: 200 });
   }
 
@@ -657,12 +779,24 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate): Promise<R
   if (commandReply) {
     await sendTelegram(env, chatId, commandReply);
     await addActivity(env, chatId, "telegram.bot", commandReply.slice(0, 300));
+    root?.end({
+      attributes: {
+        "chat.scope": scopeToString(chatId),
+        "telegram.command": true,
+      },
+    });
     return new Response("ok", { status: 200 });
   }
 
-  const answer = await generateAssistantReply(env, chatId, text);
+  const answer = await generateAssistantReply(env, chatId, text, trace);
   await sendTelegram(env, chatId, answer);
   await addActivity(env, chatId, "telegram.bot", answer.slice(0, 300));
+  root?.end({
+    attributes: {
+      "chat.scope": scopeToString(chatId),
+      "telegram.command": false,
+    },
+  });
 
   return new Response("ok", { status: 200 });
 }
@@ -727,6 +861,7 @@ async function sendInfobipMessage(
   to: string,
   text: string,
 ) {
+  const destination = to.startsWith("+") ? to : `+${to}`;
   const baseUrl = normalizeInfobipBaseUrl(env);
   const headers = {
     Authorization: `App ${env.OPENCTO_INFOBIP_API_KEY || ""}`,
@@ -735,81 +870,137 @@ async function sendInfobipMessage(
   };
 
   if (channel === "whatsapp") {
-    await fetch(`${baseUrl}/whatsapp/1/message/text`, {
+    const response = await fetch(`${baseUrl}/whatsapp/1/message/text`, {
       method: "POST",
       headers,
       body: JSON.stringify({
         from: env.OPENCTO_INFOBIP_WHATSAPP_FROM,
-        to,
+        to: destination,
         content: { text: text.slice(0, 4096) },
       }),
     });
+    const raw = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `Infobip WhatsApp send failed (${response.status}): ${raw.slice(0, 300)}`,
+      );
+    }
     return;
   }
 
-  await fetch(`${baseUrl}/sms/2/text/advanced`, {
+  const response = await fetch(`${baseUrl}/sms/2/text/advanced`, {
     method: "POST",
     headers,
     body: JSON.stringify({
       messages: [
         {
           from: env.OPENCTO_INFOBIP_SMS_FROM,
-          destinations: [{ to }],
+          destinations: [{ to: destination }],
           text: text.slice(0, 1530),
         },
       ],
     }),
   });
+  const raw = await response.text();
+  if (!response.ok) {
+    throw new Error(`Infobip SMS send failed (${response.status}): ${raw.slice(0, 300)}`);
+  }
 }
 
 async function handleInfobipWebhook(
   request: Request,
   env: Env,
   channel: "whatsapp" | "sms",
+  trace?: AnywayTraceBuffer,
 ): Promise<Response> {
+  const root = trace?.start("infobip.webhook.handle", { "infobip.channel": channel });
   if (!infobipConfigured(env, channel)) {
+    root?.end({
+      status: { code: "ERROR", message: "infobip not configured" },
+      attributes: { "infobip.configured": false },
+    });
     return Response.json(
       { ok: false, error: `infobip ${channel} not configured` },
       { status: 503 },
     );
   }
   if (!infobipWebhookAuthorized(request, env)) {
+    root?.end({
+      status: { code: "ERROR", message: "invalid webhook token" },
+    });
     return forbidden("invalid infobip webhook token");
   }
 
   const payload = (await request.json()) as unknown;
   const messages = extractInfobipMessages(payload);
-  if (!messages.length) return new Response("ok", { status: 200 });
+  if (!messages.length) {
+    root?.end({ attributes: { "infobip.messages": 0 } });
+    return new Response("ok", { status: 200 });
+  }
 
   for (const msg of messages) {
     const scope = `infobip:${channel}:${msg.from}`;
     await addActivity(env, scope, `infobip.${channel}.user`, msg.text.slice(0, 300));
-    const commandReply = isCommand(msg.text) ? await handleCommand(env, scope, msg.text) : null;
-    const answer = commandReply || (await generateAssistantReply(env, scope, msg.text));
-    await sendInfobipMessage(env, channel, msg.from, answer);
-    await addActivity(env, scope, `infobip.${channel}.bot`, answer.slice(0, 300));
+    try {
+      const commandReply = isCommand(msg.text) ? await handleCommand(env, scope, msg.text) : null;
+      const answer = commandReply || (await generateAssistantReply(env, scope, msg.text, trace));
+      await sendInfobipMessage(env, channel, msg.from, answer);
+      await addActivity(env, scope, `infobip.${channel}.bot`, answer.slice(0, 300));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await addActivity(env, scope, `infobip.${channel}.error`, message.slice(0, 350));
+    }
   }
 
+  root?.end({ attributes: { "infobip.messages": messages.length } });
   return new Response("ok", { status: 200 });
 }
 
-async function generateAssistantReply(env: Env, chatId: ChatScope, text: string) {
+async function generateAssistantReply(
+  env: Env,
+  chatId: ChatScope,
+  text: string,
+  trace?: AnywayTraceBuffer,
+) {
   const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
   const session = await loadSession(env, chatId);
   session.push({ role: "user", content: text });
-  const ragContext = await buildContext(env, chatId, text);
+  const ragContext = await buildContext(env, chatId, text, trace);
   const input = [
     { role: "system", content: SYSTEM_PROMPT },
     ragContext ? { role: "system", content: `Context:\n${ragContext}` } : null,
     ...session.map((m) => ({ role: m.role, content: m.content })),
   ].filter(Boolean);
 
-  const res = await openai.responses.create({
-    model: env.OPENCTO_AGENT_MODEL || "gpt-4.1-mini",
-    input: input as Array<{ role: "system" | "user" | "assistant"; content: string }>,
-    max_output_tokens: 700,
+  const model = env.OPENCTO_AGENT_MODEL || "gpt-4.1-mini";
+  const llmSpan = trace?.start("openai.responses.create", {
+    "chat.scope": scopeToString(chatId),
+    "llm.vendor": "openai",
+    "llm.model": model,
   });
-  const answer = (res.output_text || "No response generated.").trim();
+  let answer = "No response generated.";
+  try {
+    const res = await openai.responses.create({
+      model,
+      input: input as Array<{ role: "system" | "user" | "assistant"; content: string }>,
+      max_output_tokens: 700,
+    });
+    answer = (res.output_text || "No response generated.").trim();
+    llmSpan?.end({
+      attributes: {
+        "llm.tokens.input": res.usage?.input_tokens || 0,
+        "llm.tokens.output": res.usage?.output_tokens || 0,
+      },
+    });
+  } catch (err) {
+    llmSpan?.end({
+      status: { code: "ERROR", message: "openai responses.create failed" },
+      attributes: {
+        "error.type": err instanceof Error ? err.name : "unknown",
+      },
+    });
+    throw err;
+  }
   session.push({ role: "assistant", content: answer });
   await saveSession(env, chatId, session);
   return answer;
@@ -892,27 +1083,43 @@ function normalizeSlackText(text: string) {
   return text.replace(/<@[^>]+>\s*/g, "").trim();
 }
 
-async function handleSlackWebhook(request: Request, env: Env): Promise<Response> {
+async function handleSlackWebhook(
+  request: Request,
+  env: Env,
+  trace?: AnywayTraceBuffer,
+): Promise<Response> {
+  const root = trace?.start("slack.webhook.handle");
   const raw = await request.text();
   const ok = await verifySlackRequest(request, env, raw);
-  if (!ok) return new Response("invalid signature", { status: 401 });
+  if (!ok) {
+    root?.end({
+      status: { code: "ERROR", message: "invalid signature" },
+      attributes: { "slack.signature.valid": false },
+    });
+    return new Response("invalid signature", { status: 401 });
+  }
 
   const payload = JSON.parse(raw) as SlackEventEnvelope;
   if (payload.type === "url_verification") {
+    root?.end({ attributes: { "slack.url_verification": true } });
     return Response.json({ challenge: payload.challenge || "" });
   }
   if (payload.type !== "event_callback" || !payload.event) {
+    root?.end({ attributes: { "slack.ignored": true } });
     return new Response("ok", { status: 200 });
   }
 
   const event = payload.event;
   if (!event.channel || !event.type || !event.ts) {
+    root?.end({ attributes: { "slack.empty": true } });
     return new Response("ok", { status: 200 });
   }
   if (!slackAllowedChannel(env, event.channel)) {
+    root?.end({ attributes: { "slack.allowed_channel": false } });
     return new Response("ok", { status: 200 });
   }
   if (event.bot_id || event.subtype) {
+    root?.end({ attributes: { "slack.bot_event": true } });
     return new Response("ok", { status: 200 });
   }
 
@@ -923,6 +1130,7 @@ async function handleSlackWebhook(request: Request, env: Env): Promise<Response>
     event.channel_type !== "im" &&
     Boolean(event.thread_ts);
   if (!isMention && !isDirectMessage && !isThreadReply) {
+    root?.end({ attributes: { "slack.ignored_event": true } });
     return new Response("ok", { status: 200 });
   }
 
@@ -931,12 +1139,14 @@ async function handleSlackWebhook(request: Request, env: Env): Promise<Response>
   if (isThreadReply && !isMention) {
     const active = await isSlackThreadActive(env, team, event.channel, threadTs);
     if (!active) {
+      root?.end({ attributes: { "slack.thread_active": false } });
       return new Response("ok", { status: 200 });
     }
   }
 
   const text = normalizeSlackText(event.text || "");
   if (!text) {
+    root?.end({ attributes: { "slack.empty_text": true } });
     return new Response("ok", { status: 200 });
   }
 
@@ -944,15 +1154,21 @@ async function handleSlackWebhook(request: Request, env: Env): Promise<Response>
 
   await addActivity(env, scope, "slack.user", text.slice(0, 300), nowIso());
   const commandReply = isCommand(text) ? await handleCommand(env, scope, text) : null;
-  const answer = commandReply || (await generateAssistantReply(env, scope, text));
+  const answer = commandReply || (await generateAssistantReply(env, scope, text, trace));
   await sendSlackMessage(env, event.channel, answer, threadTs);
   await markSlackThreadActive(env, team, event.channel, threadTs);
   await addActivity(env, scope, "slack.bot", answer.slice(0, 300), nowIso());
+  root?.end({
+    attributes: {
+      "chat.scope": scopeToString(scope),
+      "slack.command": Boolean(commandReply),
+    },
+  });
   return new Response("ok", { status: 200 });
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/health") {
@@ -965,23 +1181,37 @@ export default {
         vector_rag_enabled: vectorEnabled(env),
         vector_bound: Boolean(env.OPENCTO_VECTOR_INDEX),
         embed_model: env.OPENCTO_EMBED_MODEL || "text-embedding-3-small",
+        anyway_enabled: anywayEnabled(env),
+        anyway_endpoint: env.OPENCTO_ANYWAY_ENDPOINT || ANYWAY_INGEST_DEFAULT,
         infobip_whatsapp_configured: infobipConfigured(env, "whatsapp"),
         infobip_sms_configured: infobipConfigured(env, "sms"),
       });
     }
 
     if (request.method === "POST" && url.pathname === "/webhook/telegram") {
+      const trace = new AnywayTraceBuffer(env);
       const payload = (await request.json()) as TelegramUpdate;
-      return handleTelegramUpdate(env, payload);
+      const response = await handleTelegramUpdate(env, payload, trace);
+      ctx.waitUntil(trace.flush());
+      return response;
     }
     if (request.method === "POST" && url.pathname === "/webhook/slack") {
-      return handleSlackWebhook(request, env);
+      const trace = new AnywayTraceBuffer(env);
+      const response = await handleSlackWebhook(request, env, trace);
+      ctx.waitUntil(trace.flush());
+      return response;
     }
     if (request.method === "POST" && url.pathname === "/webhook/infobip/whatsapp") {
-      return handleInfobipWebhook(request, env, "whatsapp");
+      const trace = new AnywayTraceBuffer(env);
+      const response = await handleInfobipWebhook(request, env, "whatsapp", trace);
+      ctx.waitUntil(trace.flush());
+      return response;
     }
     if (request.method === "POST" && url.pathname === "/webhook/infobip/sms") {
-      return handleInfobipWebhook(request, env, "sms");
+      const trace = new AnywayTraceBuffer(env);
+      const response = await handleInfobipWebhook(request, env, "sms", trace);
+      ctx.waitUntil(trace.flush());
+      return response;
     }
 
     if (url.pathname.startsWith("/api/")) {
