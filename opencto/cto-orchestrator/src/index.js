@@ -5,6 +5,7 @@ import { ensureIncidentIssue, commentOnIssue } from "./github.js";
 import { loadState, saveState, saveStatus } from "./state.js";
 import { sendTelegramAlert } from "./telegram.js";
 import { startTelegramBot } from "./telegramBot.js";
+import { recordAutonomyError, runAutonomyCycle } from "./autonomy.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,6 +61,16 @@ function buildStatus(cfg, state, partial = {}) {
       botMode: cfg.telegramBotMode,
     },
     pendingApprovals,
+    autonomy: {
+      enabled: cfg.autonomyEnabled,
+      cycleSeconds: cfg.autonomyCycleSeconds,
+      autoMerge: cfg.autonomyAutoMerge,
+      mergeLabel: cfg.autonomyMergeLabel,
+      lastRunAt: state.autonomy?.lastRunAt || null,
+      lastError: state.autonomy?.lastError || null,
+      cycles: state.autonomy?.cycles || 0,
+      lastResults: state.autonomy?.lastResults || null,
+    },
     incidentsTracked: incidentKeys.length,
     incidents: incidentKeys.slice(0, 20).map((key) => {
       const item = state.incidents[key] || {};
@@ -179,6 +190,7 @@ async function runLoop() {
   const state = loadState(cfg.statePath);
   let keepRunning = true;
   let botController = { stop: () => {} };
+  let autonomyTimer = null;
   console.log(
     `OpenCTO orchestrator started. monitor=${cfg.monitorUrl} poll=${cfg.pollSeconds}s dryRun=${cfg.dryRun}`
   );
@@ -191,10 +203,12 @@ async function runLoop() {
   process.on("SIGINT", () => {
     keepRunning = false;
     botController.stop();
+    if (autonomyTimer) clearInterval(autonomyTimer);
   });
   process.on("SIGTERM", () => {
     keepRunning = false;
     botController.stop();
+    if (autonomyTimer) clearInterval(autonomyTimer);
   });
 
   botController = await startTelegramBot({
@@ -208,6 +222,28 @@ async function runLoop() {
       persist(cfg, state, { lastCycle: "ok", error: null });
     },
   });
+
+  if (cfg.autonomyEnabled) {
+    const run = async () => {
+      try {
+        const results = await runAutonomyCycle({
+          cfg,
+          ai,
+          state,
+          onEvent: (type, message, detail) => pushEvent(state, type, message, detail || {}),
+        });
+        pushEvent(state, "autonomy_cycle", "Autonomy cycle completed", results);
+        persist(cfg, state, { lastCycle: "ok", error: null });
+      } catch (error) {
+        const msg = error?.message || String(error);
+        recordAutonomyError(state, msg);
+        pushEvent(state, "autonomy_error", msg, {});
+        persist(cfg, state, { lastCycle: "error", error: msg });
+      }
+    };
+    await run();
+    autonomyTimer = setInterval(run, cfg.autonomyCycleSeconds * 1000);
+  }
 
   while (keepRunning) {
     try {

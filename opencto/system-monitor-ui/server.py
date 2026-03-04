@@ -124,6 +124,16 @@ def orchestrator_status() -> dict:
         "incidentsTracked": 0,
         "pendingApprovals": 0,
         "telegram": {"enabled": False, "configured": False, "chatCount": 0},
+        "autonomy": {
+            "enabled": False,
+            "cycleSeconds": 0,
+            "autoMerge": False,
+            "mergeLabel": "auto-merge",
+            "lastRunAt": None,
+            "lastError": None,
+            "cycles": 0,
+            "lastResults": None,
+        },
         "error": None,
     }
     try:
@@ -144,6 +154,7 @@ def orchestrator_status() -> dict:
                 "incidents": data.get("incidents", []),
                 "events": data.get("events", []),
                 "telegram": data.get("telegram", payload["telegram"]),
+                "autonomy": data.get("autonomy", payload["autonomy"]),
                 "error": data.get("error"),
             }
         )

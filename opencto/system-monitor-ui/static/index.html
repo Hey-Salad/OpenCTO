@@ -163,6 +163,7 @@
             <tr><th>Tracked Incidents</th><td id="orch-incidents">-</td></tr>
             <tr><th>Pending Approvals</th><td id="orch-approvals">-</td></tr>
             <tr><th>Telegram</th><td id="orch-telegram">-</td></tr>
+            <tr><th>Autonomy</th><td id="orch-autonomy">-</td></tr>
             <tr><th>Error</th><td id="orch-error">-</td></tr>
           </tbody>
         </table>
@@ -171,6 +172,12 @@
         <h3>Agent Activity</h3>
         <ul id="agent-events" class="list">
           <li class="muted">No activity yet.</li>
+        </ul>
+      </section>
+      <section class="card" style="margin-top:12px">
+        <h3>Autonomy Cycle</h3>
+        <ul id="autonomy-summary" class="list">
+          <li class="muted">No autonomy cycle data yet.</li>
         </ul>
       </section>
       <section class="card" style="margin-top:12px">
@@ -250,6 +257,33 @@
           root.appendChild(li);
         });
       }
+      function renderAutonomy(autonomy) {
+        const root = document.getElementById("autonomy-summary");
+        root.innerHTML = "";
+        if (!autonomy || !autonomy.enabled) {
+          root.innerHTML = '<li class="muted">Autonomy loop disabled.</li>';
+          return;
+        }
+        const results = autonomy.lastResults || {};
+        const roadmap = results.roadmap || { created: 0, tracked: 0 };
+        const issues = results.issues || { commented: 0 };
+        const prs = results.prs || { reviewed: 0, merged: 0 };
+        const rows = [
+          `Cycles: ${autonomy.cycles || 0}`,
+          `Last run: ${autonomy.lastRunAt ? shortTime(autonomy.lastRunAt) : "n/a"}`,
+          `Roadmap issues tracked: ${roadmap.tracked || 0} (created ${roadmap.created || 0})`,
+          `Issue discussions updated: ${issues.commented || 0}`,
+          `PRs reviewed: ${prs.reviewed || 0}`,
+          `PRs merged: ${prs.merged || 0}`,
+          `Auto-merge: ${autonomy.autoMerge ? `ON (${autonomy.mergeLabel})` : "OFF"}`,
+          `Last autonomy error: ${autonomy.lastError || "none"}`,
+        ];
+        rows.forEach((row) => {
+          const li = document.createElement("li");
+          li.textContent = row;
+          root.appendChild(li);
+        });
+      }
       async function refresh() {
         const [metricsRes, orchestratorRes] = await Promise.all([
           fetch("/api/metrics", { cache: "no-store" }),
@@ -289,6 +323,12 @@
               : "Enabled but not fully configured"
             : "Disabled"
         );
+        text(
+          "orch-autonomy",
+          o.autonomy?.enabled
+            ? `Enabled (every ${o.autonomy.cycleSeconds || "?"}s, merge ${o.autonomy.autoMerge ? "on" : "off"})`
+            : "Disabled"
+        );
         text("orch-error", o.error || "-");
 
         const modeEl = document.getElementById("orch-mode");
@@ -308,6 +348,7 @@
         }
         renderEvents(o.events || []);
         renderIncidents(o.incidents || []);
+        renderAutonomy(o.autonomy || null);
       }
       refresh().catch(console.error);
       setInterval(() => refresh().catch(console.error), 3000);

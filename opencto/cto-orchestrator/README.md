@@ -80,6 +80,27 @@ curl "https://api.telegram.org/bot<token>/getUpdates"
   - bot queues approval and returns an `approval_id`
   - user must run `/approve <approval_id>` or `/deny <approval_id>`
 
+## Autonomous governance loop
+
+The orchestrator can run a continuous GitHub governance cycle:
+
+- reads roadmap sections and ensures tracking issues exist
+- posts autonomous issue discussion updates
+- reviews open PRs with model-backed summaries
+- auto-merges approved PRs that carry the configured merge label and have green checks
+
+Key env vars:
+
+```bash
+OPENCTO_AUTONOMY_ENABLED=true
+OPENCTO_AUTONOMY_CYCLE_SECONDS=300
+OPENCTO_AUTONOMY_ROADMAP_PATH=/home/hs-chilu/heysalad-ai-projects/CTO-AI/docs/opencto/IOS_APP_ROADMAP.md
+OPENCTO_AUTONOMY_MAX_ISSUE_COMMENTS=3
+OPENCTO_AUTONOMY_MAX_PR_REVIEWS=3
+OPENCTO_AUTONOMY_AUTO_MERGE=true
+OPENCTO_AUTONOMY_MERGE_LABEL=auto-merge
+```
+
 ## Systemd (user service)
 
 Install the unit:
