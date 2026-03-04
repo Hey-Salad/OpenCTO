@@ -27,6 +27,7 @@ npm run ios
 ## Validation
 ```bash
 npm run lint
+npm run typecheck
 npm run build
 npm run test
 ```
