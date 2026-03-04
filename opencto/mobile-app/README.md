@@ -1,6 +1,6 @@
 # OpenCTO Mobile App (MVP v1)
 
-iOS-first Expo mobile app for OpenCTO core workflows: auth, realtime voice + text chat, runs monitoring/cancel, and account actions.
+iOS-first Expo mobile app for OpenCTO core workflows: GitHub OAuth auth, token auth fallback, realtime voice + text chat, runs monitoring/cancel, and account actions.
 
 ## Requirements
 - Node.js 20+
@@ -23,6 +23,8 @@ EXPO_PUBLIC_PRIVACY_URL=https://opencto.works/privacy
 ```bash
 npm run ios
 ```
+
+GitHub sign-in requires OpenCTO API OAuth to be configured (`GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `JWT_SECRET` in the API worker).
 
 ## Validation
 ```bash
