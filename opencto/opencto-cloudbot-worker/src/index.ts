@@ -154,6 +154,10 @@ function memoryItemKey(chatId: ChatScope, id: string) {
   return `memory:${chatId}:${id}`;
 }
 
+function slackThreadKey(teamId: string, channelId: string, threadTs: string) {
+  return `slack_thread:${teamId}:${channelId}:${threadTs}`;
+}
+
 function taskIndexKey(chatId: ChatScope) {
   return `task_index:${chatId}`;
 }
@@ -183,6 +187,27 @@ async function getJson<T>(env: Env, key: string, fallback: T): Promise<T> {
 
 async function putJson(env: Env, key: string, value: unknown) {
   await env.OPENCTO_KV.put(key, JSON.stringify(value));
+}
+
+async function markSlackThreadActive(
+  env: Env,
+  teamId: string,
+  channelId: string,
+  threadTs: string,
+) {
+  const key = slackThreadKey(teamId, channelId, threadTs);
+  await putJson(env, key, { active: true, updatedAt: nowIso() });
+}
+
+async function isSlackThreadActive(
+  env: Env,
+  teamId: string,
+  channelId: string,
+  threadTs: string,
+) {
+  const key = slackThreadKey(teamId, channelId, threadTs);
+  const marker = await getJson<{ active?: boolean } | null>(env, key, null);
+  return Boolean(marker?.active);
 }
 
 async function addMemory(
@@ -603,9 +628,7 @@ async function sendSlackMessage(
 }
 
 function normalizeSlackText(text: string) {
-  const cleaned = text.replace(/<@[^>]+>\s*/g, "").trim();
-  if (cleaned) return cleaned;
-  return "help";
+  return text.replace(/<@[^>]+>\s*/g, "").trim();
 }
 
 async function handleSlackWebhook(request: Request, env: Env): Promise<Response> {
@@ -634,19 +657,35 @@ async function handleSlackWebhook(request: Request, env: Env): Promise<Response>
 
   const isMention = event.type === "app_mention";
   const isDirectMessage = event.type === "message" && event.channel_type === "im";
-  if (!isMention && !isDirectMessage) {
+  const isThreadReply =
+    event.type === "message" &&
+    event.channel_type !== "im" &&
+    Boolean(event.thread_ts);
+  if (!isMention && !isDirectMessage && !isThreadReply) {
     return new Response("ok", { status: 200 });
   }
 
-  const text = normalizeSlackText(event.text || "");
   const team = payload.team_id || "team";
   const threadTs = event.thread_ts || event.ts;
+  if (isThreadReply && !isMention) {
+    const active = await isSlackThreadActive(env, team, event.channel, threadTs);
+    if (!active) {
+      return new Response("ok", { status: 200 });
+    }
+  }
+
+  const text = normalizeSlackText(event.text || "");
+  if (!text) {
+    return new Response("ok", { status: 200 });
+  }
+
   const scope = `slack:${team}:${event.channel}:${threadTs}`;
 
   await addActivity(env, scope, "slack.user", text.slice(0, 300), nowIso());
   const commandReply = isCommand(text) ? await handleCommand(env, scope, text) : null;
   const answer = commandReply || (await generateAssistantReply(env, scope, text));
   await sendSlackMessage(env, event.channel, answer, threadTs);
+  await markSlackThreadActive(env, team, event.channel, threadTs);
   await addActivity(env, scope, "slack.bot", answer.slice(0, 300), nowIso());
   return new Response("ok", { status: 200 });
 }

@@ -1,0 +1,30 @@
+display_information:
+  name: OpenCTO CloudBot
+  description: OpenCTO assistant for Slack (Cloudflare Worker webhook mode)
+  background_color: "#0f172a"
+
+features:
+  bot_user:
+    display_name: OpenCTO
+    always_online: false
+
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - chat:write
+      - channels:history
+      - groups:history
+      - im:history
+
+settings:
+  event_subscriptions:
+    request_url: https://opencto-cloudbot-worker.heysalad-o.workers.dev/webhook/slack
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

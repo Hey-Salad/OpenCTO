@@ -39,6 +39,8 @@ curl "https://api.telegram.org/bot<token>/setWebhook?url=https://<worker-domain>
 - Request URL: `https://<worker-domain>/webhook/slack`
 - Subscribe to bot events:
   - `app_mention`
+  - `message.channels`
+  - `message.groups`
   - `message.im`
 - Install app to workspace with bot scope: `chat:write`
 
@@ -73,6 +75,8 @@ If `OPENCTO_ADMIN_TOKEN` is set, send `x-opencto-admin-token` header on `/api/*`
 
 - Verifies `X-Slack-Signature` and timestamp (replay-protected).
 - Responds to `@OpenCTO` mentions and DMs.
+- Starts a thread when mentioned in a channel.
+- Continues replying inside that active thread without requiring repeated `@` mentions.
 - Replies in thread and reuses the same persistent memory/tasks/RAG context.
 
 ## Notes
