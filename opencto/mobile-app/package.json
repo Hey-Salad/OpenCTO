@@ -9,6 +9,7 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
     "build": "expo export --platform ios --output-dir dist",
     "test": "vitest run"
   },
@@ -21,6 +22,7 @@
     "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.7",
     "expo-status-bar": "~3.0.9",
+    "expo-web-browser": "~15.0.10",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

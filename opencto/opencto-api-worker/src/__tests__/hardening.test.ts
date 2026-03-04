@@ -64,6 +64,49 @@ describe('Auth and billing hardening', () => {
     expect(body.details?.providerError).toBe('access_denied')
   })
 
+  it('accepts mobile deep-link returnTo for GitHub OAuth start', async () => {
+    const env = createMockEnv()
+
+    const res = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/auth/oauth/github/start?returnTo=opencto%3A%2F%2Fauth%2Fcallback'),
+      env,
+    )
+
+    expect(res.status).toBe(302)
+    const location = res.headers.get('location')
+    expect(location).toBeTruthy()
+    expect(location?.startsWith('https://github.com/login/oauth/authorize')).toBe(true)
+
+    const oauthUrl = new URL(location || '')
+    const stateToken = oauthUrl.searchParams.get('state') || ''
+    const [statePayload] = stateToken.split('.')
+    expect(statePayload).toBeTruthy()
+
+    const payloadJson = atob((statePayload || '').replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil((statePayload || '').length / 4) * 4, '='))
+    const payload = JSON.parse(payloadJson) as { returnTo?: string }
+    expect(payload.returnTo).toBe('opencto://auth/callback')
+  })
+
+  it('rejects untrusted custom returnTo scheme for GitHub OAuth start', async () => {
+    const env = createMockEnv()
+
+    const res = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/auth/oauth/github/start?returnTo=evil%3A%2F%2Fauth%2Fcallback'),
+      env,
+    )
+
+    expect(res.status).toBe(302)
+    const location = res.headers.get('location')
+    expect(location).toBeTruthy()
+
+    const oauthUrl = new URL(location || '')
+    const stateToken = oauthUrl.searchParams.get('state') || ''
+    const [statePayload] = stateToken.split('.')
+    const payloadJson = atob((statePayload || '').replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil((statePayload || '').length / 4) * 4, '='))
+    const payload = JSON.parse(payloadJson) as { returnTo?: string }
+    expect(payload.returnTo).toBe('https://app.opencto.works')
+  })
+
   it('rejects invalid billing intervals with a 400 payload', async () => {
     const env = createMockEnv({ ENVIRONMENT: 'development' })
 

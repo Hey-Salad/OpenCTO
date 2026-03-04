@@ -71,8 +71,13 @@ export class RealtimeSessionManager {
       const tokenPayload = await getRealtimeToken(this.client, this.workspaceId);
       const model = tokenPayload.model ?? 'gpt-4o-realtime-preview';
       const url = tokenPayload.websocketUrl ?? `wss://api.openai.com/v1/realtime?model=${model}`;
+      const token = tokenPayload.token?.trim();
 
-      this.openSocket(url, tokenPayload.token);
+      if (!token) {
+        throw new Error('Realtime token response missing token');
+      }
+
+      this.openSocket(url, token);
     } catch {
       this.snapshot = {
         ...this.snapshot,
@@ -104,12 +109,7 @@ export class RealtimeSessionManager {
   }
 
   private openSocket(url: string, token: string): void {
-    this.ws = new WebSocket(url, undefined, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'OpenAI-Beta': 'realtime=v1'
-      }
-    } as never);
+    this.ws = new WebSocket(url, ['realtime', `openai-insecure-api-key.${token}`]);
 
     this.ws.onopen = () => {
       this.updateState('CONNECTED');
