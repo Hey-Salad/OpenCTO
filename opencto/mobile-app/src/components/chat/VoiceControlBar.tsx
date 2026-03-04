@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { RealtimeConnectionState } from '@/types/models';
-import { Badge, Button } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { colors } from '@/theme/colors';
 
 interface VoiceControlBarProps {
@@ -26,11 +26,11 @@ export const VoiceControlBar = ({
   return (
     <View style={styles.container}>
       <View style={styles.statusRow}>
-        <Badge label={`Voice: ${state}`} />
+        <Text style={styles.statusText}>Voice: {state}</Text>
         <Text style={styles.timer}>{isLive ? `${seconds}s` : '--'}</Text>
       </View>
       <View style={styles.controls}>
-        <Button label={isLive ? 'Stop Voice' : 'Start Voice'} onPress={onToggleStartStop} />
+        <Button label={isLive ? 'Stop' : 'Start'} onPress={onToggleStartStop} />
         <Button label={muted ? 'Unmute' : 'Mute'} onPress={onToggleMute} variant="secondary" />
       </View>
     </View>
@@ -40,16 +40,21 @@ export const VoiceControlBar = ({
 const styles = StyleSheet.create({
   container: {
     gap: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    backgroundColor: colors.bgSurface
+    paddingTop: 4,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
   },
   statusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'
+  },
+  statusText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize'
   },
   timer: {
     color: colors.textBody,

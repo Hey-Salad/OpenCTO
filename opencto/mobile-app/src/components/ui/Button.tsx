@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import type { ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { colors } from '@/theme/colors';
 
 interface ButtonProps {
@@ -7,6 +8,7 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'danger';
   disabled?: boolean;
   style?: ViewStyle;
+  leftIcon?: ReactNode;
 }
 
 const palette = {
@@ -15,7 +17,7 @@ const palette = {
   danger: colors.error
 };
 
-export const Button = ({ label, onPress, variant = 'primary', disabled, style }: ButtonProps) => (
+export const Button = ({ label, onPress, variant = 'primary', disabled, style, leftIcon }: ButtonProps) => (
   <Pressable
     accessibilityRole="button"
     onPress={onPress}
@@ -27,7 +29,10 @@ export const Button = ({ label, onPress, variant = 'primary', disabled, style }:
       style
     ]}
   >
-    <Text style={[styles.label, variant === 'secondary' && styles.secondaryLabel]}>{label}</Text>
+    <View style={styles.inner}>
+      {leftIcon}
+      <Text style={[styles.label, variant === 'secondary' && styles.secondaryLabel]}>{label}</Text>
+    </View>
   </Pressable>
 );
 
@@ -37,6 +42,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     alignItems: 'center'
+  },
+  inner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
   },
   secondaryBorder: {
     borderWidth: 1,

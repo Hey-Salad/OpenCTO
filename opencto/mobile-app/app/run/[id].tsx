@@ -4,6 +4,7 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { RunStatusBadge } from '@/components/runs/RunStatusBadge';
 import { Button, Card, EmptyState, ErrorState } from '@/components/ui';
 import { useRuns } from '@/hooks/useRuns';
+import { useScreenSpacing } from '@/hooks/useScreenSpacing';
 import { colors } from '@/theme/colors';
 import { CodebaseRun } from '@/types/models';
 
@@ -13,6 +14,7 @@ export default function RunDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const runId = params.id;
   const { eventsByRunId, refreshRun, refreshRunEvents, cancelRunById, error } = useRuns();
+  const spacing = useScreenSpacing();
   const [run, setRun] = useState<CodebaseRun | null>(null);
 
   const events = useMemo(() => eventsByRunId[runId] ?? [], [eventsByRunId, runId]);
@@ -55,7 +57,7 @@ export default function RunDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
+      <View style={[styles.container, { padding: spacing.padding, gap: spacing.gap }]}>
         <Text style={styles.title}>Run Details</Text>
         {run ? (
           <Card>
@@ -96,9 +98,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgApp
   },
   container: {
-    flex: 1,
-    padding: 14,
-    gap: 10
+    flex: 1
   },
   title: {
     fontSize: 22,

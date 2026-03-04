@@ -77,6 +77,7 @@ export interface CodebaseRun {
 export interface CodebaseRunEvent {
   id: string;
   runId: string;
+  seq?: number;
   type: string;
   message: string;
   createdAt: string;

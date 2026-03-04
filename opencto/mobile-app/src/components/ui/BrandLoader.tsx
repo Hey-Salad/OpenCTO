@@ -1,12 +1,12 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 
 export const BrandLoader = () => {
   return (
     <View style={styles.root}>
       <View style={styles.card}>
-        <Image source={require('../../../assets/images/splash-wordmark.png')} style={styles.wordmark} resizeMode="contain" />
-        <Text style={styles.label}>Loading workspace</Text>
+        <Text style={styles.wordmark}>OpenCTO</Text>
+        <Text style={styles.byline}>Powered by HeySalad (r)</Text>
         <View style={styles.progressTrack}>
           <View style={styles.progressFill} />
         </View>
@@ -29,21 +29,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
-    backgroundColor: colors.bgSurface,
+    backgroundColor: colors.white,
     paddingVertical: 28,
     paddingHorizontal: 20,
-    gap: 14
+    gap: 12
   },
   wordmark: {
-    width: 220,
-    height: 54,
-    alignSelf: 'center'
+    color: colors.black,
+    fontFamily: 'Grandstander_700Bold',
+    fontSize: 42,
+    textAlign: 'center',
+    letterSpacing: 0.4
   },
-  label: {
-    color: colors.textMuted,
-    fontSize: 12,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+  byline: {
+    color: colors.black,
+    fontFamily: 'Grandstander_600SemiBold',
+    fontSize: 14,
     textAlign: 'center'
   },
   progressTrack: {
@@ -52,7 +53,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
-    backgroundColor: colors.bgSurface2
+    backgroundColor: colors.bgSurface2,
+    marginTop: 2
   },
   progressFill: {
     width: '42%',

@@ -15,6 +15,9 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "works.opencto.mobile",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSMicrophoneUsageDescription": "OpenCTO uses your microphone for realtime voice conversations."
       }
@@ -39,6 +42,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b4f36af9-2d45-47f0-a669-a1be4d5a638c"
+      }
+    },
+    "owner": "heysaladio"
   }
 }

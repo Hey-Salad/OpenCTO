@@ -13,10 +13,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@expo-google-fonts/grandstander": "^0.4.1",
     "@react-navigation/native": "^7.1.28",
     "expo": "~54.0.0",
     "expo-av": "^16.0.8",
     "expo-constants": "~18.0.13",
+    "expo-dev-client": "~6.0.20",
     "expo-linking": "~8.0.11",
     "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.7",

@@ -1,14 +1,16 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
 import { RunListItem } from '@/components/runs/RunListItem';
 import { EmptyState, ErrorState } from '@/components/ui';
 import { useRuns } from '@/hooks/useRuns';
+import { useScreenSpacing } from '@/hooks/useScreenSpacing';
 import { colors } from '@/theme/colors';
 
 export default function RunsScreen() {
   const router = useRouter();
   const { runs, loading, error, refreshRuns } = useRuns();
+  const spacing = useScreenSpacing();
 
   useEffect(() => {
     refreshRuns();
@@ -16,8 +18,7 @@ export default function RunsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Codebase Runs</Text>
+      <View style={[styles.container, { padding: spacing.padding, gap: spacing.gap }]}>
         {error ? <ErrorState message={error} /> : null}
         <ScrollView
           refreshControl={<RefreshControl refreshing={loading} onRefresh={refreshRuns} tintColor={colors.brandPrimary} />}
@@ -46,14 +47,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgApp
   },
   container: {
-    flex: 1,
-    padding: 14,
-    gap: 8
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.textBody
+    flex: 1
   },
   scroll: {
     paddingBottom: 16
