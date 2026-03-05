@@ -2,6 +2,7 @@ import { getContainer } from '@cloudflare/containers'
 import type { RequestContext } from './types'
 import {
   BadRequestException,
+  ForbiddenException,
   InternalServerException,
   NotFoundException,
   NotImplementedException,
@@ -9,6 +10,7 @@ import {
   jsonResponse,
 } from './errors'
 import { redactSecrets, redactUnknown } from './redaction'
+import { enforcePromptGuardrails, enforceRepoUrlGuardrails } from './guardrails'
 
 type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
 type EventLevel = 'system' | 'info' | 'warn' | 'error'
@@ -51,10 +53,12 @@ const MIN_TIMEOUT_SECONDS = 60
 const MAX_TIMEOUT_SECONDS = 1800
 const TERMINAL_RUN_STATUSES = new Set<RunStatus>(['succeeded', 'failed', 'canceled', 'timed_out'])
 const BLOCKED_CHAINING_PATTERN = /(?:&&|;|\|\||\||`|\$\()/
+const PROTECTED_BRANCH_PATTERN = /^(main|master|production|prod|release.*)$/i
 
 interface CodebaseRunRow {
   id: string
   user_id: string
+  trace_id: string | null
   repo_url: string
   repo_full_name: string | null
   base_branch: string
@@ -77,6 +81,12 @@ interface CodebaseRunEventRow {
   level: EventLevel
   event_type: string
   message: string
+  payload_json: string | null
+  created_at: string
+}
+
+type ApprovalEventRow = {
+  event_type: string
   payload_json: string | null
   created_at: string
 }
@@ -185,6 +195,7 @@ function mapRun(row: CodebaseRunRow) {
   return {
     id: row.id,
     userId: row.user_id,
+    traceId: row.trace_id,
     repoUrl: row.repo_url,
     repoFullName: row.repo_full_name,
     baseBranch: row.base_branch,
@@ -198,6 +209,95 @@ function mapRun(row: CodebaseRunRow) {
     completedAt: row.completed_at,
     canceledAt: row.canceled_at,
     errorMessage: row.error_message ? redactSecrets(row.error_message) : null,
+  }
+}
+
+function parseRequestedCommands(row: CodebaseRunRow): string[] {
+  try {
+    const parsed = JSON.parse(row.requested_commands_json)
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function runNeedsHumanApproval(commands: string[], targetBranch: string): { required: boolean; reason: string | null } {
+  if (commands.some((command) => command.startsWith('git push'))) {
+    return { required: true, reason: 'Run includes git push command' }
+  }
+  if (PROTECTED_BRANCH_PATTERN.test(targetBranch)) {
+    return { required: true, reason: 'Run targets protected branch' }
+  }
+  return { required: false, reason: null }
+}
+
+function ensureApproverRole(ctx: RequestContext): void {
+  if (ctx.user.role === 'owner' || ctx.user.role === 'cto') return
+  throw new ForbiddenException('Only owner/cto can approve dangerous runs', {
+    role: ctx.user.role,
+  })
+}
+
+async function getRunApproval(runId: string, ctx: RequestContext) {
+  const rows = await ctx.env.DB.prepare(
+    `SELECT event_type, payload_json, created_at
+     FROM codebase_run_events
+     WHERE run_id = ?
+       AND event_type IN ('run.approval_required', 'run.approval.approved', 'run.approval.denied')
+     ORDER BY seq ASC`,
+  ).bind(runId).all<ApprovalEventRow>()
+
+  const events = rows.results ?? []
+  const requiredEvent = events.find((event) => event.event_type === 'run.approval_required')
+  if (!requiredEvent) {
+    return {
+      required: false,
+      state: 'not_required' as const,
+      reason: null,
+      approvedByUserId: null,
+      decidedAt: null,
+    }
+  }
+
+  const approvedEvent = events.find((event) => event.event_type === 'run.approval.approved')
+  if (approvedEvent) {
+    let approvedByUserId: string | null = null
+    try {
+      const payload = approvedEvent.payload_json ? JSON.parse(approvedEvent.payload_json) as Record<string, unknown> : {}
+      approvedByUserId = typeof payload.approvedByUserId === 'string' ? payload.approvedByUserId : null
+    } catch {}
+    return {
+      required: true,
+      state: 'approved' as const,
+      reason: null,
+      approvedByUserId,
+      decidedAt: approvedEvent.created_at,
+    }
+  }
+
+  const deniedEvent = events.find((event) => event.event_type === 'run.approval.denied')
+  if (deniedEvent) {
+    return {
+      required: true,
+      state: 'denied' as const,
+      reason: 'Denied by human approver',
+      approvedByUserId: null,
+      decidedAt: deniedEvent.created_at,
+    }
+  }
+
+  let reason: string | null = null
+  try {
+    const payload = requiredEvent.payload_json ? JSON.parse(requiredEvent.payload_json) as Record<string, unknown> : {}
+    reason = typeof payload.reason === 'string' ? payload.reason : null
+  } catch {}
+
+  return {
+    required: true,
+    state: 'pending' as const,
+    reason,
+    approvedByUserId: null,
+    decidedAt: null,
   }
 }
 
@@ -224,6 +324,7 @@ async function ensureSchema(ctx: RequestContext): Promise<void> {
     `CREATE TABLE IF NOT EXISTS codebase_runs (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      trace_id TEXT,
       repo_url TEXT NOT NULL,
       repo_full_name TEXT,
       base_branch TEXT NOT NULL,
@@ -239,6 +340,7 @@ async function ensureSchema(ctx: RequestContext): Promise<void> {
       error_message TEXT
     )`,
   ).run()
+  await ctx.env.DB.prepare('ALTER TABLE codebase_runs ADD COLUMN trace_id TEXT').run().catch(() => {})
 
   await ctx.env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS codebase_run_events (
@@ -281,7 +383,7 @@ async function ensureSchema(ctx: RequestContext): Promise<void> {
 async function getRunRow(runId: string, ctx: RequestContext): Promise<CodebaseRunRow> {
   await ensureSchema(ctx)
   const row = await ctx.env.DB.prepare(
-    `SELECT id, user_id, repo_url, repo_full_name, base_branch, target_branch, status, requested_commands_json,
+    `SELECT id, user_id, trace_id, repo_url, repo_full_name, base_branch, target_branch, status, requested_commands_json,
             command_allowlist_version, timeout_seconds, created_at, started_at, completed_at, canceled_at, error_message
      FROM codebase_runs WHERE id = ? AND user_id = ?`,
   ).bind(runId, ctx.userId).first<CodebaseRunRow>()
@@ -337,6 +439,54 @@ async function setRunStatus(runId: string, ctx: RequestContext, input: { status:
   await ctx.env.DB.prepare(
     'UPDATE codebase_runs SET status = ?, completed_at = ?, error_message = ? WHERE id = ? AND user_id = ?',
   ).bind(input.status, timestamp, input.errorMessage ?? null, runId, ctx.userId).run()
+}
+
+async function executeContainerRun(
+  runId: string,
+  input: {
+    repoUrl: string
+    baseBranch: string
+    targetBranch: string
+    commands: string[]
+    timeoutSeconds: number
+  },
+  ctx: RequestContext,
+): Promise<void> {
+  await setRunStatus(runId, ctx, { status: 'running' })
+  await appendEvent(runId, {
+    level: 'system',
+    eventType: 'run.dispatched',
+    message: 'Run dispatched to container executor.',
+  }, ctx)
+
+  const result = await containerDispatcher(runId, input, ctx)
+
+  for (const log of result.logs) {
+    await appendEvent(runId, {
+      level: log.level,
+      eventType: 'container.log',
+      message: log.message,
+    }, ctx)
+  }
+
+  if (result.status === 'succeeded') {
+    await setRunStatus(runId, ctx, { status: 'succeeded' })
+    await appendEvent(runId, {
+      level: 'system',
+      eventType: 'run.completed',
+      message: 'Container execution completed successfully.',
+    }, ctx)
+  } else {
+    await setRunStatus(runId, ctx, {
+      status: result.status,
+      errorMessage: result.errorMessage ?? 'Container execution failed',
+    })
+    await appendEvent(runId, {
+      level: 'error',
+      eventType: 'run.failed',
+      message: result.errorMessage ?? 'Container execution failed',
+    }, ctx)
+  }
 }
 
 async function enforceRunLimits(ctx: RequestContext): Promise<void> {
@@ -450,8 +600,13 @@ export async function createCodebaseRun(
   if (!repoUrl) {
     throw new BadRequestException('repoUrl is required')
   }
+  enforceRepoUrlGuardrails(repoUrl)
 
   const commands = normalizeAndValidateCommands(payload.commands)
+  enforcePromptGuardrails(
+    `${repoUrl}\n${commands.join('\n')}\n${payload.baseBranch ?? ''}\n${payload.targetBranch ?? ''}`,
+    'codebase.runs.create',
+  )
   const timeoutBounds = getTimeoutBounds(ctx)
   const timeoutSeconds = normalizeTimeoutSeconds(payload.timeoutSeconds, timeoutBounds)
   await enforceRunLimits(ctx)
@@ -461,6 +616,7 @@ export async function createCodebaseRun(
   const baseBranch = (payload.baseBranch ?? 'main').trim() || 'main'
   const targetBranch = (payload.targetBranch ?? `opencto/${runId.slice(0, 8)}`).trim() || `opencto/${runId.slice(0, 8)}`
   const executionMode = getExecutionMode(ctx)
+  const approvalPolicy = runNeedsHumanApproval(commands, targetBranch)
 
   if (executionMode === 'container' && !ctx.env.CODEBASE_EXECUTOR) {
     throw new NotImplementedException('Container execution requested but CODEBASE_EXECUTOR binding is not configured')
@@ -468,12 +624,13 @@ export async function createCodebaseRun(
 
   await ctx.env.DB.prepare(
     `INSERT INTO codebase_runs (
-      id, user_id, repo_url, repo_full_name, base_branch, target_branch, status,
+      id, user_id, trace_id, repo_url, repo_full_name, base_branch, target_branch, status,
       requested_commands_json, command_allowlist_version, timeout_seconds, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     runId,
     ctx.userId,
+    ctx.traceContext.traceId,
     repoUrl,
     payload.repoFullName?.trim() || null,
     baseBranch,
@@ -502,53 +659,32 @@ export async function createCodebaseRun(
     message: `Requested commands: ${commands.join(' | ')}`,
   }, ctx)
 
-  if (executionMode === 'container') {
-    await setRunStatus(runId, ctx, { status: 'running' })
+  if (approvalPolicy.required) {
     await appendEvent(runId, {
-      level: 'system',
-      eventType: 'run.dispatched',
-      message: 'Run dispatched to container executor.',
+      level: 'warn',
+      eventType: 'run.approval_required',
+      message: 'Human approval required before run execution.',
+      payload: {
+        reason: approvalPolicy.reason,
+      },
     }, ctx)
-
-    const result = await containerDispatcher(runId, {
+  } else if (executionMode === 'container') {
+    await executeContainerRun(runId, {
       repoUrl,
       baseBranch,
       targetBranch,
       commands,
       timeoutSeconds,
     }, ctx)
-
-    for (const log of result.logs) {
-      await appendEvent(runId, {
-        level: log.level,
-        eventType: 'container.log',
-        message: log.message,
-      }, ctx)
-    }
-
-    if (result.status === 'succeeded') {
-      await setRunStatus(runId, ctx, { status: 'succeeded' })
-      await appendEvent(runId, {
-        level: 'system',
-        eventType: 'run.completed',
-        message: 'Container execution completed successfully.',
-      }, ctx)
-    } else {
-      await setRunStatus(runId, ctx, {
-        status: result.status,
-        errorMessage: result.errorMessage ?? 'Container execution failed',
-      })
-      await appendEvent(runId, {
-        level: 'error',
-        eventType: 'run.failed',
-        message: result.errorMessage ?? 'Container execution failed',
-      }, ctx)
-    }
   }
 
   const row = await getRunRow(runId, ctx)
+  const approval = await getRunApproval(runId, ctx)
   return jsonResponse({
-    run: mapRun(row),
+    run: {
+      ...mapRun(row),
+      approval,
+    },
     allowlist: [...ALLOWED_COMMAND_TEMPLATES],
   }, 201)
 }
@@ -556,6 +692,7 @@ export async function createCodebaseRun(
 // GET /api/v1/codebase/runs/:id
 export async function getCodebaseRun(runId: string, ctx: RequestContext): Promise<Response> {
   const row = await getRunRow(runId, ctx)
+  const approval = await getRunApproval(runId, ctx)
   const eventCount = await ctx.env.DB.prepare('SELECT COUNT(*) AS count FROM codebase_run_events WHERE run_id = ?')
     .bind(runId)
     .first<{ count: number }>()
@@ -564,10 +701,119 @@ export async function getCodebaseRun(runId: string, ctx: RequestContext): Promis
     .first<{ count: number }>()
 
   return jsonResponse({
-    run: mapRun(row),
+    run: {
+      ...mapRun(row),
+      approval,
+    },
     metrics: {
       eventCount: eventCount?.count ?? 0,
       artifactCount: artifactCount?.count ?? 0,
+    },
+  })
+}
+
+// POST /api/v1/codebase/runs/:id/approve
+export async function approveCodebaseRun(
+  runId: string,
+  payload: { note?: string } | undefined,
+  ctx: RequestContext,
+): Promise<Response> {
+  ensureApproverRole(ctx)
+  const row = await getRunRow(runId, ctx)
+  if (TERMINAL_RUN_STATUSES.has(row.status)) {
+    throw new BadRequestException('Cannot approve a completed run')
+  }
+
+  const approval = await getRunApproval(runId, ctx)
+  if (!approval.required) {
+    throw new BadRequestException('Run does not require human approval')
+  }
+  if (approval.state !== 'pending') {
+    throw new BadRequestException('Approval decision already recorded')
+  }
+
+  await appendEvent(runId, {
+    level: 'system',
+    eventType: 'run.approval.approved',
+    message: 'Run approved by human reviewer.',
+    payload: {
+      approvedByUserId: ctx.userId,
+      approverRole: ctx.user.role,
+      note: payload?.note ?? null,
+    },
+  }, ctx)
+
+  if (getExecutionMode(ctx) === 'container') {
+    if (!ctx.env.CODEBASE_EXECUTOR) {
+      throw new NotImplementedException('Container execution requested but CODEBASE_EXECUTOR binding is not configured')
+    }
+    await executeContainerRun(runId, {
+      repoUrl: row.repo_url,
+      baseBranch: row.base_branch,
+      targetBranch: row.target_branch,
+      commands: parseRequestedCommands(row),
+      timeoutSeconds: row.timeout_seconds,
+    }, ctx)
+  }
+
+  const updated = await getRunRow(runId, ctx)
+  const updatedApproval = await getRunApproval(runId, ctx)
+  return jsonResponse({
+    run: {
+      ...mapRun(updated),
+      approval: updatedApproval,
+    },
+  })
+}
+
+// POST /api/v1/codebase/runs/:id/deny
+export async function denyCodebaseRun(
+  runId: string,
+  payload: { note?: string } | undefined,
+  ctx: RequestContext,
+): Promise<Response> {
+  ensureApproverRole(ctx)
+  const row = await getRunRow(runId, ctx)
+  if (TERMINAL_RUN_STATUSES.has(row.status)) {
+    throw new BadRequestException('Cannot deny a completed run')
+  }
+
+  const approval = await getRunApproval(runId, ctx)
+  if (!approval.required) {
+    throw new BadRequestException('Run does not require human approval')
+  }
+  if (approval.state !== 'pending') {
+    throw new BadRequestException('Approval decision already recorded')
+  }
+
+  await appendEvent(runId, {
+    level: 'warn',
+    eventType: 'run.approval.denied',
+    message: 'Run denied by human reviewer.',
+    payload: {
+      deniedByUserId: ctx.userId,
+      approverRole: ctx.user.role,
+      note: payload?.note ?? null,
+    },
+  }, ctx)
+
+  const canceledAt = nowIso()
+  await ctx.env.DB.prepare(
+    'UPDATE codebase_runs SET status = ?, canceled_at = ?, completed_at = ?, error_message = ? WHERE id = ? AND user_id = ?',
+  ).bind('canceled', canceledAt, canceledAt, 'Denied by human approver', runId, ctx.userId).run()
+
+  await appendEvent(runId, {
+    level: 'warn',
+    eventType: 'run.canceled',
+    message: 'Run canceled after denial.',
+  }, ctx)
+
+  const updated = await getRunRow(runId, ctx)
+  const updatedApproval = await getRunApproval(runId, ctx)
+  return jsonResponse({
+    run: {
+      ...mapRun(updated),
+      approval: updatedApproval,
     },
   })
 }

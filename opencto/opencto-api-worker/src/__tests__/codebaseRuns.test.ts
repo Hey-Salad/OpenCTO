@@ -8,6 +8,7 @@ type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 't
 type RunRow = {
   id: string
   user_id: string
+  trace_id: string | null
   repo_url: string
   repo_full_name: string | null
   base_branch: string
@@ -59,21 +60,22 @@ class MockD1Database {
 
   executeRun(sql: string, args: unknown[]): void {
     const normalized = normalizeSql(sql)
-    if (normalized.startsWith('create table') || normalized.startsWith('create index')) return
+    if (normalized.startsWith('create table') || normalized.startsWith('create index') || normalized.startsWith('alter table')) return
 
     if (normalized.startsWith('insert into codebase_runs')) {
       const row: RunRow = {
         id: String(args[0]),
         user_id: String(args[1]),
-        repo_url: String(args[2]),
-        repo_full_name: args[3] == null ? null : String(args[3]),
-        base_branch: String(args[4]),
-        target_branch: String(args[5]),
-        status: String(args[6]) as RunStatus,
-        requested_commands_json: String(args[7]),
-        command_allowlist_version: String(args[8]),
-        timeout_seconds: Number(args[9]),
-        created_at: String(args[10]),
+        trace_id: args[2] == null ? null : String(args[2]),
+        repo_url: String(args[3]),
+        repo_full_name: args[4] == null ? null : String(args[4]),
+        base_branch: String(args[5]),
+        target_branch: String(args[6]),
+        status: String(args[7]) as RunStatus,
+        requested_commands_json: String(args[8]),
+        command_allowlist_version: String(args[9]),
+        timeout_seconds: Number(args[10]),
+        created_at: String(args[11]),
         started_at: null,
         completed_at: null,
         canceled_at: null,
@@ -95,6 +97,17 @@ class MockD1Database {
         created_at: String(args[7]),
       }
       this.events.push(row)
+      return
+    }
+
+    if (normalized.startsWith('update codebase_runs set status = ?, canceled_at = ?, completed_at = ?, error_message = ?')) {
+      const [status, canceledAt, completedAt, errorMessage, runId, userId] = args
+      const run = this.runs.get(String(runId))
+      if (!run || run.user_id !== String(userId)) return
+      run.status = String(status) as RunStatus
+      run.canceled_at = String(canceledAt)
+      run.completed_at = String(completedAt)
+      run.error_message = String(errorMessage)
       return
     }
 
@@ -134,7 +147,7 @@ class MockD1Database {
   executeFirst<T>(sql: string, args: unknown[]): T | null {
     const normalized = normalizeSql(sql)
 
-    if (normalized.startsWith('select id, user_id, repo_url, repo_full_name')) {
+    if (normalized.startsWith('select id, user_id, trace_id, repo_url, repo_full_name')) {
       const [runId, userId] = args
       const row = this.runs.get(String(runId))
       if (!row || row.user_id !== String(userId)) return null
@@ -182,6 +195,23 @@ class MockD1Database {
         .sort((a, b) => a.seq - b.seq)
         .slice(0, Number(limit))
       return { results: filtered.map((event) => structuredClone(event) as T) }
+    }
+
+    if (normalized.startsWith("select event_type, payload_json, created_at from codebase_run_events where run_id = ? and event_type in ('run.approval_required', 'run.approval.approved', 'run.approval.denied')")) {
+      const [runId] = args
+      const filtered = this.events
+        .filter((event) => event.run_id === String(runId) && (
+          event.event_type === 'run.approval_required'
+          || event.event_type === 'run.approval.approved'
+          || event.event_type === 'run.approval.denied'
+        ))
+        .sort((a, b) => a.seq - b.seq)
+        .map((event) => ({
+          event_type: event.event_type,
+          payload_json: event.payload_json,
+          created_at: event.created_at,
+        }) as T)
+      return { results: filtered }
     }
 
     throw new Error(`Unhandled all SQL: ${sql}`)
@@ -299,6 +329,21 @@ describe('Codebase run endpoints', () => {
     expect(body.error).toContain('Shell chaining')
   })
 
+  it('POST /api/v1/codebase/runs blocks unsafe repo URLs', async () => {
+    const env = createMockEnv()
+
+    const res = await createRun(env, {
+      repoUrl: 'http://localhost:3000/private.git',
+      commands: ['npm run build'],
+    })
+    const body = await res.json() as { code?: string; status?: number; details?: { guardrailCodes?: string[] } }
+
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('FORBIDDEN')
+    expect(body.status).toBe(403)
+    expect(body.details?.guardrailCodes).toContain('UNSAFE_REPO_URL')
+  })
+
   it('POST /api/v1/codebase/runs rejects unauthorized requests', async () => {
     const env = createMockEnv({ ENVIRONMENT: 'production' })
 
@@ -352,6 +397,87 @@ describe('Codebase run endpoints', () => {
     expect(res.status).toBe(501)
     expect(body.code).toBe('NOT_IMPLEMENTED')
     expect(body.status).toBe(501)
+  })
+
+  it('POST /api/v1/codebase/runs creates pending human approval for high-risk runs', async () => {
+    const env = createMockEnv()
+
+    const res = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['git push origin main'],
+    })
+    const body = await res.json() as { run: { status: string; approval?: { state?: string; required?: boolean } } }
+
+    expect(res.status).toBe(201)
+    expect(body.run.status).toBe('queued')
+    expect(body.run.approval?.required).toBe(true)
+    expect(body.run.approval?.state).toBe('pending')
+  })
+
+  it('POST /api/v1/codebase/runs/:id/approve executes pending run in container mode', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv(
+      {
+        CODEBASE_EXECUTION_MODE: 'container',
+        CODEBASE_EXECUTOR: {} as DurableObjectNamespace,
+      },
+      db,
+    )
+
+    __setContainerDispatcherForTests(async () => ({
+      status: 'succeeded',
+      logs: [{ level: 'info', message: 'approved run executed' }],
+    }))
+
+    const created = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['git push origin main'],
+    })
+    const createdBody = await created.json() as { run: { id: string } }
+
+    const approveRes = await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/codebase/runs/${createdBody.run.id}/approve`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer demo-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ note: 'approved in test' }),
+      }),
+      env,
+    )
+    const approveBody = await approveRes.json() as { run: { status: string; approval?: { state?: string } } }
+
+    expect(approveRes.status).toBe(200)
+    expect(approveBody.run.status).toBe('succeeded')
+    expect(approveBody.run.approval?.state).toBe('approved')
+  })
+
+  it('POST /api/v1/codebase/runs/:id/deny cancels pending run', async () => {
+    const env = createMockEnv()
+
+    const created = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['git push origin main'],
+    })
+    const createdBody = await created.json() as { run: { id: string } }
+
+    const denyRes = await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/codebase/runs/${createdBody.run.id}/deny`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer demo-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ note: 'deny in test' }),
+      }),
+      env,
+    )
+    const denyBody = await denyRes.json() as { run: { status: string; approval?: { state?: string } } }
+
+    expect(denyRes.status).toBe(200)
+    expect(denyBody.run.status).toBe('canceled')
+    expect(denyBody.run.approval?.state).toBe('denied')
   })
 
   it('POST /api/v1/codebase/runs dispatches to container in container mode', async () => {
