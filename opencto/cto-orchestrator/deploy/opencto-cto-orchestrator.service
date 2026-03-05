@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenCTO CTO Orchestrator
+After=network-online.target opencto-system-monitor.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hs-chilu/heysalad-ai-projects/CTO-AI/opencto/cto-orchestrator
+EnvironmentFile=/home/hs-chilu/heysalad-ai-projects/CTO-AI/opencto/cto-orchestrator/.env
+ExecStart=/usr/bin/node /home/hs-chilu/heysalad-ai-projects/CTO-AI/opencto/cto-orchestrator/src/index.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/hs-chilu/heysalad-ai-projects/CTO-AI/opencto/cto-orchestrator
+
+[Install]
+WantedBy=default.target

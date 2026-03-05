@@ -1,0 +1,23 @@
+name = "opencto-cloudbot-worker"
+main = "src/index.ts"
+compatibility_date = "2026-03-04"
+account_id = "67a17ada4efeee4480283035cc0c5f90"
+
+[vars]
+OPENCTO_AGENT_MODEL = "gpt-4.1-mini"
+OPENCTO_APPROVAL_REQUIRED = "true"
+OPENCTO_VECTOR_RAG_ENABLED = "true"
+OPENCTO_EMBED_MODEL = "text-embedding-3-small"
+OPENCTO_ANYWAY_ENABLED = "false"
+OPENCTO_ANYWAY_ENDPOINT = "https://api.anyway.sh/v1/ingest"
+OPENCTO_INFOBIP_BASE_URL = "https://gr6pre.api.infobip.com"
+OPENCTO_INFOBIP_WHATSAPP_FROM = "+447307810053"
+OPENCTO_INFOBIP_SMS_FROM = "+447307810053"
+
+[[kv_namespaces]]
+binding = "OPENCTO_KV"
+id = "f19afd3b1d954361ab56e2fb9eda21be"
+
+[[vectorize]]
+binding = "OPENCTO_VECTOR_INDEX"
+index_name = "opencto-memory-index"
