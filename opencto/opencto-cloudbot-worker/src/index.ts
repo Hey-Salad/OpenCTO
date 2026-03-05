@@ -64,6 +64,17 @@ const SYSTEM_PROMPT = [
   "Respond clearly with short execution updates and final outcomes.",
 ].join(" ");
 
+const TELEGRAM_START_MESSAGE = [
+  "Welcome to OpenCTO.",
+  "You can ask for coding help, ops tasks, roadmap planning, and daily execution support.",
+  "",
+  "Try these commands:",
+  "/help",
+  "/task add <title>",
+  "/tasks",
+  "/daily",
+].join("\n");
+
 const SESSION_LIMIT = 12;
 const MEMORY_LIMIT = 300;
 const TASK_LIMIT = 300;
@@ -632,6 +643,10 @@ async function handleCommand(env: Env, chatId: ChatScope, text: string) {
   const trimmed = text.trim();
   const [cmd, ...rest] = trimmed.split(" ");
   const arg = rest.join(" ").trim();
+
+  if (cmd === "/start") {
+    return TELEGRAM_START_MESSAGE;
+  }
 
   if (cmd === "/help") {
     return [
