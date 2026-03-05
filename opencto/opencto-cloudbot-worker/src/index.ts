@@ -1019,7 +1019,25 @@ function extractInfobipMessages(body: unknown): InfobipInboundMessage[] {
 }
 
 function normalizeStatusToken(value: string) {
-  const token = value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const lowered = value.toLowerCase();
+  let token = "";
+  let lastWasUnderscore = false;
+  for (let i = 0; i < lowered.length; i += 1) {
+    const ch = lowered.charCodeAt(i);
+    const isAlphaNum = (ch >= 97 && ch <= 122) || (ch >= 48 && ch <= 57);
+    if (isAlphaNum) {
+      token += lowered[i];
+      lastWasUnderscore = false;
+      continue;
+    }
+    if (!lastWasUnderscore && token.length > 0) {
+      token += "_";
+      lastWasUnderscore = true;
+    }
+  }
+  if (token.endsWith("_")) {
+    token = token.slice(0, -1);
+  }
   return token || "unknown";
 }
 

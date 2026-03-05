@@ -8,7 +8,7 @@ export class OpenCTOClient {
   private readonly timeoutMs: number
 
   constructor(options: OpenCTOClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, '')
+    this.baseUrl = trimTrailingSlashes(options.baseUrl)
     this.token = options.token
     this.headers = options.headers ?? {}
     this.fetchImpl = options.fetchImpl ?? fetch
@@ -65,4 +65,12 @@ export class OpenCTOClient {
       clearTimeout(timeout)
     }
   }
+}
+
+function trimTrailingSlashes(input: string): string {
+  let end = input.length
+  while (end > 0 && input.charCodeAt(end - 1) === 47) {
+    end -= 1
+  }
+  return input.slice(0, end)
 }
