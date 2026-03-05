@@ -1,38 +1,100 @@
 # OpenCTO CloudBot Worker
 
-Cloudflare Worker that exposes a Telegram webhook and uses OpenAI Responses API.
-Now includes KV-backed persistent memory, task tracking, and daily activity logs with lightweight RAG retrieval.
-Optional semantic RAG is supported via OpenAI embeddings + Cloudflare Vectorize.
+Cloudflare Worker powering OpenCTO across Telegram, Slack, WhatsApp, and SMS.
+It runs a shared AI orchestration path with persistent memory, task management, daily activity logs, and optional semantic RAG.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  TG1[Telegram Admin Bot] --> W[OpenCTO CloudBot Worker]
+  TG2[Telegram Consumer Bot] --> W
+  SL[Slack Events API] --> W
+  IB[Infobip Webhooks<br/>WhatsApp/SMS + Status] --> W
+
+  W --> OA[OpenAI Responses API]
+  W --> KV[Cloudflare KV<br/>sessions, tasks, activity, memory index]
+  W --> V[Cloudflare Vectorize<br/>semantic memory search]
+  W --> TEL[Telegram sendMessage]
+  W --> SLP[Slack chat.postMessage]
+  W --> IBO[Infobip outbound<br/>text/template]
+  W --> OBS[Anyway Tracing]
+```
+
+## Information Flow
+
+1. Channel webhook receives a user event.
+2. Worker normalizes event into a channel scope (`telegram:<id>`, `slack:<team>:<channel>:<thread>`, `infobip:whatsapp:<phone>`).
+3. User event is logged to daily activity (`KV`).
+4. Shared chat turn executes.
+5. Commands (`/help`, `/remember`, `/task`, `/tasks`, `/daily`) are handled if present.
+6. Otherwise, RAG context is built from lexical memory (`KV`) and semantic memory (`Vectorize`, if enabled).
+7. OpenAI generates assistant response.
+8. Worker sends reply to originating channel.
+9. Bot reply (or error/status) is logged to activity for observability and replay.
+
+## Channel Behavior
+
+- Telegram: admin webhook at `/webhook/telegram`, consumer webhook at `/webhook/telegram-consumer`; each replies with its own bot token.
+- Slack: verifies signature/timestamp, handles mentions/DMs/active thread replies, and keeps thread context in KV.
+- Infobip WhatsApp/SMS: inbound message webhooks, delivery/read callback logging, 24h WhatsApp free-form window, and template fallback outside the window.
+
+## Data Model (KV / Vectorize)
+
+- Session: short conversational memory (`session:<scope>`)
+- Persistent memory entries + memory index (`memory:*`, `memory_index:*`)
+- Tasks and task index (`task:*`, `task_index:*`)
+- Activity timeline (`activity:<scope>:YYYY-MM-DD`)
+- Slack active thread markers (`slack_thread:*`)
+- Infobip last inbound marker (`infobip_last_inbound:*`)
+- Semantic vectors in `OPENCTO_VECTOR_INDEX` (optional)
 
 ## Setup
 
-1. Install deps:
+1. Install:
 
 ```bash
 npm install
 ```
 
-2. Create KV namespace and put id in `wrangler.toml`.
+2. Configure `wrangler.toml` bindings/vars:
 
-3. Set secrets:
+```toml
+[vars]
+OPENCTO_AGENT_MODEL = "gpt-4.1-mini"
+OPENCTO_VECTOR_RAG_ENABLED = "true"
+OPENCTO_EMBED_MODEL = "text-embedding-3-small"
+OPENCTO_ANYWAY_ENABLED = "true"
+OPENCTO_ANYWAY_ENDPOINT = "https://api.anyway.sh/v1/ingest"
+
+OPENCTO_INFOBIP_BASE_URL = "https://<your-subdomain>.api.infobip.com"
+OPENCTO_INFOBIP_WHATSAPP_FROM = "<approved_whatsapp_sender>"
+OPENCTO_INFOBIP_SMS_FROM = "<sms_sender_id>"
+OPENCTO_INFOBIP_WHATSAPP_TEMPLATE_NAME = "<template_name_optional>"
+OPENCTO_INFOBIP_WHATSAPP_TEMPLATE_LANGUAGE = "en"
+
+OPENCTO_SLACK_ALLOWED_CHANNELS = "C12345,C67890"
+```
+
+3. Add secrets:
 
 ```bash
 wrangler secret put OPENAI_API_KEY
 wrangler secret put TELEGRAM_BOT_TOKEN
+wrangler secret put OPENCTO_TELEGRAM_CONSUMER_BOT_TOKEN
 wrangler secret put OPENCTO_SLACK_BOT_TOKEN
 wrangler secret put OPENCTO_SLACK_SIGNING_SECRET
 wrangler secret put OPENCTO_INFOBIP_API_KEY
 wrangler secret put OPENCTO_INFOBIP_WEBHOOK_TOKEN
+wrangler secret put OPENCTO_ANYWAY_API_KEY
+wrangler secret put OPENCTO_ADMIN_TOKEN
 ```
 
-4. (Optional) Enable semantic RAG with Vectorize:
+4. Optional semantic RAG (Vectorize):
 
 ```bash
-# create index once (example dimensions for text-embedding-3-small)
 wrangler vectorize create opencto-memory-index --dimensions=1536 --metric=cosine
 ```
-
-Add binding in `wrangler.toml`:
 
 ```toml
 [[vectorize]]
@@ -40,96 +102,60 @@ binding = "OPENCTO_VECTOR_INDEX"
 index_name = "opencto-memory-index"
 ```
 
-Optional vars:
-
-```toml
-[vars]
-OPENCTO_VECTOR_RAG_ENABLED = "true"
-OPENCTO_EMBED_MODEL = "text-embedding-3-small"
-```
-
-Infobip vars (`wrangler.toml`):
-
-```toml
-[vars]
-OPENCTO_INFOBIP_BASE_URL = "https://<your-subdomain>.api.infobip.com"
-OPENCTO_INFOBIP_WHATSAPP_FROM = "<approved_whatsapp_sender>"
-OPENCTO_INFOBIP_SMS_FROM = "<sms_sender_id>"
-```
-
 5. Deploy:
 
 ```bash
-npm run deploy
+wrangler deploy
 ```
 
-6. Set Telegram webhook:
+## Webhook Configuration
+
+- Telegram admin bot:
 
 ```bash
-curl "https://api.telegram.org/bot<token>/setWebhook?url=https://<worker-domain>/webhook/telegram"
+curl -sS "https://api.telegram.org/bot<ADMIN_TOKEN>/setWebhook?url=https://<worker-domain>/webhook/telegram"
 ```
 
-7. Configure Slack Events API webhook:
+- Telegram consumer bot:
 
-- Request URL: `https://<worker-domain>/webhook/slack`
-- Subscribe to bot events:
-  - `app_mention`
-  - `message.channels`
-  - `message.groups`
-  - `message.im`
-- Install app to workspace with bot scope: `chat:write`
-
-Optional `wrangler.toml` vars:
-
-```toml
-[vars]
-OPENCTO_SLACK_ALLOWED_CHANNELS = "C12345,C67890"
+```bash
+curl -sS "https://api.telegram.org/bot<CONSUMER_TOKEN>/setWebhook?url=https://<worker-domain>/webhook/telegram-consumer"
 ```
 
-8. Configure Infobip webhooks:
+- Slack Events API request URL: `https://<worker-domain>/webhook/slack`
+- Slack required events: `app_mention`, `message.channels`, `message.groups`, `message.im`
+- Slack bot scope: `chat:write`
+- Infobip WhatsApp webhook: `https://<worker-domain>/webhook/infobip/whatsapp?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
+- Infobip SMS webhook: `https://<worker-domain>/webhook/infobip/sms?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
 
-- WhatsApp inbound URL:
-  - `https://<worker-domain>/webhook/infobip/whatsapp?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
-- SMS inbound URL:
-  - `https://<worker-domain>/webhook/infobip/sms?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
+## API Endpoints
 
-Supported channels in this phase:
-- WhatsApp text
-- SMS text
+- `GET /health`
+- `POST /api/log-activity` body: `{ "chatId": string|number, "type": string, "text": string }`
+- `POST /api/tasks` body: `{ "chatId": string|number, "title": string, "priority": "low|medium|high" }`
+- `GET /api/tasks?chatId=<id>&status=open|done`
+- `GET /api/activity/daily?chatId=<id>&date=YYYY-MM-DD`
+
+If `OPENCTO_ADMIN_TOKEN` is set, include `x-opencto-admin-token` on `/api/*`.
 
 ## Telegram Commands
 
 - `/help`
-- `/remember <text>`: save persistent memory
-- `/task add <title>`: create a task
-- `/task done <task_id>`: complete a task
-- `/tasks`: list open tasks
-- `/daily`: show today's activity log
+- `/remember <text>`
+- `/task add <title>`
+- `/task done <task_id>`
+- `/tasks`
+- `/daily`
 
-All user/bot messages are also logged into a daily activity stream.
+## Quick Demo Script
 
-## API Endpoints
-
-- `POST /api/log-activity` body: `{ "chatId": number, "type": string, "text": string }`
-- `POST /api/tasks` body: `{ "chatId": number, "title": string, "priority": "low|medium|high" }`
-- `GET /api/tasks?chatId=<id>&status=open|done`
-- `GET /api/activity/daily?chatId=<id>&date=YYYY-MM-DD`
-
-If `OPENCTO_ADMIN_TOKEN` is set, send `x-opencto-admin-token` header on `/api/*`.
-
-## Slack behavior
-
-- Verifies `X-Slack-Signature` and timestamp (replay-protected).
-- Responds to `@OpenCTO` mentions and DMs.
-- Starts a thread when mentioned in a channel.
-- Continues replying inside that active thread without requiring repeated `@` mentions.
-- Replies in thread and reuses the same persistent memory/tasks/RAG context.
+1. Open `@OpenCTO_ai_bot` and send `Hi`.
+2. Send `/task add Ship architecture demo`.
+3. Send `/tasks` to confirm task persistence.
+4. Send a WhatsApp message.
+5. Verify status events with `GET /api/activity/daily?chatId=infobip:whatsapp:<number>&date=<today>`.
 
 ## Notes
 
-- KV lexical retrieval works out of the box.
-- If `OPENCTO_VECTOR_INDEX` is bound, memory writes are embedded and upserted to Vectorize.
-- Queries then combine semantic matches (`Vectorize`) + lexical matches (`KV`) for context.
-- Infobip replies are sent through:
-  - WhatsApp: `/whatsapp/1/message/text`
-  - SMS: `/sms/2/text/advanced`
+- Tracing is fail-open: telemetry failures never block channel replies.
+- Python tracing sidecar lives in `sidecar/`.
