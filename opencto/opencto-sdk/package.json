@@ -1,0 +1,30 @@
+{
+  "name": "@heysalad/opencto",
+  "version": "0.2.0",
+  "description": "OpenCTO JavaScript SDK for auth, chats, runs, realtime, marketplace, agents, and tracing.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "opencto",
+    "sdk",
+    "agents",
+    "stripe",
+    "marketplace",
+    "tracing"
+  ],
+  "author": "HeySalad",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
