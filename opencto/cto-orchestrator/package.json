@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node src/main.js",
     "test": "node --test"
   },
   "dependencies": {
+    "@traceloop/node-server-sdk": "^0.22.8",
     "openai": "^4.86.2"
   }
 }

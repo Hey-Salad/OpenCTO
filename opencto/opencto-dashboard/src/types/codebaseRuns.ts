@@ -1,5 +1,14 @@
 export type CodebaseRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
 export type CodebaseRunEventLevel = 'system' | 'info' | 'warn' | 'error'
+export type CodebaseRunApprovalState = 'not_required' | 'pending' | 'approved' | 'denied'
+
+export interface CodebaseRunApproval {
+  required: boolean
+  state: CodebaseRunApprovalState
+  reason: string | null
+  approvedByUserId: string | null
+  decidedAt: string | null
+}
 
 export interface CodebaseRun {
   id: string
@@ -17,6 +26,7 @@ export interface CodebaseRun {
   completedAt: string | null
   canceledAt: string | null
   errorMessage: string | null
+  approval?: CodebaseRunApproval
 }
 
 export interface CodebaseRunEvent {
@@ -41,6 +51,10 @@ export interface GetCodebaseRunResponse {
     eventCount: number
     artifactCount: number
   }
+}
+
+export interface MutateCodebaseRunResponse {
+  run: CodebaseRun
 }
 
 export interface GetCodebaseRunEventsResponse {

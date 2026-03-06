@@ -176,6 +176,15 @@ export async function executeToolCall({ cfg, state, name, args }) {
     if (!serviceAllowed(service)) {
       throw new Error("Service not allowed. Use opencto-*.service only.");
     }
+    if (!cfg.requireApprovals) {
+      await runCommand("systemctl", ["--user", "restart", service]);
+      return {
+        queued: false,
+        executed: true,
+        message: `Restarted ${service} immediately (full-autonomous mode).`,
+        reason,
+      };
+    }
     const approvals = ensureApprovalState(state);
     const id = approvalId();
     approvals[id] = {

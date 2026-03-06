@@ -24,4 +24,5 @@ Recommended route plan:
 
 - `opencto.works`: marketing site
 - `app.opencto.works`: authenticated app
+- `market.opencto.works`: marketplace frontend
 - `api.opencto.works`: API

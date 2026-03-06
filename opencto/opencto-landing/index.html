@@ -3,788 +3,104 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenCTO | AI Engineering Control Center</title>
-    <meta
-      name="description"
-      content="OpenCTO helps founders, CTOs, and engineering teams run planning, execution, and deployment workflows from one AI-assisted control center."
-    />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Grandstander:wght@600;700&family=Sora:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <title>OpenCTO | Agentic Engineering</title>
     <style>
       :root {
-        --bg: #090d14;
-        --bg-soft: #111826;
-        --surface: rgba(19, 28, 43, 0.86);
-        --surface-border: #2a3852;
-        --text: #ecf2ff;
-        --muted: #a9b7d1;
-        --brand: #ed4c4c;
-        --brand-strong: #ff6b6b;
-        --accent: #2d8cff;
-        --ok: #4fbf88;
+        color-scheme: dark;
+        --brand-primary: #ed4c4c;
+        --brand-secondary: #faa09a;
+        --brand-tertiary: #ffd0cd;
+        --bg-1: #0f0f12;
+        --bg-2: #17171c;
+        --panel: rgba(23, 23, 28, 0.9);
+        --text: #f4f4f7;
+        --muted: #a3a3b2;
       }
-
-      * {
-        box-sizing: border-box;
-      }
-
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        font-family: "Sora", "Segoe UI", sans-serif;
+        min-height: 100vh;
+        font-family: "Sora", "Avenir Next", "Segoe UI", sans-serif;
         color: var(--text);
-        background:
-          radial-gradient(900px 560px at 86% -12%, rgba(45, 140, 255, 0.18), transparent 62%),
-          radial-gradient(760px 480px at 8% -10%, rgba(237, 76, 76, 0.16), transparent 54%),
-          linear-gradient(165deg, #06090f 0%, var(--bg) 60%, #0b1320 100%);
-        line-height: 1.55;
+        background: radial-gradient(900px 700px at 88% -15%, rgba(237, 76, 76, 0.22), transparent 55%),
+          radial-gradient(760px 640px at -10% 0%, rgba(250, 160, 154, 0.12), transparent 48%),
+          linear-gradient(135deg, var(--bg-1), var(--bg-2));
+        display: grid;
+        place-items: center;
+        padding: 2rem;
       }
-
-      a {
-        color: inherit;
+      .card {
+        width: min(760px, 100%);
+        border: 1px solid rgba(250, 160, 154, 0.24);
+        background: var(--panel);
+        backdrop-filter: blur(8px);
+        border-radius: 20px;
+        padding: 2.5rem;
       }
-
-      .container {
-        width: min(1100px, calc(100% - 2rem));
-        margin: 0 auto;
-      }
-
-      .site-header {
-        position: sticky;
-        top: 0;
-        z-index: 20;
-        backdrop-filter: blur(10px);
-        background: rgba(8, 12, 19, 0.78);
-        border-bottom: 1px solid rgba(169, 183, 209, 0.16);
-      }
-
-      .site-header .container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        min-height: 72px;
-      }
-
       .brand {
-        display: inline-flex;
+        display: flex;
         align-items: center;
-        gap: 0.65rem;
-        text-decoration: none;
+        gap: 0.6rem;
+        margin-bottom: 0.8rem;
       }
-
       .brand svg {
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
       }
-
       .brand span {
-        font-family: "Grandstander", "Sora", sans-serif;
-        font-size: 1.45rem;
         font-weight: 700;
         letter-spacing: 0.02em;
       }
-
-      .header-links {
-        display: flex;
-        align-items: center;
-        gap: 0.8rem;
-      }
-
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        border-radius: 999px;
-        padding: 0.7rem 1.1rem;
-        text-decoration: none;
-        font-weight: 600;
-        border: 1px solid transparent;
-      }
-
-      .btn-primary {
-        background: linear-gradient(140deg, var(--brand), var(--brand-strong));
-        color: #fff;
-      }
-
-      .btn-primary:hover {
-        filter: brightness(1.08);
-      }
-
-      .btn-secondary {
-        border-color: rgba(169, 183, 209, 0.45);
-        background: rgba(169, 183, 209, 0.08);
-        color: var(--text);
-      }
-
-      .btn-secondary:hover {
-        border-color: rgba(169, 183, 209, 0.8);
-      }
-
-      section {
-        padding: 4rem 0;
-      }
-
-      .hero {
-        padding-top: 5.2rem;
-      }
-
-      .hero-grid {
-        display: grid;
-        grid-template-columns: 1.12fr 0.88fr;
-        gap: 1.4rem;
-      }
-
-      .eyebrow {
-        display: inline-flex;
-        border: 1px solid rgba(79, 191, 136, 0.45);
-        color: #b5f0cf;
-        background: rgba(79, 191, 136, 0.12);
-        border-radius: 999px;
-        padding: 0.35rem 0.75rem;
-        font-size: 0.82rem;
-        font-weight: 600;
-      }
-
       h1 {
-        margin: 0.9rem 0 1rem;
-        font-size: clamp(2rem, 5vw, 3.25rem);
+        margin: 0 0 0.8rem;
+        font-size: clamp(2rem, 5vw, 3rem);
         line-height: 1.1;
       }
-
-      .hero p {
-        margin: 0;
+      p {
+        margin: 0 0 1.5rem;
         color: var(--muted);
         font-size: 1.05rem;
-        max-width: 64ch;
       }
-
-      .hero-actions {
-        margin-top: 1.6rem;
-        display: flex;
-        gap: 0.7rem;
-        flex-wrap: wrap;
-      }
-
-      .panel {
-        border: 1px solid var(--surface-border);
-        background: var(--surface);
-        border-radius: 18px;
-      }
-
-      .demo {
-        padding: 1rem;
-      }
-
-      .demo-head {
-        display: flex;
+      .cta {
+        display: inline-flex;
         align-items: center;
-        justify-content: space-between;
-        margin-bottom: 0.9rem;
-      }
-
-      .status {
-        font-size: 0.78rem;
-        color: #b5f0cf;
-        background: rgba(79, 191, 136, 0.16);
-        border: 1px solid rgba(79, 191, 136, 0.35);
+        gap: 0.5rem;
+        border: 0;
         border-radius: 999px;
-        padding: 0.22rem 0.6rem;
-      }
-
-      .demo-window {
-        min-height: 260px;
-        border-radius: 14px;
-        border: 1px dashed rgba(169, 183, 209, 0.45);
-        background: linear-gradient(150deg, rgba(45, 140, 255, 0.09), rgba(237, 76, 76, 0.08));
-        display: grid;
-        place-items: center;
-        text-align: center;
-        color: var(--muted);
-        padding: 1.2rem;
-      }
-
-      .metrics,
-      .logos,
-      .cards,
-      .use-cases,
-      .model-grid,
-      .integration-grid,
-      .footer-links {
-        display: grid;
-        gap: 0.9rem;
-      }
-
-      .metrics {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-      }
-
-      .metric,
-      .logo-pill,
-      .card,
-      .role,
-      .model,
-      .integration,
-      .cta-box,
-      .trust-box {
-        border: 1px solid var(--surface-border);
-        background: var(--surface);
-        border-radius: 16px;
-      }
-
-      .metric {
-        padding: 1rem;
-      }
-
-      .metric strong {
-        display: block;
-        font-size: 1.35rem;
-      }
-
-      .metric span {
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
-
-      .logos {
-        margin-top: 0.9rem;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-      }
-
-      .logo-pill {
-        text-align: center;
-        padding: 0.75rem 0.5rem;
-        font-weight: 600;
-        color: #d8e3fb;
-      }
-
-      .section-head {
-        margin-bottom: 1.15rem;
-      }
-
-      .section-head h2 {
-        margin: 0 0 0.5rem;
-        font-size: clamp(1.45rem, 3vw, 2rem);
-      }
-
-      .section-head p {
-        margin: 0;
-        color: var(--muted);
-      }
-
-      .cards {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .card {
-        padding: 1rem;
-      }
-
-      .card h3,
-      .role h3,
-      .model h3,
-      .integration h3 {
-        margin: 0.25rem 0 0.45rem;
-        font-size: 1.08rem;
-      }
-
-      .card p,
-      .role p,
-      .model p,
-      .integration p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      .icon {
-        width: 2rem;
-        height: 2rem;
-        border-radius: 8px;
-        display: grid;
-        place-items: center;
-        background: rgba(45, 140, 255, 0.18);
-        border: 1px solid rgba(45, 140, 255, 0.45);
-        font-size: 1rem;
-      }
-
-      .use-cases {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .role {
-        padding: 1rem;
-      }
-
-      .role ul {
-        margin: 0.7rem 0 0;
-        padding-left: 1.1rem;
-        color: var(--muted);
-      }
-
-      .deep-dive {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.9rem;
-      }
-
-      .video-placeholder,
-      .steps {
-        padding: 1rem;
-      }
-
-      .steps ol {
-        margin: 0.5rem 0 0;
-        padding-left: 1.15rem;
-      }
-
-      .steps li {
-        margin-bottom: 0.6rem;
-      }
-
-      .steps strong {
-        display: block;
-      }
-
-      .steps span {
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      .model-grid,
-      .integration-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .model,
-      .integration {
-        padding: 1rem;
-      }
-
-      .badge {
-        display: inline-block;
-        margin-bottom: 0.4rem;
-        font-size: 0.75rem;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: #bcd4ff;
-      }
-
-      .integration.planned {
-        border-color: rgba(169, 183, 209, 0.28);
-        background: rgba(19, 28, 43, 0.5);
-      }
-
-      .conversion {
-        padding-top: 2.5rem;
-      }
-
-      .cta-box {
-        padding: 1.35rem;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.9rem;
-      }
-
-      .cta-box h2 {
-        margin: 0 0 0.35rem;
-      }
-
-      .cta-box p {
-        margin: 0;
-        color: var(--muted);
-      }
-
-      .trust {
-        padding-top: 2.5rem;
-        padding-bottom: 3.5rem;
-      }
-
-      .trust-box {
-        padding: 1rem;
-      }
-
-      .footer-links {
-        grid-template-columns: repeat(7, minmax(0, 1fr));
-      }
-
-      .footer-links a {
+        padding: 0.85rem 1.25rem;
+        font-weight: 700;
+        color: #ffffff;
+        background: var(--brand-primary);
         text-decoration: none;
-        border: 1px solid rgba(169, 183, 209, 0.3);
-        padding: 0.6rem;
-        border-radius: 10px;
-        text-align: center;
-        color: #d8e3fb;
+      }
+      .cta:hover {
+        background: #d94444;
+      }
+      .meta {
+        margin-top: 1rem;
         font-size: 0.9rem;
-      }
-
-      .footer-links a:hover {
-        border-color: rgba(169, 183, 209, 0.8);
-      }
-
-      .legal {
-        margin-top: 0.9rem;
         color: var(--muted);
-        font-size: 0.85rem;
-      }
-
-      .hidden-anchor {
-        position: relative;
-        top: -90px;
-      }
-
-      @media (max-width: 980px) {
-        .hero-grid,
-        .deep-dive {
-          grid-template-columns: 1fr;
-        }
-
-        .metrics {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .logos,
-        .cards,
-        .model-grid,
-        .integration-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .use-cases {
-          grid-template-columns: 1fr;
-        }
-
-        .footer-links {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 640px) {
-        section {
-          padding: 3.2rem 0;
-        }
-
-        .site-header .container {
-          min-height: 64px;
-        }
-
-        .brand span {
-          font-size: 1.25rem;
-        }
-
-        .header-links {
-          gap: 0.5rem;
-        }
-
-        .btn {
-          padding: 0.62rem 0.88rem;
-          font-size: 0.9rem;
-        }
-
-        .metrics,
-        .logos,
-        .cards,
-        .model-grid,
-        .integration-grid,
-        .footer-links {
-          grid-template-columns: 1fr;
-        }
       }
     </style>
   </head>
   <body>
-    <header class="site-header">
-      <div class="container">
-        <a class="brand" href="https://use.opencto.works" aria-label="OpenCTO landing home">
-          <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
-            <rect width="28" height="28" rx="6" fill="#ed4c4c" />
-            <path d="M 6,21 A 9.5 9.5 0 1 1 22,13" stroke="white" stroke-width="2.5" stroke-linecap="round" />
-            <circle cx="6" cy="21" r="1.5" fill="#ffd0cd" />
-            <circle cx="22" cy="13" r="1.5" fill="#ffd0cd" />
-            <polyline points="9,14 13,17 9,20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <polyline points="12,15.5 16,18.5 12,21.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <span>OpenCTO</span>
-        </a>
-        <nav class="header-links" aria-label="Primary actions">
-          <a class="btn btn-secondary" href="#models-title">View Docs</a>
-          <a class="btn btn-primary" href="https://app.opencto.works">Open App</a>
-        </nav>
+    <main class="card">
+      <div class="brand">
+        <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <rect width="28" height="28" rx="6" fill="#ed4c4c" />
+          <path d="M 6,21 A 9.5 9.5 0 1 1 22,13" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+          <circle cx="6" cy="21" r="1.5" fill="#ffd0cd" />
+          <circle cx="22" cy="13" r="1.5" fill="#ffd0cd" />
+          <polyline points="9,14 13,17 9,20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <polyline points="12,15.5 16,18.5 12,21.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span>OpenCTO</span>
       </div>
-    </header>
-
-    <main>
-      <section class="hero">
-        <div class="container hero-grid">
-          <div>
-            <span class="eyebrow">Built for founders, CTOs, and engineering teams</span>
-            <h1>Ship production software faster with one AI control center for your team.</h1>
-            <p>
-              Plan work, orchestrate execution, and track deployment-critical decisions in one place so leadership and developers stay aligned.
-            </p>
-            <div class="hero-actions">
-              <a class="btn btn-primary" href="https://app.opencto.works">Open App</a>
-              <a class="btn btn-secondary" href="#deep-dive-title">View Docs</a>
-            </div>
-          </div>
-          <aside class="panel demo" aria-label="Product visual preview">
-            <div class="demo-head">
-              <strong>Product Demo Preview</strong>
-              <span class="status">Placeholder</span>
-            </div>
-            <div class="demo-window">
-              <div>
-                <p><strong>Interactive dashboard preview area</strong></p>
-                <p>Use this slot for a short product GIF/video showing plan → execute → review workflow.</p>
-              </div>
-            </div>
-          </aside>
-        </div>
-      </section>
-
-      <section aria-labelledby="proof-title">
-        <div class="container">
-          <div class="section-head">
-            <h2 id="proof-title">Social proof and platform foundations</h2>
-            <p>Defensible implementation metrics from the current repository and product surfaces.</p>
-          </div>
-          <div class="metrics" role="list" aria-label="Key metrics">
-            <article class="metric" role="listitem"><strong>3</strong><span>Live web surfaces (landing, app, auth)</span></article>
-            <article class="metric" role="listitem"><strong>2</strong><span>Core product services (dashboard + API worker)</span></article>
-            <article class="metric" role="listitem"><strong>5</strong><span>First-class provider/integration targets represented</span></article>
-            <article class="metric" role="listitem"><strong>1</strong><span>Unified control plane vision across roles</span></article>
-          </div>
-          <div class="logos" role="list" aria-label="Built with platforms">
-            <div class="logo-pill" role="listitem">OpenAI</div>
-            <div class="logo-pill" role="listitem">GitHub</div>
-            <div class="logo-pill" role="listitem">Cloudflare</div>
-            <div class="logo-pill" role="listitem">Vercel</div>
-            <div class="logo-pill" role="listitem">Expo</div>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="features-title">
-        <div class="container">
-          <div class="section-head">
-            <h2 id="features-title">Features mapped to outcomes</h2>
-            <p>What teams get in practice: faster cycles, clearer status, safer automation, and tighter operational control.</p>
-          </div>
-          <div class="cards">
-            <article class="card">
-              <div class="icon" aria-hidden="true">⚡</div>
-              <h3>Faster execution loops</h3>
-              <p>Move from intent to action quickly with coordinated plan, tooling, and output flows in one workspace.</p>
-            </article>
-            <article class="card">
-              <div class="icon" aria-hidden="true">👁</div>
-              <h3>Operational visibility</h3>
-              <p>Keep team context visible across sessions so status, blockers, and decisions are easier to audit and share.</p>
-            </article>
-            <article class="card">
-              <div class="icon" aria-hidden="true">🤖</div>
-              <h3>Automation with guardrails</h3>
-              <p>Use automated workflows while preserving human approval checkpoints where higher-risk actions require control.</p>
-            </article>
-            <article class="card">
-              <div class="icon" aria-hidden="true">🎛</div>
-              <h3>Centralized control</h3>
-              <p>Align product, engineering, and deployment operations in one command surface instead of fragmented tools.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="roles-title">
-        <div class="container">
-          <div class="section-head">
-            <h2 id="roles-title">Role-based use cases</h2>
-            <p>Each role gets outcomes matched to how they make decisions and ship work.</p>
-          </div>
-          <div class="use-cases">
-            <article class="role">
-              <h3>Founder / CTO</h3>
-              <p>Track delivery confidence and execution health without waiting for scattered status updates.</p>
-              <ul>
-                <li>Prioritize roadmap work with real execution context.</li>
-                <li>Review critical actions before deployment.</li>
-                <li>Keep technical and business timelines aligned.</li>
-              </ul>
-            </article>
-            <article class="role">
-              <h3>Engineering Manager</h3>
-              <p>Coordinate team throughput and remove blockers with clear visibility into active execution flows.</p>
-              <ul>
-                <li>Monitor progress across parallel tasks.</li>
-                <li>Spot risk earlier with centralized logs and context.</li>
-                <li>Standardize handoffs between planning and delivery.</li>
-              </ul>
-            </article>
-            <article class="role">
-              <h3>Developer</h3>
-              <p>Focus on shipping code while keeping tools, outputs, and approvals in one practical interface.</p>
-              <ul>
-                <li>Run assisted workflows from a single workspace.</li>
-                <li>Preserve conversation and execution history.</li>
-                <li>Switch between coding and operations without context loss.</li>
-              </ul>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="deep-dive-title">
-        <div class="container">
-          <div class="section-head">
-            <h2 id="deep-dive-title">Deep dive</h2>
-            <p>Simple three-step flow from intent to validated execution.</p>
-          </div>
-          <div class="deep-dive">
-            <article class="panel video-placeholder" aria-label="Demo video placeholder">
-              <h3>Demo / walkthrough placeholder</h3>
-              <p>Replace this panel with a 60-90 second product walkthrough for higher conversion quality.</p>
-            </article>
-            <article class="panel steps" aria-label="How it works">
-              <h3>How it works</h3>
-              <ol>
-                <li>
-                  <strong>Define goal</strong>
-                  <span>Set intent, scope, and constraints for the task.</span>
-                </li>
-                <li>
-                  <strong>Execute with tooling</strong>
-                  <span>Use integrated models and provider adapters to run work.</span>
-                </li>
-                <li>
-                  <strong>Review and ship</strong>
-                  <span>Apply checkpoints, validate output, and move into deployment paths.</span>
-                </li>
-              </ol>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="models-title">
-        <div class="container">
-          <div class="section-head">
-            <h2 id="models-title">Supported models</h2>
-            <p>Model/provider support reflected by current adapters in the repository.</p>
-          </div>
-          <div class="model-grid">
-            <article class="model">
-              <span class="badge">Available</span>
-              <h3>OpenAI</h3>
-              <p>Realtime and reasoning model paths are represented in the dashboard integration layer.</p>
-            </article>
-            <article class="model">
-              <span class="badge">Available</span>
-              <h3>GitHub Models</h3>
-              <p>GitHub model routing is represented via dedicated adapter support in the current codebase.</p>
-            </article>
-            <article class="model">
-              <span class="badge">Conservative Preview</span>
-              <h3>Google Live</h3>
-              <p>Google live adapter hooks are present; treat this as early integration status rather than broad production coverage.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="integrations-title">
-        <div class="container">
-          <div class="section-head">
-            <h2 id="integrations-title">Integrations</h2>
-            <p>Clear distinction between what is wired now and what is on the roadmap.</p>
-          </div>
-          <div class="integration-grid">
-            <article class="integration">
-              <span class="badge">Native now</span>
-              <h3>GitHub</h3>
-              <p>Connection and repository organization flows are represented in current dashboard/API contracts.</p>
-            </article>
-            <article class="integration">
-              <span class="badge">Native now</span>
-              <h3>Cloudflare</h3>
-              <p>Worker and pages-related paths are present for operational querying and deployment-aligned workflows.</p>
-            </article>
-            <article class="integration">
-              <span class="badge">Native now</span>
-              <h3>Vercel</h3>
-              <p>Deployment listing and inspection endpoints are represented in the current backend route set.</p>
-            </article>
-            <article class="integration planned">
-              <span class="badge">Planned</span>
-              <h3>AWS</h3>
-              <p>Not yet represented as a native integration in this repository surface.</p>
-            </article>
-            <article class="integration planned">
-              <span class="badge">Planned</span>
-              <h3>Azure</h3>
-              <p>Not yet represented as a native integration in this repository surface.</p>
-            </article>
-            <article class="integration planned">
-              <span class="badge">Planned</span>
-              <h3>Google Cloud</h3>
-              <p>Not yet represented as a native integration in this repository surface.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="conversion" aria-labelledby="conversion-title">
-        <div class="container">
-          <article class="cta-box">
-            <div>
-              <h2 id="conversion-title">Start with a pilot workflow</h2>
-              <p>Open the app to test a focused pilot, or join the waitlist for structured onboarding support.</p>
-            </div>
-            <div class="hero-actions">
-              <a class="btn btn-primary" href="https://app.opencto.works">Open App</a>
-              <a class="btn btn-secondary" href="#support">Join Waitlist</a>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="trust" aria-labelledby="trust-title">
-        <div class="container">
-          <article class="trust-box">
-            <h2 id="trust-title">Trust and transparency</h2>
-            <p class="section-head" style="margin-bottom: 0.95rem;">Governance, security posture, and support links in one place.</p>
-
-            <span id="privacy" class="hidden-anchor" aria-hidden="true"></span>
-            <span id="terms" class="hidden-anchor" aria-hidden="true"></span>
-            <span id="support" class="hidden-anchor" aria-hidden="true"></span>
-            <span id="docs" class="hidden-anchor" aria-hidden="true"></span>
-            <span id="roadmap" class="hidden-anchor" aria-hidden="true"></span>
-            <span id="security" class="hidden-anchor" aria-hidden="true"></span>
-
-            <nav class="footer-links" aria-label="Trust links">
-              <a href="#privacy">Privacy</a>
-              <a href="#terms">Terms</a>
-              <a href="#support">Support</a>
-              <a href="#docs">Docs</a>
-              <a href="#roadmap">Roadmap</a>
-              <a href="#security">Security</a>
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
-            </nav>
-            <p class="legal">
-              Privacy, terms, and support are currently provided through standard OpenCTO operational channels while formal standalone policy pages are finalized.
-            </p>
-            <p class="legal">
-              Docs reference this page's deep dive and model/integration sections; roadmap and security details are reflected in current repository documentation and deployment practices.
-            </p>
-          </article>
-        </div>
-      </section>
+      <h1>Agentic Engineering Platform</h1>
+      <p>Build, ship, and operate production software with realtime voice control, tool orchestration, and autonomous execution.</p>
+      <a class="cta" href="https://app.opencto.works">Open App</a>
+      <a class="cta" style="margin-left:0.6rem;background:#2b2b33" href="./marketplace.html">Open Marketplace</a>
+      <div class="meta">use.opencto.works • app.opencto.works • auth.opencto.works</div>
     </main>
   </body>
 </html>

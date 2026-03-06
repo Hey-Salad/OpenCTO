@@ -19,23 +19,28 @@ tag = "v1_codebase_executor_container"
 [env.production]
 name = "opencto-api"
 route = { pattern = "api.opencto.works/*", zone_name = "opencto.works" }
+d1_databases = [
+  { binding = "DB", database_name = "opencto-chat-store", database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4" },
+]
+
+[[env.production.containers]]
+class_name = "CodebaseExecutorContainer"
+image = "./container-runtime/codebase-executor/Dockerfile"
+max_instances = 4
 
 [env.production.vars]
 ENVIRONMENT = "production"
 OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works"
 APP_BASE_URL = "https://app.opencto.works"
+MARKETPLACE_BASE_URL = "https://market.opencto.works"
 API_BASE_URL = "https://api.opencto.works"
-CODEBASE_EXECUTION_MODE = "stub"
+OPENCTO_MARKETPLACE_PLATFORM_FEE_PERCENT = "12"
+CODEBASE_EXECUTION_MODE = "container"
 CODEBASE_MAX_CONCURRENT_RUNS = "2"
 CODEBASE_DAILY_RUN_LIMIT = "30"
 CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS = "600"
 CODEBASE_RUN_MIN_TIMEOUT_SECONDS = "60"
 CODEBASE_RUN_MAX_TIMEOUT_SECONDS = "1800"
-
-[[env.production.d1_databases]]
-binding = "DB"
-database_name = "opencto-chat-store"
-database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4"
 
 [[env.production.durable_objects.bindings]]
 class_name = "CodebaseExecutorContainer"
@@ -50,7 +55,9 @@ database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4"
 ENVIRONMENT = "production"
 OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works"
 APP_BASE_URL = "https://app.opencto.works"
-CODEBASE_EXECUTION_MODE = "stub"
+MARKETPLACE_BASE_URL = "https://market.opencto.works"
+OPENCTO_MARKETPLACE_PLATFORM_FEE_PERCENT = "12"
+CODEBASE_EXECUTION_MODE = "container"
 CODEBASE_MAX_CONCURRENT_RUNS = "2"
 CODEBASE_DAILY_RUN_LIMIT = "20"
 CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS = "600"
@@ -69,3 +76,4 @@ CODEBASE_RUN_MAX_TIMEOUT_SECONDS = "1800"
 # - CF_API_TOKEN           (Cloudflare API token with Workers + Pages read permissions)
 # - CF_ACCOUNT_ID          (Cloudflare account ID — visible in dashboard URL)
 # - GITHUB_TOKEN           (GitHub Models PAT, if using GitHub inference proxy)
+# - OPENCTO_INTERNAL_API_TOKEN (shared internal token for trusted worker-to-worker calls)

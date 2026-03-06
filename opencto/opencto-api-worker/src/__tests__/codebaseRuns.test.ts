@@ -62,6 +62,10 @@ class MockD1Database {
     const normalized = normalizeSql(sql)
     if (normalized.startsWith('create table') || normalized.startsWith('create index') || normalized.startsWith('alter table')) return
 
+    if (normalized.startsWith('insert into users')) {
+      return
+    }
+
     if (normalized.startsWith('insert into codebase_runs')) {
       const row: RunRow = {
         id: String(args[0]),
@@ -276,6 +280,22 @@ function createMockEnv(overrides: Partial<Env> = {}, db = new MockD1Database()):
 afterEach(() => {
   __setContainerDispatcherForTests(null)
 })
+
+function createExecutionContext() {
+  const pending: Promise<unknown>[] = []
+  const executionCtx = {
+    waitUntil(promise: Promise<unknown>) {
+      pending.push(promise)
+    },
+    passThroughOnException() {},
+  } as ExecutionContext
+  return {
+    executionCtx,
+    async flush() {
+      await Promise.all(pending)
+    },
+  }
+}
 
 async function createRun(env: Env, body?: Record<string, unknown>): Promise<Response> {
   return await worker.fetch(
@@ -502,6 +522,104 @@ describe('Codebase run endpoints', () => {
     expect(res.status).toBe(201)
     expect(body.run.status).toBe('succeeded')
     expect(db.countEvents(runId)).toBe(6)
+  })
+
+  it('POST /api/v1/internal/codebase/runs rejects missing internal token', async () => {
+    const env = createMockEnv({
+      OPENCTO_INTERNAL_API_TOKEN: 'internal-test-token',
+      CODEBASE_EXECUTION_MODE: 'container',
+      CODEBASE_EXECUTOR: {} as DurableObjectNamespace,
+    })
+
+    const res = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/internal/codebase/runs?dispatch=async', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          repoUrl: 'https://github.com/Hey-Salad/OpenCTO.git',
+          repoFullName: 'Hey-Salad/OpenCTO',
+          commands: ['git clone https://github.com/Hey-Salad/OpenCTO.git', 'npm --prefix opencto/opencto-api-worker run build'],
+        }),
+      }),
+      env,
+    )
+
+    expect(res.status).toBe(401)
+  })
+
+  it('POST /api/v1/internal/codebase/runs schedules async container execution and exposes run events', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({
+      OPENCTO_INTERNAL_API_TOKEN: 'internal-test-token',
+      CODEBASE_EXECUTION_MODE: 'container',
+      CODEBASE_EXECUTOR: {} as DurableObjectNamespace,
+    }, db)
+    const ctx = createExecutionContext()
+
+    __setContainerDispatcherForTests(async () => ({
+      status: 'succeeded',
+      logs: [{ level: 'info', message: 'internal async run executed' }],
+    }))
+
+    const createRes = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/internal/codebase/runs?dispatch=async', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-opencto-internal-token': 'internal-test-token',
+          'x-opencto-service-user-email': 'slack-bot@opencto.works',
+        },
+        body: JSON.stringify({
+          repoUrl: 'https://github.com/Hey-Salad/OpenCTO.git',
+          repoFullName: 'Hey-Salad/OpenCTO',
+          baseBranch: 'main',
+          targetBranch: 'opencto/internal-smoke',
+          commands: [
+            'git clone https://github.com/Hey-Salad/OpenCTO.git',
+            'git checkout -b opencto/internal-smoke',
+            'npm --prefix opencto/opencto-api-worker run build',
+          ],
+        }),
+      }),
+      env,
+      ctx.executionCtx,
+    )
+    const createBody = await createRes.json() as { run: { id: string; status: RunStatus } }
+
+    expect(createRes.status).toBe(201)
+    expect(createBody.run.status).toBe('queued')
+
+    await ctx.flush()
+
+    const statusRes = await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/internal/codebase/runs/${createBody.run.id}`, {
+        headers: {
+          'x-opencto-internal-token': 'internal-test-token',
+          'x-opencto-service-user-email': 'slack-bot@opencto.works',
+        },
+      }),
+      env,
+    )
+    const statusBody = await statusRes.json() as { run: { status: RunStatus; targetBranch: string } }
+
+    expect(statusRes.status).toBe(200)
+    expect(statusBody.run.status).toBe('succeeded')
+    expect(statusBody.run.targetBranch).toBe('opencto/internal-smoke')
+
+    const eventsRes = await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/internal/codebase/runs/${createBody.run.id}/events?afterSeq=0&limit=50`, {
+        headers: {
+          'x-opencto-internal-token': 'internal-test-token',
+          'x-opencto-service-user-email': 'slack-bot@opencto.works',
+        },
+      }),
+      env,
+    )
+    const eventsBody = await eventsRes.json() as { events: Array<{ eventType: string }> }
+
+    expect(eventsRes.status).toBe(200)
+    expect(eventsBody.events.some((event) => event.eventType === 'run.dispatch_scheduled')).toBe(true)
+    expect(eventsBody.events.some((event) => event.eventType === 'run.completed')).toBe(true)
   })
 
   it('GET /api/v1/codebase/runs/:id returns run when found', async () => {

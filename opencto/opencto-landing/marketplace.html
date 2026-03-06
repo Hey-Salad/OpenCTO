@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenCTO Marketplace</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --brand-primary: #ed4c4c;
+        --brand-secondary: #faa09a;
+        --brand-tertiary: #ffd0cd;
+        --bg-1: #0f0f12;
+        --bg-2: #17171c;
+        --panel: rgba(23, 23, 28, 0.94);
+        --text: #f4f4f7;
+        --muted: #a3a3b2;
+        --border: rgba(250, 160, 154, 0.24);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Sora", "Avenir Next", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: radial-gradient(900px 700px at 88% -15%, rgba(237, 76, 76, 0.22), transparent 55%),
+          radial-gradient(760px 640px at -10% 0%, rgba(250, 160, 154, 0.12), transparent 48%),
+          linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      }
+      main {
+        width: min(1100px, 100%);
+        margin: 0 auto;
+        padding: 2rem 1rem 3rem;
+        display: grid;
+        gap: 1rem;
+      }
+      .panel {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--panel);
+        padding: 1rem;
+      }
+      .hero h1 {
+        margin: 0 0 0.5rem;
+        font-size: clamp(1.8rem, 3vw, 2.5rem);
+      }
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: 1fr 1fr;
+      }
+      label {
+        display: grid;
+        gap: 0.35rem;
+        margin-bottom: 0.75rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      input {
+        width: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 10px;
+        padding: 0.7rem 0.8rem;
+        background: #101014;
+        color: var(--text);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+      }
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 0.7rem 1rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .primary { background: var(--brand-primary); color: #fff; }
+      .secondary { background: #2b2b33; color: #fff; }
+      .status {
+        min-height: 42px;
+        border-radius: 10px;
+        padding: 0.7rem 0.8rem;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.02);
+        white-space: pre-wrap;
+        color: var(--brand-tertiary);
+      }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border-bottom: 1px solid rgba(255,255,255,0.12); text-align: left; padding: 0.55rem; font-size: 0.9rem; }
+      th { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
+      @media (max-width: 900px) {
+        .grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="panel hero">
+        <h1>OpenCTO Marketplace Frontend</h1>
+        <p>Standalone frontend for Stripe Connect onboarding and agent rental checkout over the existing marketplace backend.</p>
+      </section>
+
+      <section class="panel">
+        <h2>API Session</h2>
+        <div class="grid">
+          <label>
+            API Base URL
+            <input id="apiBase" value="https://api.opencto.works" />
+          </label>
+          <label>
+            Bearer Token
+            <input id="authToken" placeholder="Paste session token (optional in local demo mode)" />
+          </label>
+        </div>
+        <div class="row">
+          <button id="btnListRentals" class="secondary">List My Rentals</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <section class="panel">
+          <h2>Provider Connect Onboarding</h2>
+          <label>Business Name<input id="businessName" placeholder="OpenCTO Agent Studio" /></label>
+          <label>Country<input id="country" value="US" maxlength="2" /></label>
+          <div class="row">
+            <button id="btnCreateAccount" class="primary">Create Connected Account</button>
+          </div>
+
+          <label>Connected Account ID<input id="connectedAccountId" placeholder="acct_..." /></label>
+          <div class="row">
+            <button id="btnCreateOnboarding" class="secondary">Create Onboarding Link</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Rental Checkout</h2>
+          <label>Provider Workspace ID<input id="providerWorkspaceId" value="ws-provider-demo" /></label>
+          <label>Provider Stripe Account ID<input id="providerStripeAccountId" value="acct_demo_provider" /></label>
+          <label>Agent Slug<input id="agentSlug" value="code-review-pro" /></label>
+          <label>Description<input id="description" value="Agent rental contract" /></label>
+          <label>Amount (USD)<input id="amountUsd" value="49" /></label>
+          <div class="row">
+            <button id="btnCreateCheckout" class="primary">Create Checkout Session</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel">
+        <h2>Status</h2>
+        <div class="status" id="status">Ready</div>
+      </section>
+
+      <section class="panel">
+        <h2>Rental Contracts</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Contract</th>
+              <th>Agent</th>
+              <th>Status</th>
+              <th>Amount</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody id="rentalsBody">
+            <tr><td colspan="5" style="color:#a3a3b2">No data loaded.</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const statusEl = document.getElementById('status')
+      const rentalsBody = document.getElementById('rentalsBody')
+
+      function status(message) {
+        statusEl.textContent = message
+      }
+
+      function headers() {
+        const token = document.getElementById('authToken').value.trim()
+        const baseHeaders = { 'content-type': 'application/json' }
+        if (!token) return baseHeaders
+        return { ...baseHeaders, Authorization: `Bearer ${token}` }
+      }
+
+      function apiBase() {
+        return document.getElementById('apiBase').value.trim().replace(/\/+$/, '')
+      }
+
+      async function call(path, init) {
+        const response = await fetch(`${apiBase()}${path}`, init)
+        const raw = await response.text()
+        let body = null
+        try {
+          body = raw ? JSON.parse(raw) : null
+        } catch {
+          body = raw
+        }
+        if (!response.ok) {
+          throw new Error(`${path} failed (${response.status}): ${typeof body === 'string' ? body : JSON.stringify(body)}`)
+        }
+        return body
+      }
+
+      function renderRentals(contracts) {
+        if (!Array.isArray(contracts) || contracts.length === 0) {
+          rentalsBody.innerHTML = '<tr><td colspan="5" style="color:#a3a3b2">No contracts found.</td></tr>'
+          return
+        }
+        rentalsBody.innerHTML = contracts.map((item) => {
+          const amount = ((item.amountCents || 0) / 100).toFixed(2)
+          const currency = (item.currency || 'usd').toUpperCase()
+          const updated = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-'
+          return `<tr><td>${item.id}</td><td>${item.agentSlug}</td><td>${item.status}</td><td>${currency} ${amount}</td><td>${updated}</td></tr>`
+        }).join('')
+      }
+
+      async function listRentals() {
+        status('Loading rental contracts...')
+        try {
+          const response = await call('/api/v1/marketplace/agent-rentals', { headers: headers() })
+          renderRentals(response.contracts || [])
+          status(`Loaded ${response.contracts?.length || 0} contract(s).`)
+        } catch (error) {
+          status(error.message)
+        }
+      }
+
+      async function createConnectedAccount() {
+        const payload = {
+          businessName: document.getElementById('businessName').value.trim() || undefined,
+          country: document.getElementById('country').value.trim() || undefined,
+        }
+        status('Creating connected account...')
+        try {
+          const response = await call('/api/v1/marketplace/connect/accounts', {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify(payload),
+          })
+          document.getElementById('connectedAccountId').value = response.stripeAccountId || ''
+          status(`Connected account ready: ${response.stripeAccountId}`)
+        } catch (error) {
+          status(error.message)
+        }
+      }
+
+      async function createOnboardingLink() {
+        const accountId = document.getElementById('connectedAccountId').value.trim()
+        if (!accountId) {
+          status('Set a connected account ID first.')
+          return
+        }
+
+        status(`Creating onboarding link for ${accountId}...`)
+        try {
+          const response = await call(`/api/v1/marketplace/connect/accounts/${encodeURIComponent(accountId)}/onboarding-link`, {
+            method: 'POST',
+            headers: headers(),
+          })
+          status(`Opening onboarding link for ${response.stripeAccountId}`)
+          window.open(response.onboardingUrl, '_blank', 'noopener,noreferrer')
+        } catch (error) {
+          status(error.message)
+        }
+      }
+
+      async function createCheckoutSession() {
+        const payload = {
+          providerWorkspaceId: document.getElementById('providerWorkspaceId').value.trim(),
+          providerStripeAccountId: document.getElementById('providerStripeAccountId').value.trim(),
+          agentSlug: document.getElementById('agentSlug').value.trim(),
+          description: document.getElementById('description').value.trim(),
+          amountUsd: Number.parseFloat(document.getElementById('amountUsd').value.trim()),
+          currency: 'usd',
+        }
+
+        if (!Number.isFinite(payload.amountUsd) || payload.amountUsd <= 0) {
+          status('Amount must be a positive number.')
+          return
+        }
+
+        status('Creating rental checkout session...')
+        try {
+          const response = await call('/api/v1/marketplace/agent-rentals/checkout/session', {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify(payload),
+          })
+          status(`Checkout created: ${response.checkoutSessionId}`)
+          await listRentals()
+          if (response.checkoutUrl) {
+            window.open(response.checkoutUrl, '_blank', 'noopener,noreferrer')
+          }
+        } catch (error) {
+          status(error.message)
+        }
+      }
+
+      document.getElementById('btnListRentals').addEventListener('click', listRentals)
+      document.getElementById('btnCreateAccount').addEventListener('click', createConnectedAccount)
+      document.getElementById('btnCreateOnboarding').addEventListener('click', createOnboardingLink)
+      document.getElementById('btnCreateCheckout').addEventListener('click', createCheckoutSession)
+    </script>
+  </body>
+</html>

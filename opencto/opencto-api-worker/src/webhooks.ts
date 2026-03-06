@@ -4,6 +4,7 @@
 import Stripe from 'stripe'
 import type { Env, PlanCode, BillingInterval } from './types'
 import { jsonResponse, BadRequestException, InternalServerException } from './errors'
+import { markRentalPaidFromCheckout } from './marketplace'
 
 // Initialize Stripe client
 function getStripeClient(env: Env): Stripe {
@@ -11,7 +12,7 @@ function getStripeClient(env: Env): Stripe {
     throw new InternalServerException('STRIPE_SECRET_KEY is not configured')
   }
   return new Stripe(env.STRIPE_SECRET_KEY, {
-    apiVersion: '2024-04-10',
+    apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion,
     httpClient: Stripe.createFetchHttpClient(),
   })
 }
@@ -160,6 +161,13 @@ async function markEventProcessed(event: Stripe.Event, env: Env): Promise<void> 
 // Handle checkout.session.completed
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session, _env: Env): Promise<void> {
   console.log(`Checkout completed: ${session.id}`)
+
+  if (session.metadata?.flow === 'agent_marketplace_rental') {
+    const paymentIntentId =
+      typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null
+    await markRentalPaidFromCheckout(session.id, paymentIntentId, _env)
+    return
+  }
 
   // Extract metadata
   const userId = session.metadata?.userId

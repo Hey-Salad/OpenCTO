@@ -37,9 +37,15 @@ const ALLOWED_COMMAND_TEMPLATES = [
   'git clone',
   'git checkout -b',
   'npm install',
+  'npm --prefix',
+  'npm ci',
   'pnpm install',
+  'pnpm --dir',
   'npm test',
   'npm run build',
+  'npm run lint',
+  'npm run typecheck',
+  'npx --prefix',
   'git add',
   'git commit',
   'git push',
@@ -147,7 +153,20 @@ function isBlockedCommand(command: string): boolean {
 }
 
 function isCommandAllowed(command: string): boolean {
-  return ALLOWED_COMMAND_TEMPLATES.some((template) => command === template || command.startsWith(`${template} `))
+  if (ALLOWED_COMMAND_TEMPLATES.some((template) => command === template || command.startsWith(`${template} `))) {
+    return true
+  }
+
+  if (/^npm --prefix [^\s]+ install$/.test(command)) return true
+  if (/^npm --prefix [^\s]+ ci$/.test(command)) return true
+  if (/^npm --prefix [^\s]+ test$/.test(command)) return true
+  if (/^npm --prefix [^\s]+ run (build|lint|typecheck)$/.test(command)) return true
+  if (/^pnpm --dir [^\s]+ install$/.test(command)) return true
+  if (/^pnpm --dir [^\s]+ test$/.test(command)) return true
+  if (/^pnpm --dir [^\s]+ run (build|lint|typecheck)$/.test(command)) return true
+  if (/^npx --prefix [^\s]+ tsc -p [^\s]+ --noEmit --skipLibCheck$/.test(command)) return true
+
+  return false
 }
 
 function normalizeAndValidateCommands(raw: unknown): string[] {
@@ -265,7 +284,9 @@ async function getRunApproval(runId: string, ctx: RequestContext) {
     try {
       const payload = approvedEvent.payload_json ? JSON.parse(approvedEvent.payload_json) as Record<string, unknown> : {}
       approvedByUserId = typeof payload.approvedByUserId === 'string' ? payload.approvedByUserId : null
-    } catch {}
+    } catch {
+      approvedByUserId = null
+    }
     return {
       required: true,
       state: 'approved' as const,
@@ -290,7 +311,9 @@ async function getRunApproval(runId: string, ctx: RequestContext) {
   try {
     const payload = requiredEvent.payload_json ? JSON.parse(requiredEvent.payload_json) as Record<string, unknown> : {}
     reason = typeof payload.reason === 'string' ? payload.reason : null
-  } catch {}
+  } catch {
+    reason = null
+  }
 
   return {
     required: true,
@@ -593,6 +616,9 @@ export async function createCodebaseRun(
     timeoutSeconds?: number
   },
   ctx: RequestContext,
+  options?: {
+    dispatchAsync?: boolean
+  },
 ): Promise<Response> {
   await ensureSchema(ctx)
 
@@ -669,13 +695,23 @@ export async function createCodebaseRun(
       },
     }, ctx)
   } else if (executionMode === 'container') {
-    await executeContainerRun(runId, {
+    const executePayload = {
       repoUrl,
       baseBranch,
       targetBranch,
       commands,
       timeoutSeconds,
-    }, ctx)
+    }
+    if (options?.dispatchAsync && ctx.executionCtx) {
+      await appendEvent(runId, {
+        level: 'system',
+        eventType: 'run.dispatch_scheduled',
+        message: 'Run scheduled for asynchronous container execution.',
+      }, ctx)
+      ctx.executionCtx.waitUntil(executeContainerRun(runId, executePayload, ctx))
+    } else {
+      await executeContainerRun(runId, executePayload, ctx)
+    }
   }
 
   const row = await getRunRow(runId, ctx)

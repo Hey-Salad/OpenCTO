@@ -29,6 +29,13 @@ export function loadConfig() {
     monitorUrl: process.env.OPENCTO_MONITOR_URL || "http://127.0.0.1:8099/api/metrics",
     openaiApiKey: process.env.OPENAI_API_KEY || "",
     openaiModel: process.env.OPENCTO_OPENAI_MODEL || "gpt-4.1-mini",
+    traceEnabled: optionalBool("OPENCTO_TRACE_ENABLED", true),
+    traceServiceName: process.env.OPENCTO_TRACE_SERVICE_NAME || "opencto-cto-orchestrator",
+    traceloopApiKey: process.env.TRACELOOP_API_KEY || "",
+    otelExporterOtlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "",
+    sidecarEnabled: optionalBool("OPENCTO_SIDECAR_ENABLED", false),
+    sidecarUrl: process.env.OPENCTO_SIDECAR_URL || "",
+    sidecarToken: process.env.OPENCTO_SIDECAR_TOKEN || "",
     githubToken: process.env.GITHUB_TOKEN || "",
     githubOwner: process.env.OPENCTO_GITHUB_OWNER || "",
     githubRepo: process.env.OPENCTO_GITHUB_REPO || "",
@@ -44,6 +51,21 @@ export function loadConfig() {
     telegramBotMode: optionalBool("OPENCTO_TELEGRAM_BOT_MODE", true),
     telegramPollSeconds: optionalInt("OPENCTO_TELEGRAM_POLL_SECONDS", 3),
     agentModel: process.env.OPENCTO_AGENT_MODEL || process.env.OPENCTO_OPENAI_MODEL || "gpt-4.1-mini",
+    plannerModel:
+      process.env.OPENCTO_AGENT_MODEL_PLANNER ||
+      process.env.OPENCTO_AGENT_MODEL ||
+      process.env.OPENCTO_OPENAI_MODEL ||
+      "gpt-4.1-mini",
+    executorModel:
+      process.env.OPENCTO_AGENT_MODEL_EXECUTOR ||
+      process.env.OPENCTO_AGENT_MODEL ||
+      process.env.OPENCTO_OPENAI_MODEL ||
+      "gpt-4.1-mini",
+    reviewerModel:
+      process.env.OPENCTO_AGENT_MODEL_REVIEWER ||
+      process.env.OPENCTO_AGENT_MODEL ||
+      process.env.OPENCTO_OPENAI_MODEL ||
+      "gpt-4.1-mini",
     requireApprovals: optionalBool("OPENCTO_REQUIRE_APPROVALS", true),
     autonomyEnabled: optionalBool("OPENCTO_AUTONOMY_ENABLED", true),
     autonomyCycleSeconds: optionalInt("OPENCTO_AUTONOMY_CYCLE_SECONDS", 300),

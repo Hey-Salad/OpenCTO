@@ -1,0 +1,7 @@
+tunnel: 710cbfd3-27aa-4091-aded-8ae26c9449b9
+credentials-file: /home/hs-chilu/.cloudflared/710cbfd3-27aa-4091-aded-8ae26c9449b9.json
+
+ingress:
+  - hostname: anyway-sdk-sidecar.opencto.works
+    service: http://127.0.0.1:8788
+  - service: http_status:404

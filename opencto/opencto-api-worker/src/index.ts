@@ -25,7 +25,7 @@ export class CodebaseExecutorContainer extends Container {
 const DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE = 30
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, executionCtx?: ExecutionContext): Promise<Response> {
     const traceContext = extractTraceContext(request)
 
     // Handle CORS preflight
@@ -66,8 +66,18 @@ export default {
         return withTraceResponseHeaders(await auth.completeGitHubOAuth(request, env), traceContext)
       }
 
+      if (path.startsWith('/api/v1/internal/codebase/runs')) {
+        if (!await isInternalAuthorized(request, env)) {
+          throw new UnauthorizedException('Missing or invalid internal API token')
+        }
+        const ctx = buildInternalRequestContext(request, env, traceContext, executionCtx)
+        await ensureUserRecord(ctx)
+        return withTraceResponseHeaders(await routeInternal(path, request, ctx), traceContext)
+      }
+
       // All other endpoints require authentication
-      const ctx = await authenticate(request, env, traceContext)
+      const ctx = await authenticate(request, env, traceContext, executionCtx)
+      await ensureUserRecord(ctx)
 
       // Route to handlers
       return withTraceResponseHeaders(await route(path, request, ctx), traceContext)
@@ -78,7 +88,12 @@ export default {
 }
 
 // Authentication middleware
-async function authenticate(request: Request, env: Env, traceContext = extractTraceContext(request)): Promise<RequestContext> {
+async function authenticate(
+  request: Request,
+  env: Env,
+  traceContext = extractTraceContext(request),
+  executionCtx?: ExecutionContext,
+): Promise<RequestContext> {
   const authHeader = request.headers.get('Authorization')
   const accessEmail = request.headers.get('CF-Access-Authenticated-User-Email')
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null
@@ -92,6 +107,7 @@ async function authenticate(request: Request, env: Env, traceContext = extractTr
         user: sessionUser,
         env,
         traceContext,
+        executionCtx,
       }
     }
   }
@@ -116,7 +132,78 @@ async function authenticate(request: Request, env: Env, traceContext = extractTr
     user,
     env,
     traceContext,
+    executionCtx,
   }
+}
+
+async function isInternalAuthorized(request: Request, env: Env): Promise<boolean> {
+  const expected = (env.OPENCTO_INTERNAL_API_TOKEN || '').trim()
+  if (!expected) return false
+  const provided = (request.headers.get('x-opencto-internal-token') || '').trim()
+  if (!provided) return false
+  return await constantTimeEquals(provided, expected)
+}
+
+async function constantTimeEquals(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder()
+  const [aHash, bHash] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(a)),
+    crypto.subtle.digest('SHA-256', encoder.encode(b)),
+  ])
+  const left = new Uint8Array(aHash)
+  const right = new Uint8Array(bHash)
+  if (left.length !== right.length) return false
+  let diff = 0
+  for (let index = 0; index < left.length; index += 1) {
+    diff |= (left[index] ?? 0) ^ (right[index] ?? 0)
+  }
+  return diff === 0
+}
+
+function buildInternalRequestContext(
+  request: Request,
+  env: Env,
+  traceContext: RequestContext['traceContext'],
+  executionCtx?: ExecutionContext,
+): RequestContext {
+  const email =
+    request.headers.get('x-opencto-service-user-email')?.trim() ||
+    'slack-bot@opencto.works'
+  const normalized = email.toLowerCase()
+  const id = `user-${normalized.replace(/[^a-z0-9]+/g, '-')}`
+  return {
+    userId: id,
+    user: {
+      id,
+      email: normalized,
+      displayName: 'OpenCTO Slack Agent',
+      role: 'owner',
+    },
+    env,
+    traceContext,
+    executionCtx,
+  }
+}
+
+async function ensureUserRecord(ctx: RequestContext): Promise<void> {
+  if (!ctx.env.DB || typeof ctx.env.DB.prepare !== 'function') return
+  const timestamp = new Date().toISOString()
+  await ctx.env.DB.prepare(
+    `INSERT INTO users (id, email, display_name, role, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       email = excluded.email,
+       display_name = excluded.display_name,
+       role = excluded.role,
+       updated_at = excluded.updated_at`,
+  ).bind(
+    ctx.user.id,
+    ctx.user.email,
+    ctx.user.displayName,
+    ctx.user.role,
+    timestamp,
+    timestamp,
+  ).run()
 }
 
 // Router
@@ -425,6 +512,34 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
 
   // 404 Not Found
   return jsonResponse({ error: 'Not found', code: 'NOT_FOUND' }, 404)
+}
+
+async function routeInternal(path: string, request: Request, ctx: RequestContext): Promise<Response> {
+  const method = request.method
+  const url = new URL(request.url)
+
+  if (path === '/api/v1/internal/codebase/runs' && method === 'POST') {
+    const body = await request.json().catch(() => ({})) as Parameters<typeof codebaseRuns.createCodebaseRun>[0]
+    const dispatchAsync = url.searchParams.get('dispatch') === 'async'
+    return await codebaseRuns.createCodebaseRun(body, ctx, { dispatchAsync })
+  }
+
+  if (path.match(/^\/api\/v1\/internal\/codebase\/runs\/([^/]+)$/) && method === 'GET') {
+    const runId = path.split('/')[6] ?? ''
+    return await codebaseRuns.getCodebaseRun(runId, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/internal\/codebase\/runs\/([^/]+)\/events$/) && method === 'GET') {
+    const runId = path.split('/')[6] ?? ''
+    return await codebaseRuns.getCodebaseRunEvents(runId, request, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/internal\/codebase\/runs\/([^/]+)\/cancel$/) && method === 'POST') {
+    const runId = path.split('/')[6] ?? ''
+    return await codebaseRuns.cancelCodebaseRun(runId, ctx)
+  }
+
+  return jsonResponse({ error: 'Not found', code: 'NOT_FOUND', status: 404 }, 404)
 }
 
 function parseRateLimit(value: string | undefined, fallback: number): number {

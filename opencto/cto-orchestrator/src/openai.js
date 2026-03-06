@@ -81,16 +81,17 @@ export async function triageIncident(client, model, incident, metrics, maxAction
     `Latest metrics: ${JSON.stringify(metrics)}`,
   ].join("\n");
 
-  const response = await client.responses.create({
+  const response = await client.chat.completions.create({
     model,
-    input: [
+    messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    max_output_tokens: 600,
+    max_tokens: 600,
+    temperature: 0.2,
   });
 
-  const text = response.output_text || "{}";
+  const text = response.choices?.[0]?.message?.content || "{}";
   try {
     const parsed = JSON.parse(text);
     return normalizeTriage(parsed, incident.severity, maxActionsPerCycle);

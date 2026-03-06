@@ -24,12 +24,12 @@ function safeUrl(raw: string): URL {
   try {
     return new URL(raw)
   } catch {
-    throw new InternalServerException('APP_BASE_URL must be a valid URL')
+    throw new InternalServerException('Configured base URL must be a valid URL')
   }
 }
 
-function appUrl(env: Env, path: string): string {
-  const base = safeUrl(env.APP_BASE_URL || 'https://app.opencto.works')
+function marketplaceUrl(env: Env, path: string): string {
+  const base = safeUrl(env.MARKETPLACE_BASE_URL || env.APP_BASE_URL || 'https://app.opencto.works')
   const pathname = path.startsWith('/') ? path : `/${path}`
   return `${base.origin}${pathname}`
 }
@@ -217,8 +217,8 @@ export async function createConnectedAccountOnboardingLink(
   const link = await stripe.accountLinks.create({
     account: accountId,
     type: 'account_onboarding',
-    refresh_url: appUrl(env, '/marketplace/connect/refresh'),
-    return_url: appUrl(env, '/marketplace/connect/complete'),
+    refresh_url: marketplaceUrl(env, '/marketplace/connect/refresh'),
+    return_url: marketplaceUrl(env, '/marketplace/connect/complete'),
   })
 
   return jsonResponse({
@@ -317,8 +317,8 @@ export async function createAgentRentalCheckoutSession(
       providerWorkspaceId,
       flow: 'agent_marketplace_rental',
     },
-    success_url: `${appUrl(env, '/marketplace/rentals/success')}?contract_id=${contractId}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl(env, '/marketplace/rentals/cancel')}?contract_id=${contractId}`,
+    success_url: `${marketplaceUrl(env, '/marketplace/rentals/success')}?contract_id=${contractId}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${marketplaceUrl(env, '/marketplace/rentals/cancel')}?contract_id=${contractId}`,
   })
 
   await env.DB.prepare(

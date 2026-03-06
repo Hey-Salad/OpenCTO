@@ -20,6 +20,9 @@ interface Env {
   OPENCTO_VECTOR_RAG_ENABLED?: string;
   OPENCTO_EMBED_MODEL?: string;
   OPENCTO_AGENT_MODEL?: string;
+  OPENCTO_AGENT_MODEL_PLANNER?: string;
+  OPENCTO_AGENT_MODEL_EXECUTOR?: string;
+  OPENCTO_AGENT_MODEL_REVIEWER?: string;
   OPENCTO_APPROVAL_REQUIRED?: string;
   OPENCTO_ADMIN_TOKEN?: string;
   OPENCTO_ANYWAY_ENABLED?: string;
@@ -29,6 +32,15 @@ interface Env {
   OPENCTO_SIDECAR_ENABLED?: string;
   OPENCTO_SIDECAR_URL?: string;
   OPENCTO_SIDECAR_TOKEN?: string;
+  OPENCTO_API_BASE_URL?: string;
+  OPENCTO_INTERNAL_API_TOKEN?: string;
+  OPENCTO_CODE_AGENT_ENABLED?: string;
+  OPENCTO_ANDROID_AUTODEV_ENABLED?: string;
+  OPENCTO_ANDROID_AUTODEV_BASE_URL?: string;
+  OPENCTO_ANDROID_AUTODEV_PUBLIC_BASE_URL?: string;
+  OPENCTO_ANDROID_AUTODEV_TOKEN?: string;
+  OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_ID?: string;
+  OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_SECRET?: string;
   OPENCTO_KV: KVNamespace;
   OPENCTO_VECTOR_INDEX?: VectorizeIndex;
 }
@@ -139,10 +151,110 @@ type SidecarTraceEvent = {
   text: string;
   direction: "user" | "assistant";
   model?: string;
+  trace_id?: string;
   attributes?: Record<string, unknown>;
 };
 
 type SidecarEnqueue = (event: SidecarTraceEvent) => void;
+
+type AndroidRelayHealth = {
+  ok: boolean;
+  device?: {
+    serial?: string;
+    boot_completed?: boolean;
+    devices?: Array<{ serial?: string; state?: string; extra?: string }>;
+  };
+  error?: string;
+};
+
+type AndroidRelayTaskResponse = {
+  ok: boolean;
+  queued_task?: string;
+  task?: {
+    task_id?: string;
+    goal?: string;
+  };
+  error?: string;
+};
+
+type AndroidRelayCaptureResponse = {
+  ok: boolean;
+  capture?: {
+    type?: string;
+    serial?: string;
+    artifact?: string;
+    seconds?: number;
+  };
+  artifact_url?: string;
+  error?: string;
+};
+
+type AndroidRelayRunsResponse = {
+  ok: boolean;
+  runs?: Array<Record<string, unknown>>;
+  error?: string;
+};
+
+type AndroidControlPlaneStatus = {
+  ok: boolean;
+  device?: {
+    serial?: string;
+    boot_completed?: boolean;
+    devices?: Array<{ serial?: string; state?: string; extra?: string }>;
+  };
+  recent_runs?: Array<Record<string, unknown>>;
+  latest_successful_run?: Record<string, unknown> | null;
+  latest_failed_run?: Record<string, unknown> | null;
+  error?: string;
+};
+
+type AndroidChatMeta = {
+  chat_id?: string;
+  channel?: string;
+  thread_ts?: string;
+  user_id?: string;
+};
+
+type CodeRunApproval = {
+  required?: boolean;
+  state?: string;
+  reason?: string | null;
+};
+
+type CodeRunRecord = {
+  id: string;
+  repoUrl: string;
+  repoFullName?: string | null;
+  baseBranch: string;
+  targetBranch: string;
+  status: string;
+  requestedCommands: string[];
+  errorMessage?: string | null;
+  approval?: CodeRunApproval;
+};
+
+type CodeRunCreateResponse = {
+  run: CodeRunRecord;
+  allowlist?: string[];
+};
+
+type CodeRunStatusResponse = {
+  run: CodeRunRecord;
+  metrics?: {
+    eventCount?: number;
+    artifactCount?: number;
+  };
+};
+
+type CodeRunEventsResponse = {
+  events: Array<{
+    seq: number;
+    level: string;
+    eventType: string;
+    message: string;
+    createdAt: string;
+  }>;
+};
 
 function randomHex(length: number) {
   const bytes = new Uint8Array(Math.ceil(length / 2));
@@ -164,6 +276,19 @@ function sidecarEnabled(env: Env) {
     flag === "true" &&
     Boolean(env.OPENCTO_SIDECAR_URL) &&
     Boolean(env.OPENCTO_SIDECAR_TOKEN)
+  );
+}
+
+function androidAutodevEnabled(env: Env) {
+  const enabled = (env.OPENCTO_ANDROID_AUTODEV_ENABLED || "").toLowerCase() === "true";
+  return enabled && Boolean((env.OPENCTO_ANDROID_AUTODEV_BASE_URL || "").trim());
+}
+
+function codeAgentEnabled(env: Env) {
+  return (
+    (env.OPENCTO_CODE_AGENT_ENABLED || "").toLowerCase() === "true" &&
+    Boolean((env.OPENCTO_API_BASE_URL || "").trim()) &&
+    Boolean((env.OPENCTO_INTERNAL_API_TOKEN || "").trim())
   );
 }
 
@@ -199,6 +324,441 @@ async function sendSidecarEvent(env: Env, event: SidecarTraceEvent) {
   } catch {
     console.error("sidecar trace failed: network error");
   }
+}
+
+async function callAndroidAutodev<T>(
+  env: Env,
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const baseUrl = (env.OPENCTO_ANDROID_AUTODEV_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (!baseUrl) {
+    throw new Error("Android relay base URL is not configured");
+  }
+  const headers = new Headers(init.headers || {});
+  headers.set("Accept", "application/json");
+  if (env.OPENCTO_ANDROID_AUTODEV_TOKEN) {
+    headers.set("x-android-autodev-token", env.OPENCTO_ANDROID_AUTODEV_TOKEN);
+  }
+  if (env.OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_ID) {
+    headers.set(
+      "CF-Access-Client-Id",
+      env.OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_ID,
+    );
+  }
+  if (env.OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_SECRET) {
+    headers.set(
+      "CF-Access-Client-Secret",
+      env.OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_SECRET,
+    );
+  }
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers,
+    signal: AbortSignal.timeout(15000),
+  });
+  const raw = await response.text();
+  let payload: unknown = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    payload = { ok: false, error: raw.slice(0, 300) };
+  }
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object" && "error" in payload
+        ? String((payload as { error?: string }).error || `relay ${response.status}`)
+        : `relay ${response.status}`;
+    throw new Error(message);
+  }
+  return payload as T;
+}
+
+async function callOpenctoApi<T>(
+  env: Env,
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const baseUrl = (env.OPENCTO_API_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (!baseUrl) {
+    throw new Error("OpenCTO API base URL is not configured");
+  }
+  const token = (env.OPENCTO_INTERNAL_API_TOKEN || "").trim();
+  if (!token) {
+    throw new Error("OpenCTO internal API token is not configured");
+  }
+  const headers = new Headers(init.headers || {});
+  headers.set("Accept", "application/json");
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  headers.set("x-opencto-internal-token", token);
+  headers.set("x-opencto-service-user-email", "slack-bot@opencto.works");
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers,
+    signal: AbortSignal.timeout(20000),
+  });
+  const raw = await response.text();
+  let payload: unknown = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    payload = { error: raw.slice(0, 300) };
+  }
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object" && "error" in payload
+        ? String((payload as { error?: string }).error || `api ${response.status}`)
+        : `api ${response.status}`;
+    throw new Error(message);
+  }
+  return payload as T;
+}
+
+function parseDurationSeconds(text: string, fallback = 15) {
+  const match = text.match(/\b(\d{1,3})\s*(seconds?|secs?|minutes?|mins?)\b/i);
+  if (!match) return fallback;
+  let seconds = Number.parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  if (unit.startsWith("min")) seconds *= 60;
+  return Math.max(1, Math.min(180, seconds));
+}
+
+function looksLikeRepoCodingTask(text: string) {
+  return /\b(repo|repository|github|git|branch|pull request|pr\b|commit|push|merge|deploy|codebase|opencto\/|src\/|package\.json|wrangler\.toml|fix\b|implement\b|edit\b|refactor\b|build\b|test\b|lint\b)\b/i.test(
+    text,
+  );
+}
+
+function androidExecutorScopeMessage() {
+  return [
+    "This request is a repo or coding workflow, not a device-execution task.",
+    "The Android executor currently handles device QA actions like status, screenshots, videos, app launch, taps, and app-flow checks.",
+    "It should not be used for branch, PR, code-edit, or repo delivery work.",
+    "Use the coding-agent flow for repo tasks, or send a device-specific Android request.",
+  ].join(" ");
+}
+
+type CodingPreset = {
+  scope: string;
+  repoUrl: string;
+  repoFullName: string;
+  baseBranch: string;
+  commandPlan: string[];
+};
+
+function codeRunKey(scope: ChatScope) {
+  return `code_run_latest:${scopeToString(scope)}`;
+}
+
+async function saveLatestCodeRun(env: Env, scope: ChatScope, run: CodeRunRecord) {
+  await putJson(env, codeRunKey(scope), {
+    id: run.id,
+    repoFullName: run.repoFullName || "",
+    targetBranch: run.targetBranch,
+    updatedAt: nowIso(),
+  });
+}
+
+async function getLatestCodeRun(env: Env, scope: ChatScope) {
+  return getJson<{ id?: string; repoFullName?: string; targetBranch?: string; updatedAt?: string } | null>(
+    env,
+    codeRunKey(scope),
+    null,
+  );
+}
+
+function slugifyBranch(input: string) {
+  const slug = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return slug || `task-${Date.now().toString(36)}`;
+}
+
+function findCodingPreset(text: string): CodingPreset | null {
+  const normalized = text.toLowerCase();
+  if (/\bopencto\/opencto-api-worker\b|\bapi worker\b/.test(normalized)) {
+    return {
+      scope: "opencto/opencto-api-worker",
+      repoUrl: "https://github.com/Hey-Salad/OpenCTO.git",
+      repoFullName: "Hey-Salad/OpenCTO",
+      baseBranch: "main",
+      commandPlan: [
+        "git clone https://github.com/Hey-Salad/OpenCTO.git",
+        "npm --prefix opencto/opencto-api-worker install",
+        "npm --prefix opencto/opencto-api-worker run lint",
+        "npm --prefix opencto/opencto-api-worker run build",
+        "npm --prefix opencto/opencto-api-worker test",
+      ],
+    };
+  }
+  if (/\bopencto\/opencto-dashboard\b|\bdashboard\b/.test(normalized)) {
+    return {
+      scope: "opencto/opencto-dashboard",
+      repoUrl: "https://github.com/Hey-Salad/OpenCTO.git",
+      repoFullName: "Hey-Salad/OpenCTO",
+      baseBranch: "main",
+      commandPlan: [
+        "git clone https://github.com/Hey-Salad/OpenCTO.git",
+        "npm --prefix opencto/opencto-dashboard install",
+        "npm --prefix opencto/opencto-dashboard run lint",
+        "npm --prefix opencto/opencto-dashboard run build",
+        "npm --prefix opencto/opencto-dashboard test",
+      ],
+    };
+  }
+  if (/\bopencto\/mobile-app\b|\bmobile app\b/.test(normalized)) {
+    return {
+      scope: "opencto/mobile-app",
+      repoUrl: "https://github.com/Hey-Salad/OpenCTO.git",
+      repoFullName: "Hey-Salad/OpenCTO",
+      baseBranch: "main",
+      commandPlan: [
+        "git clone https://github.com/Hey-Salad/OpenCTO.git",
+        "npm --prefix opencto/mobile-app install",
+        "npm --prefix opencto/mobile-app run lint",
+        "npm --prefix opencto/mobile-app run typecheck",
+        "npm --prefix opencto/mobile-app test",
+      ],
+    };
+  }
+  if (/\bopencto\/opencto-cloudbot-worker\b|\bcloudbot worker\b/.test(normalized)) {
+    return {
+      scope: "opencto/opencto-cloudbot-worker",
+      repoUrl: "https://github.com/Hey-Salad/OpenCTO.git",
+      repoFullName: "Hey-Salad/OpenCTO",
+      baseBranch: "main",
+      commandPlan: [
+        "git clone https://github.com/Hey-Salad/OpenCTO.git",
+        "npm --prefix opencto/opencto-cloudbot-worker install",
+        "npx --prefix opencto/opencto-cloudbot-worker tsc -p opencto/opencto-cloudbot-worker/tsconfig.json --noEmit --skipLibCheck",
+      ],
+    };
+  }
+  return null;
+}
+
+function codingAgentHelp() {
+  return [
+    "Coding agent commands:",
+    "/code help - show coding agent commands",
+    "/code run <repo scope> | <goal> - start a repo validation run",
+    "/code status [run_id] - show latest coding run status",
+    "",
+    "Supported repo scopes:",
+    "- opencto/opencto-api-worker",
+    "- opencto/opencto-dashboard",
+    "- opencto/mobile-app",
+    "- opencto/opencto-cloudbot-worker",
+  ].join("\n");
+}
+
+async function codingRunReply(env: Env, scope: ChatScope, text: string) {
+  if (!codeAgentEnabled(env)) {
+    return "Coding agent is not configured yet.";
+  }
+  const preset = findCodingPreset(text);
+  if (!preset) {
+    return [
+      "I need a supported repo scope before I can start a coding run.",
+      "Use one of:",
+      "- opencto/opencto-api-worker",
+      "- opencto/opencto-dashboard",
+      "- opencto/mobile-app",
+      "- opencto/opencto-cloudbot-worker",
+    ].join("\n");
+  }
+
+  const branch = `opencto/${slugifyBranch(text)}`;
+  const commands = [...preset.commandPlan];
+  commands.splice(1, 0, `git checkout -b ${branch}`);
+  const response = await callOpenctoApi<CodeRunCreateResponse>(
+    env,
+    "/api/v1/internal/codebase/runs?dispatch=async",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        repoUrl: preset.repoUrl,
+        repoFullName: preset.repoFullName,
+        baseBranch: preset.baseBranch,
+        targetBranch: branch,
+        commands,
+        timeoutSeconds: 900,
+      }),
+    },
+  );
+  await saveLatestCodeRun(env, scope, response.run);
+  return [
+    `Accepted coding run for ${preset.scope}.`,
+    `Run: ${response.run.id}`,
+    `Branch: ${response.run.targetBranch}`,
+    `Plan: ${commands.slice(2).join(" -> ")}`,
+    "Status: queued for asynchronous execution.",
+    "Use /code status to check progress.",
+  ].join("\n");
+}
+
+async function codingStatusReply(env: Env, scope: ChatScope, explicitRunId?: string) {
+  if (!codeAgentEnabled(env)) {
+    return "Coding agent is not configured yet.";
+  }
+  const latest = explicitRunId ? null : await getLatestCodeRun(env, scope);
+  const runId = explicitRunId || latest?.id;
+  if (!runId) {
+    return "No coding run found for this chat yet. Use /code run <repo scope> | <goal> first.";
+  }
+  const [status, events] = await Promise.all([
+    callOpenctoApi<CodeRunStatusResponse>(env, `/api/v1/internal/codebase/runs/${encodeURIComponent(runId)}`),
+    callOpenctoApi<CodeRunEventsResponse>(env, `/api/v1/internal/codebase/runs/${encodeURIComponent(runId)}/events?limit=6`),
+  ]);
+  const run = status.run;
+  const lines = [
+    `Coding run ${run.id}`,
+    `Repo: ${run.repoFullName || run.repoUrl}`,
+    `Branch: ${run.targetBranch}`,
+    `Status: ${run.status}`,
+  ];
+  if (run.errorMessage) {
+    lines.push(`Error: ${run.errorMessage}`);
+  }
+  const recent = Array.isArray(events.events) ? events.events.slice(-4) : [];
+  if (recent.length) {
+    lines.push("Recent events:");
+    for (const event of recent) {
+      lines.push(`- [${event.level}] ${event.eventType}: ${event.message}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+async function androidStatusReply(env: Env) {
+  const result = await callAndroidAutodev<AndroidControlPlaneStatus>(env, "/v1/worker/status?limit=5");
+  if (!result.ok) {
+    return `Android control plane unhealthy: ${result.error || "unknown error"}`;
+  }
+  const serial = result.device?.serial || "unknown";
+  const boot = result.device?.boot_completed ? "yes" : "no";
+  const devices = Array.isArray(result.device?.devices) ? result.device?.devices.length : 0;
+  const recentRuns = Array.isArray(result.recent_runs) ? result.recent_runs.length : 0;
+  return `Android device ready. serial=${serial} boot_completed=${boot} devices=${devices} recent_runs=${recentRuns}`;
+}
+
+async function androidTaskReply(
+  env: Env,
+  scope: ChatScope,
+  channel: "telegram" | "slack" | "whatsapp" | "sms" | "discord",
+  goal: string,
+  chatMeta?: AndroidChatMeta,
+) {
+  if (looksLikeRepoCodingTask(goal)) {
+    return androidExecutorScopeMessage();
+  }
+  const result = await callAndroidAutodev<AndroidRelayTaskResponse>(env, "/v1/worker/tasks", {
+    method: "POST",
+    body: JSON.stringify({
+      goal,
+      platform: channel,
+      session_id: scopeToString(scope),
+      chat: chatMeta || {},
+      metadata: {
+        source: "opencto-cloudbot-worker",
+        channel,
+        chat_scope: scopeToString(scope),
+      },
+    }),
+  });
+  const taskId = result.task?.task_id || "unknown-task";
+  return `Queued Android task ${taskId}: ${goal}`;
+}
+
+async function androidScreenshotReply(env: Env) {
+  const result = await callAndroidAutodev<AndroidRelayCaptureResponse>(env, "/v1/worker/capture/screenshot", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  const serial = result.capture?.serial || "unknown";
+  const url = result.artifact_url ? ` ${result.artifact_url}` : "";
+  return `Captured Android screenshot from ${serial}.${url}`;
+}
+
+async function androidVideoReply(env: Env, seconds: number) {
+  const result = await callAndroidAutodev<AndroidRelayCaptureResponse>(env, "/v1/worker/capture/video", {
+    method: "POST",
+    body: JSON.stringify({ seconds }),
+  });
+  const serial = result.capture?.serial || "unknown";
+  const url = result.artifact_url ? ` ${result.artifact_url}` : "";
+  return `Recorded Android screen video (${seconds}s) from ${serial}.${url}`;
+}
+
+async function androidRunsReply(env: Env) {
+  const result = await callAndroidAutodev<AndroidControlPlaneStatus>(env, "/v1/worker/status?limit=5");
+  const runs = Array.isArray(result.recent_runs) ? result.recent_runs : [];
+  if (!runs.length) return "No Android runs found yet.";
+  return runs
+    .slice(0, 5)
+    .map((run) => {
+      const taskId = typeof run.task_id === "string" ? run.task_id : "unknown";
+      const ok = run.ok === true ? "ok" : "fail";
+      const runId = typeof run.run_id === "string" ? run.run_id : "n/a";
+      return `- ${taskId} (${ok}) ${runId}`;
+    })
+    .join("\n");
+}
+
+async function maybeHandleAndroidIntent(
+  env: Env,
+  scope: ChatScope,
+  text: string,
+  channel: "telegram" | "slack" | "whatsapp" | "sms" | "discord",
+  chatMeta?: AndroidChatMeta,
+) {
+  if (!androidAutodevEnabled(env)) return null;
+  const lowered = text.toLowerCase();
+  const mentionsDevice = /\b(android|device|phone)\b/.test(lowered);
+  const wantsScreenshot =
+    /(?:take|capture).*(?:screenshot|screen shot)|(?:screenshot|screen shot).*(?:android|device|phone)/i.test(
+      text,
+    );
+  const wantsVideo =
+    /(?:record|capture).*(?:video|screen record|screenrecord)|(?:video|screen record|screenrecord).*(?:android|device|phone)/i.test(
+      text,
+    );
+  const wantsStatus =
+    mentionsDevice && /\b(status|health|connected|online|ready)\b/.test(lowered);
+  const wantsTask =
+    mentionsDevice &&
+    /\b(run|open|launch|tap|type|test|check|queue|do|perform|automate)\b/.test(lowered);
+  const looksCoding = looksLikeRepoCodingTask(text);
+
+  if (wantsScreenshot) {
+    return androidScreenshotReply(env);
+  }
+  if (wantsVideo) {
+    return androidVideoReply(env, parseDurationSeconds(text, 15));
+  }
+  if (wantsStatus) {
+    return androidStatusReply(env);
+  }
+  if (mentionsDevice && looksCoding) {
+    return androidExecutorScopeMessage();
+  }
+  if (wantsTask) {
+    return androidTaskReply(env, scope, channel, text.trim(), chatMeta);
+  }
+  return null;
+}
+
+async function maybeHandleCodingIntent(env: Env, scope: ChatScope, text: string) {
+  if (!codeAgentEnabled(env)) return null;
+  if (!looksLikeRepoCodingTask(text)) return null;
+  return codingRunReply(env, scope, text);
 }
 
 class AnywayTraceBuffer {
@@ -348,6 +908,29 @@ type ApiTaskBody = {
   priority?: "low" | "medium" | "high";
 };
 
+type ScopeStatus = {
+  scope: string;
+  focus: "general" | "android";
+  models: {
+    primary: string;
+    planner: string;
+    executor: string;
+    reviewer: string;
+  };
+  tracing: {
+    anyway_enabled: boolean;
+    sidecar_enabled: boolean;
+  };
+  tasks: TaskIndexItem[];
+  activities: ActivityItem[];
+  android?: {
+    enabled: boolean;
+    health?: AndroidRelayHealth | null;
+    runs?: Array<Record<string, unknown>>;
+    error?: string | null;
+  };
+};
+
 async function loadSession(env: Env, chatId: ChatScope): Promise<SessionItem[]> {
   const raw = await env.OPENCTO_KV.get(sessionKey(chatId));
   if (!raw) return [];
@@ -425,6 +1008,16 @@ function scopeToString(chatId: ChatScope) {
 function scopeNamespace(chatId: ChatScope) {
   const raw = scopeToString(chatId).replace(/[^a-zA-Z0-9_-]/g, "_");
   return `scope_${raw.slice(0, 48)}`;
+}
+
+function modelRoster(env: Env) {
+  const primary = env.OPENCTO_AGENT_MODEL || "gpt-4.1-mini";
+  return {
+    primary,
+    planner: env.OPENCTO_AGENT_MODEL_PLANNER || primary,
+    executor: env.OPENCTO_AGENT_MODEL_EXECUTOR || primary,
+    reviewer: env.OPENCTO_AGENT_MODEL_REVIEWER || primary,
+  };
 }
 
 function vectorEnabled(env: Env) {
@@ -623,6 +1216,113 @@ async function getDailyActivity(
   return items.slice(-limit);
 }
 
+function focusFromText(text: string): "general" | "android" {
+  return /\b(android|device|phone|mobile|expo|eas)\b/i.test(text) ? "android" : "general";
+}
+
+function looksLikeStatusQuestion(text: string) {
+  return /\b(status|progress|update|summary|roadmap)\b/i.test(text) || /where are we/i.test(text);
+}
+
+function statusActivityFilter(focus: "general" | "android", item: ActivityItem) {
+  if (focus !== "android") return true;
+  return /\bandroid\b|device|screenshot|video|expo|eas/i.test(`${item.type} ${item.text}`);
+}
+
+async function gatherScopeStatus(
+  env: Env,
+  chatId: ChatScope,
+  focus: "general" | "android",
+): Promise<ScopeStatus> {
+  const status: ScopeStatus = {
+    scope: scopeToString(chatId),
+    focus,
+    models: modelRoster(env),
+    tracing: {
+      anyway_enabled: anywayEnabled(env),
+      sidecar_enabled: sidecarEnabled(env),
+    },
+    tasks: (await listTasks(env, chatId, "open")).slice(0, 6),
+    activities: (await getDailyActivity(env, chatId, dayKey(), 50))
+      .filter((item) => statusActivityFilter(focus, item))
+      .slice(-8),
+  };
+
+  if (focus === "android") {
+    status.android = { enabled: androidAutodevEnabled(env), health: null, runs: [] };
+    if (androidAutodevEnabled(env)) {
+      try {
+        const payload = await callAndroidAutodev<AndroidControlPlaneStatus>(env, "/v1/worker/status?limit=5");
+        status.android.health = { ok: payload.ok, device: payload.device, error: payload.error };
+        status.android.runs = Array.isArray(payload.recent_runs) ? payload.recent_runs.slice(0, 5) : [];
+      } catch (error) {
+        status.android.error = error instanceof Error ? error.message : String(error);
+      }
+    }
+  }
+
+  return status;
+}
+
+function formatRunSummary(run: Record<string, unknown>) {
+  const taskId = typeof run.task_id === "string" ? run.task_id : "unknown";
+  const ok = run.ok === true ? "ok" : "fail";
+  const runId = typeof run.run_id === "string" ? run.run_id : "n/a";
+  return `- ${taskId} (${ok}) ${runId}`;
+}
+
+function renderScopeStatus(status: ScopeStatus) {
+  const lines = [
+    `Work status (${status.focus})`,
+    `Scope: ${status.scope}`,
+    `Models: planner=${status.models.planner}, executor=${status.models.executor}, reviewer=${status.models.reviewer}, live=${status.models.primary}`,
+    `Tracing: anyway=${status.tracing.anyway_enabled ? "on" : "off"} sidecar=${status.tracing.sidecar_enabled ? "on" : "off"}`,
+    `Open tasks: ${status.tasks.length}`,
+  ];
+
+  if (status.tasks.length) {
+    lines.push("Open tasks:");
+    for (const task of status.tasks) {
+      lines.push(`- [${task.id}] (${task.priority}) ${task.title}`);
+    }
+  }
+
+  if (status.activities.length) {
+    lines.push("Recent activity:");
+    for (const item of status.activities) {
+      lines.push(`- ${item.ts.slice(11, 19)} ${item.type}: ${item.text.slice(0, 120)}`);
+    }
+  }
+
+  if (status.android) {
+    lines.push(`Android relay: ${status.android.enabled ? "enabled" : "disabled"}`);
+    if (status.android.error) {
+      lines.push(`Android error: ${status.android.error}`);
+    } else if (status.android.health?.ok) {
+      const serial = status.android.health.device?.serial || "unknown";
+      const boot = status.android.health.device?.boot_completed ? "yes" : "no";
+      lines.push(`Android health: serial=${serial} boot_completed=${boot}`);
+    }
+    if (status.android.runs?.length) {
+      lines.push("Recent Android runs:");
+      for (const run of status.android.runs.slice(0, 5)) {
+        lines.push(formatRunSummary(run));
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+async function scopeStatusReply(
+  env: Env,
+  chatId: ChatScope,
+  focus: "general" | "android",
+) {
+  const status = await gatherScopeStatus(env, chatId, focus);
+  return renderScopeStatus(status);
+}
+
 function tokenSet(text: string) {
   const words = text.toLowerCase().match(/[a-z0-9_]+/g) || [];
   return new Set(words.filter((w) => w.length > 2));
@@ -689,7 +1389,7 @@ async function retrieveSemanticMemories(
       returnMetadata: "all",
     });
     const rows = matches?.matches || [];
-    const result = rows
+    const result: MemoryRetrievalItem[] = rows
       .map((m) => {
         const md = (m.metadata || {}) as Record<string, string | number | boolean | string[]>;
         const text = typeof md.text === "string" ? md.text : "";
@@ -710,7 +1410,7 @@ async function retrieveSemanticMemories(
           retrieval: "semantic" as const,
         };
       })
-      .filter((x): x is MemoryRetrievalItem => Boolean(x));
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
     span?.end({ attributes: { "rag.semantic.count": result.length } });
     return result;
   } catch {
@@ -772,7 +1472,12 @@ function isCommand(text: string) {
   return text.startsWith("/");
 }
 
-async function handleCommand(env: Env, chatId: ChatScope, text: string) {
+async function handleCommand(
+  env: Env,
+  chatId: ChatScope,
+  text: string,
+  channel: "telegram" | "slack" | "whatsapp" | "sms" | "discord",
+) {
   const trimmed = text.trim();
   const [cmd, ...rest] = trimmed.split(" ");
   const arg = rest.join(" ").trim();
@@ -784,8 +1489,75 @@ async function handleCommand(env: Env, chatId: ChatScope, text: string) {
       "/task add <title> - create task",
       "/task done <task_id> - mark task complete",
       "/tasks - list open tasks",
+      "/status - show grounded work status",
       "/daily - show today activity log",
+      "/android help - show Android relay commands",
+      "/code help - show coding agent commands",
     ].join("\n");
+  }
+
+  if (cmd === "/android") {
+    if (!androidAutodevEnabled(env)) {
+      return "Android relay is not configured.";
+    }
+    const [action, ...tail] = arg.split(" ");
+    const payload = tail.join(" ").trim();
+
+    if (!action || action === "help") {
+      return [
+        "Android relay commands:",
+        "/android status - check connected device",
+        "/android screenshot - capture a device screenshot",
+        "/android video [seconds] - record a screen video",
+        "/android task <goal> - queue an Android agent task",
+        "/android runs - list recent Android runs",
+      ].join("\n");
+    }
+
+    if (action === "status") {
+      const reply = await androidStatusReply(env);
+      await addActivity(env, chatId, "android.status", reply);
+      return reply;
+    }
+    if (action === "screenshot") {
+      const reply = await androidScreenshotReply(env);
+      await addActivity(env, chatId, "android.screenshot", reply);
+      return reply;
+    }
+    if (action === "video") {
+      const seconds = parseDurationSeconds(payload, 15);
+      const reply = await androidVideoReply(env, seconds);
+      await addActivity(env, chatId, "android.video", reply);
+      return reply;
+    }
+    if (action === "task") {
+      if (!payload) return "Usage: /android task <goal>";
+      const reply = await androidTaskReply(env, chatId, channel, payload);
+      await addActivity(env, chatId, "android.task", reply);
+      return reply;
+    }
+    if (action === "runs") {
+      const reply = await androidRunsReply(env);
+      await addActivity(env, chatId, "android.runs", reply);
+      return reply;
+    }
+    return "Usage: /android help|status|screenshot|video [seconds]|task <goal>|runs";
+  }
+
+  if (cmd === "/code") {
+    const [action, ...tail] = arg.split(" ");
+    const payload = tail.join(" ").trim();
+    if (!action || action === "help") {
+      return codingAgentHelp();
+    }
+    if (action === "run") {
+      if (!payload) return "Usage: /code run <repo scope> | <goal>";
+      return codingRunReply(env, chatId, payload);
+    }
+    if (action === "status") {
+      return codingStatusReply(env, chatId, payload || undefined);
+    }
+    return codingAgentHelp();
   }
 
   if (cmd === "/remember") {
@@ -803,6 +1575,10 @@ async function handleCommand(env: Env, chatId: ChatScope, text: string) {
       .slice(0, 12)
       .map((t) => `- [${t.id}] (${t.priority}) ${t.title}`)
       .join("\n");
+  }
+
+  if (cmd === "/status") {
+    return scopeStatusReply(env, chatId, focusFromText(arg || ""));
   }
 
   if (cmd === "/task") {
@@ -843,12 +1619,33 @@ async function runChatTurn(
   text: string,
   channel: "telegram" | "slack" | "whatsapp" | "sms" | "discord",
   trace?: AnywayTraceBuffer,
+  chatMeta?: AndroidChatMeta,
 ) {
-  const commandReply = isCommand(text) ? await handleCommand(env, scope, text) : null;
-  const answer = commandReply || (await generateAssistantReply(env, scope, text, trace));
+  const commandReply = isCommand(text) ? await handleCommand(env, scope, text, channel) : null;
+  const androidReply = commandReply ? null : await maybeHandleAndroidIntent(env, scope, text, channel, chatMeta);
+  const codingReply = commandReply || androidReply ? null : await maybeHandleCodingIntent(env, scope, text);
+  const statusReply =
+    commandReply || androidReply || codingReply || !looksLikeStatusQuestion(text)
+      ? null
+      : await scopeStatusReply(env, scope, focusFromText(text));
+  if (androidReply) {
+    await addActivity(env, scope, `${channel}.android`, androidReply.slice(0, 300));
+  }
+  if (codingReply) {
+    await addActivity(env, scope, `${channel}.coding`, codingReply.slice(0, 300));
+  }
+  if (statusReply) {
+    await addActivity(env, scope, `${channel}.status`, statusReply.slice(0, 300));
+  }
+  const answer =
+    commandReply ||
+    androidReply ||
+    codingReply ||
+    statusReply ||
+    (await generateAssistantReply(env, scope, text, trace));
   return {
     answer,
-    command: Boolean(commandReply),
+    command: Boolean(commandReply || androidReply || codingReply || statusReply),
     userType: `${channel}.user`,
     botType: `${channel}.bot`,
   };
@@ -918,6 +1715,15 @@ async function handleApi(request: Request, env: Env, url: URL) {
     return Response.json({ ok: true, date, activities });
   }
 
+  if (request.method === "GET" && url.pathname === "/api/status") {
+    const chatId = parseChatScopeParam(url.searchParams.get("chatId"));
+    const focusRaw = (url.searchParams.get("focus") || "general").toLowerCase();
+    if (!chatId) return badRequest("chatId required");
+    const focus = focusRaw === "android" ? "android" : "general";
+    const status = await gatherScopeStatus(env, chatId, focus);
+    return Response.json({ ok: true, status, summary: renderScopeStatus(status) });
+  }
+
   return new Response("Not Found", { status: 404 });
 }
 
@@ -945,11 +1751,23 @@ async function handleTelegramUpdate(
     scope: scopeToString(chatId),
     text,
     direction: "user",
-    attributes: { bot_kind: botKind },
+    trace_id: trace?.getTraceId(),
+    attributes: {
+      bot_kind: botKind,
+      service_name: "opencto-cloudbot-worker",
+      agent_role: "channel_orchestrator",
+    },
   });
   await addActivity(env, chatId, userActivityType, text.slice(0, 300));
   try {
-    const turn = await runChatTurn(env, chatId, text, "telegram", trace);
+    const turn = await runChatTurn(
+      env,
+      chatId,
+      text,
+      "telegram",
+      trace,
+      { chat_id: String(chatId) },
+    );
     const answer = turn.answer;
     await sendTelegram(chatId, answer, botToken);
     enqueueSidecar?.({
@@ -958,7 +1776,13 @@ async function handleTelegramUpdate(
       text: answer,
       direction: "assistant",
       model: env.OPENCTO_AGENT_MODEL || "gpt-4.1-mini",
-      attributes: { bot_kind: botKind, command: turn.command },
+      trace_id: trace?.getTraceId(),
+      attributes: {
+        bot_kind: botKind,
+        command: turn.command,
+        service_name: "opencto-cloudbot-worker",
+        agent_role: "channel_orchestrator",
+      },
     });
     await addActivity(env, chatId, botActivityType, answer.slice(0, 300));
     root?.end({
@@ -1315,7 +2139,12 @@ async function handleInfobipWebhook(
       scope: scopeToString(scope),
       text: msg.text,
       direction: "user",
-      attributes: { contact },
+      trace_id: trace?.getTraceId(),
+      attributes: {
+        contact,
+        service_name: "opencto-cloudbot-worker",
+        agent_role: "channel_orchestrator",
+      },
     });
     await setInfobipLastInbound(env, channel, contact);
     await addActivity(env, scope, `infobip.${channel}.user`, msg.text.slice(0, 300));
@@ -1330,7 +2159,13 @@ async function handleInfobipWebhook(
         text: answer,
         direction: "assistant",
         model: env.OPENCTO_AGENT_MODEL || "gpt-4.1-mini",
-        attributes: { contact, command: turn.command },
+        trace_id: trace?.getTraceId(),
+        attributes: {
+          contact,
+          command: turn.command,
+          service_name: "opencto-cloudbot-worker",
+          agent_role: "channel_orchestrator",
+        },
       });
       await addActivity(env, scope, turn.botType, answer.slice(0, 300));
     } catch (error) {
@@ -1659,7 +2494,14 @@ async function handleDiscordWebhook(
     scope: scopeToString(scope),
     text,
     direction: "user",
-    attributes: { guild_id: guildId, channel_id: channelId, user_id: userId },
+    trace_id: trace?.getTraceId(),
+    attributes: {
+      guild_id: guildId,
+      channel_id: channelId,
+      user_id: userId,
+      service_name: "opencto-cloudbot-worker",
+      agent_role: "channel_orchestrator",
+    },
   });
   await addActivity(env, scope, "discord.user", text.slice(0, 300), nowIso());
   root?.end({ attributes: { "chat.scope": scopeToString(scope) } });
@@ -1675,11 +2517,14 @@ async function handleDiscordWebhook(
           text: turn.answer,
           direction: "assistant",
           model,
+          trace_id: trace?.getTraceId(),
           attributes: {
             guild_id: guildId,
             channel_id: channelId,
             user_id: userId,
             command: turn.command,
+            service_name: "opencto-cloudbot-worker",
+            agent_role: "channel_orchestrator",
           },
         });
         await addActivity(env, scope, turn.botType, turn.answer.slice(0, 300), nowIso());
@@ -1780,11 +2625,28 @@ async function handleSlackWebhook(
     scope: scopeToString(scope),
     text,
     direction: "user",
-    attributes: { channel_id: event.channel, thread_ts: threadTs },
+    trace_id: trace?.getTraceId(),
+    attributes: {
+      channel_id: event.channel,
+      thread_ts: threadTs,
+      service_name: "opencto-cloudbot-worker",
+      agent_role: "channel_orchestrator",
+    },
   });
 
   await addActivity(env, scope, "slack.user", text.slice(0, 300), nowIso());
-  const turn = await runChatTurn(env, scope, text, "slack", trace);
+  const turn = await runChatTurn(
+    env,
+    scope,
+    text,
+    "slack",
+    trace,
+    {
+      channel: event.channel,
+      thread_ts: threadTs,
+      user_id: event.user || "",
+    },
+  );
   const answer = turn.answer;
   await sendSlackMessage(env, event.channel, answer, threadTs);
   enqueueSidecar?.({
@@ -1793,10 +2655,13 @@ async function handleSlackWebhook(
     text: answer,
     direction: "assistant",
     model: env.OPENCTO_AGENT_MODEL || "gpt-4.1-mini",
+    trace_id: trace?.getTraceId(),
     attributes: {
       channel_id: event.channel,
       thread_ts: threadTs,
       command: turn.command,
+      service_name: "opencto-cloudbot-worker",
+      agent_role: "channel_orchestrator",
     },
   });
   await markSlackThreadActive(env, team, event.channel, threadTs);
@@ -1830,11 +2695,19 @@ export default {
         vector_rag_enabled: vectorEnabled(env),
         vector_bound: Boolean(env.OPENCTO_VECTOR_INDEX),
         embed_model: env.OPENCTO_EMBED_MODEL || "text-embedding-3-small",
+        models: modelRoster(env),
         anyway_enabled: anywayEnabled(env),
         anyway_endpoint: resolveAnywayIngestEndpoint(env.OPENCTO_ANYWAY_ENDPOINT),
         anyway_app_name: env.OPENCTO_ANYWAY_APP_NAME || "opencto-cloudbot-worker",
+        traceloop_via_sidecar: sidecarEnabled(env),
         sidecar_enabled: sidecarEnabled(env),
         sidecar_url: env.OPENCTO_SIDECAR_URL || null,
+        code_agent_enabled: codeAgentEnabled(env),
+        opencto_api_base_url: env.OPENCTO_API_BASE_URL || null,
+        android_autodev_cf_access_configured: Boolean(
+          env.OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_ID &&
+            env.OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_SECRET,
+        ),
         infobip_whatsapp_configured: infobipConfigured(env, "whatsapp"),
         infobip_sms_configured: infobipConfigured(env, "sms"),
       });

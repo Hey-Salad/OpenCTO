@@ -19,6 +19,7 @@ export interface Env {
   API_BASE_URL: string
   OPENCTO_AGENT_BASE_URL: string
   APP_BASE_URL: string
+  MARKETPLACE_BASE_URL?: string
   OPENCTO_MARKETPLACE_PLATFORM_FEE_PERCENT?: string
   CODEBASE_EXECUTOR?: DurableObjectNamespace
   CODEBASE_EXECUTION_MODE?: 'stub' | 'container'
@@ -31,6 +32,7 @@ export interface Env {
   RATE_LIMIT_CTO_PROXY_PER_MINUTE?: string
   RATE_LIMIT_CTO_OPENAI_PER_MINUTE?: string
   RATE_LIMIT_CTO_GITHUB_CHAT_PER_MINUTE?: string
+  OPENCTO_INTERNAL_API_TOKEN?: string
 }
 
 export type UserRole = 'owner' | 'cto' | 'developer' | 'viewer' | 'auditor'
@@ -172,6 +174,7 @@ export interface RequestContext {
   user: SessionUser
   env: Env
   traceContext: TraceContext
+  executionCtx?: ExecutionContext
 }
 
 export interface TraceContext {

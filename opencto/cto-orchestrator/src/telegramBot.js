@@ -252,7 +252,7 @@ async function handleCommand({ cfg, state, chatId, text, onEvent }) {
   return null;
 }
 
-export async function startTelegramBot({ cfg, ai, state, onEvent, onStateChanged }) {
+export async function startTelegramBot({ cfg, ai, state, telemetry, onEvent, onStateChanged }) {
   if (!cfg.telegramEnabled || !cfg.telegramBotMode || !cfg.telegramBotToken) {
     return { stop: () => {} };
   }
@@ -281,11 +281,27 @@ export async function startTelegramBot({ cfg, ai, state, onEvent, onStateChanged
             onEvent?.("bot_message", `Telegram message received: ${text.slice(0, 80)}`, {
               chatId,
             });
+            void telemetry?.emit({
+              channel: "telegram",
+              scope: `telegram:${chatId}`,
+              text,
+              direction: "user",
+              model: cfg.agentModel,
+              attributes: { agent_role: "cto_orchestrator", command: text.startsWith("/") },
+            });
             onStateChanged?.();
 
             const maybeCommand = await handleCommand({ cfg, state, chatId, text, onEvent });
             if (maybeCommand) {
               await sendMessage(cfg, chatId, maybeCommand);
+              void telemetry?.emit({
+                channel: "telegram",
+                scope: `telegram:${chatId}`,
+                text: maybeCommand,
+                direction: "assistant",
+                model: cfg.agentModel,
+                attributes: { agent_role: "cto_orchestrator", command: true },
+              });
               onStateChanged?.();
               continue;
             }
@@ -299,10 +315,26 @@ export async function startTelegramBot({ cfg, ai, state, onEvent, onStateChanged
             const answer = await runAgent({ cfg, ai, state, chatId, userText: text, onEvent });
             await sendMessage(cfg, chatId, answer);
             onEvent?.("bot_response", "Telegram response sent", { chatId });
+            void telemetry?.emit({
+              channel: "telegram",
+              scope: `telegram:${chatId}`,
+              text: answer,
+              direction: "assistant",
+              model: cfg.agentModel,
+              attributes: { agent_role: "cto_orchestrator", command: false },
+            });
             onStateChanged?.();
           } catch (error) {
             const errMsg = error?.message || String(error);
             onEvent?.("bot_error", errMsg, { chatId });
+            void telemetry?.emit({
+              channel: "telegram",
+              scope: `telegram:${chatId}`,
+              text: errMsg,
+              direction: "assistant",
+              model: cfg.agentModel,
+              attributes: { agent_role: "cto_orchestrator", error: true },
+            });
             try {
               await sendMessage(cfg, chatId, `I hit an error: ${errMsg}`);
             } catch {

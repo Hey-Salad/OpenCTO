@@ -92,7 +92,7 @@ function getStripeClient(env: RequestContext['env']): Stripe {
     throw new InternalServerException('STRIPE_SECRET_KEY is not configured')
   }
   return new Stripe(env.STRIPE_SECRET_KEY, {
-    apiVersion: '2024-04-10',
+    apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion,
     httpClient: Stripe.createFetchHttpClient(),
   })
 }

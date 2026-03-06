@@ -58,6 +58,26 @@ The iOS app relies on the same backend contracts used by `opencto-dashboard`:
 - compliance endpoints
 - billing endpoints
 
+Reference mobile API package scaffold:
+- `opencto/opencto-mobile-ios/opencto` (Swift Package, includes run approve/deny client methods)
+
+## Mobile Wiring Policy
+
+The iOS app should connect directly to the Cloudflare API worker, not to raw agent runtimes.
+
+1. Required path
+- iOS app -> `opencto-api-worker` -> queue/container/agent runtime.
+- The worker remains the single trust boundary for auth, validation, and audit logging.
+
+2. Forbidden path
+- iOS app -> direct SSH/MQTT/container agent endpoints.
+- This bypasses policy checks and increases prompt-injection/scam risk.
+
+3. Security controls on mobile requests
+- Use short-lived session tokens only.
+- Require user confirmation (and optional biometrics) for high-risk actions.
+- Treat all user text as untrusted and rely on backend guardrails for final enforcement.
+
 ## Definition of Done
 
 - End-to-end login and job read path works on device.

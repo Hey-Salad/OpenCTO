@@ -22,6 +22,7 @@ import { CodebasePanel } from './components/codebase/CodebasePanel'
 import { BillingHttpClient } from './api/billingClient'
 import { deleteProviderKey, listProviderKeys, saveProviderKey, type ProviderKeySummary } from './api/llmKeysClient'
 import { BillingDashboard } from './components/billing/BillingDashboard'
+import { MarketplacePanel } from './components/marketplace/MarketplacePanel'
 import { getApiBaseUrl } from './config/apiBase'
 import type { OnboardingState } from './types/onboarding'
 import type { BillingSummaryResponse, Invoice } from './types/billing'
@@ -87,7 +88,7 @@ function App() {
   const [githubOrgs, setGitHubOrgs] = useState<GitHubOrgSummary[]>([])
   const [githubRepos, setGitHubRepos] = useState<GitHubRepoSummary[]>([])
   const [selectedOrg, setSelectedOrg] = useState('')
-  const [activeSection, setActiveSection] = useState<'launchpad' | 'codebase' | 'settings' | 'billing'>('launchpad')
+  const [activeSection, setActiveSection] = useState<'launchpad' | 'codebase' | 'marketplace' | 'settings' | 'billing'>('launchpad')
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [isExportingData, setIsExportingData] = useState(false)
   const [billingSummary, setBillingSummary] = useState<BillingSummaryResponse | null>(null)
@@ -513,6 +514,8 @@ function App() {
     )
   }
 
+  const isCenterOnlySection = activeSection === 'codebase' || activeSection === 'marketplace'
+
   return (
     <RouteGuard
       session={session}
@@ -555,7 +558,7 @@ function App() {
           />
         </main>
       ) : (
-      <main className={`app-shell ${activeSection === 'codebase' ? 'app-shell-codebase' : ''}`}>
+      <main className={`app-shell ${isCenterOnlySection ? 'app-shell-codebase' : ''}`}>
         <header className="top-bar panel">
           <div className="brand-mark">
             <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
@@ -660,6 +663,14 @@ function App() {
             </svg>
             Codebase
           </button>
+          <button type="button" className={`nav-item ${activeSection === 'marketplace' ? 'nav-item-active' : ''}`} onClick={() => setActiveSection('marketplace')}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.75" y="4" width="12.5" height="9.75" rx="2" stroke="currentColor" strokeWidth="1.25" />
+              <path d="M1.75 6.75h12.5" stroke="currentColor" strokeWidth="1.25" />
+              <path d="M5.5 6.75v-1a2.5 2.5 0 0 1 5 0v1" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+            </svg>
+            Marketplace
+          </button>
         </aside>
 
         <section className={`center-column route-content ${routeTransitionActive ? 'route-content-active' : ''}`}>
@@ -688,6 +699,9 @@ function App() {
               onSync={handleSyncGitHub}
               onConnect={handleConnectGitHub}
             />
+          )}
+          {activeSection === 'marketplace' && (
+            <MarketplacePanel />
           )}
           {activeSection === 'settings' && (
             <section className="panel settings-panel">
@@ -833,7 +847,7 @@ function App() {
 
         {activeSection === 'launchpad' ? (
           <AudioConfigPanel config={audioConfig} onConfigChange={setAudioConfig} />
-        ) : activeSection === 'codebase' ? null : (
+        ) : isCenterOnlySection ? null : (
           <aside className="right-config panel">
             <p className="muted">Workspace settings and billing controls appear here.</p>
           </aside>

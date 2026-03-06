@@ -78,6 +78,7 @@ class TraceEvent(BaseModel):
     text: str
     direction: str = Field(default="user")
     model: str | None = None
+    trace_id: str | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
     timestamp: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat(),
@@ -91,6 +92,7 @@ def capture_message(event: TraceEvent) -> dict[str, Any]:
         "scope": event.scope,
         "direction": event.direction,
         "model": event.model,
+        "trace_id": event.trace_id,
         "text_len": len(event.text),
         "attributes": event.attributes,
         "timestamp": event.timestamp,
@@ -123,7 +125,7 @@ def ingest_fallback(event: TraceEvent) -> None:
     payload = {
         "traces": [
             {
-                "trace_id": secrets.token_hex(16),
+                "trace_id": event.trace_id or secrets.token_hex(16),
                 "spans": [
                     {
                         "span_id": secrets.token_hex(8),

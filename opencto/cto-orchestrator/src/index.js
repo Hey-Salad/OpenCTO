@@ -6,6 +6,7 @@ import { loadState, saveState, saveStatus } from "./state.js";
 import { sendTelegramAlert } from "./telegram.js";
 import { startTelegramBot } from "./telegramBot.js";
 import { recordAutonomyError, runAutonomyCycle } from "./autonomy.js";
+import { createTelemetry } from "./telemetry.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -188,12 +189,24 @@ async function runLoop() {
   validateConfig(cfg);
   const ai = createOpenAI(cfg.openaiApiKey);
   const state = loadState(cfg.statePath);
+  const telemetry = createTelemetry(cfg);
   let keepRunning = true;
   let botController = { stop: () => {} };
   let autonomyTimer = null;
   console.log(
     `OpenCTO orchestrator started. monitor=${cfg.monitorUrl} poll=${cfg.pollSeconds}s dryRun=${cfg.dryRun}`
   );
+  await telemetry.emit({
+    scope: "orchestrator:lifecycle",
+    text: "OpenCTO orchestrator started",
+    direction: "assistant",
+    attributes: {
+      event_type: "startup",
+      dry_run: cfg.dryRun,
+      github_target:
+        cfg.githubOwner && cfg.githubRepo ? `${cfg.githubOwner}/${cfg.githubRepo}` : "unset",
+    },
+  });
   pushEvent(state, "startup", "Orchestrator started", {
     dryRun: cfg.dryRun,
     githubTarget: cfg.githubOwner && cfg.githubRepo ? `${cfg.githubOwner}/${cfg.githubRepo}` : "unset",
@@ -215,8 +228,15 @@ async function runLoop() {
     cfg,
     ai,
     state,
+    telemetry,
     onEvent: (type, message, detail) => {
       pushEvent(state, type, message, detail || {});
+      void telemetry.emit({
+        scope: "orchestrator:events",
+        text: `${type}: ${message}`,
+        direction: "assistant",
+        attributes: { event_type: type, ...(detail || {}) },
+      });
     },
     onStateChanged: () => {
       persist(cfg, state, { lastCycle: "ok", error: null });
@@ -230,14 +250,34 @@ async function runLoop() {
           cfg,
           ai,
           state,
-          onEvent: (type, message, detail) => pushEvent(state, type, message, detail || {}),
+          onEvent: (type, message, detail) => {
+            pushEvent(state, type, message, detail || {});
+            void telemetry.emit({
+              scope: "orchestrator:autonomy",
+              text: `${type}: ${message}`,
+              direction: "assistant",
+              attributes: { event_type: type, ...(detail || {}) },
+            });
+          },
         });
         pushEvent(state, "autonomy_cycle", "Autonomy cycle completed", results);
+        void telemetry.emit({
+          scope: "orchestrator:autonomy",
+          text: "autonomy_cycle: Autonomy cycle completed",
+          direction: "assistant",
+          attributes: { event_type: "autonomy_cycle", ...results },
+        });
         persist(cfg, state, { lastCycle: "ok", error: null });
       } catch (error) {
         const msg = error?.message || String(error);
         recordAutonomyError(state, msg);
         pushEvent(state, "autonomy_error", msg, {});
+        void telemetry.emit({
+          scope: "orchestrator:autonomy",
+          text: `autonomy_error: ${msg}`,
+          direction: "assistant",
+          attributes: { event_type: "autonomy_error" },
+        });
         persist(cfg, state, { lastCycle: "error", error: msg });
       }
     };
@@ -251,10 +291,26 @@ async function runLoop() {
       const incidents = deriveSignals(metrics);
       if (incidents.length === 0) {
         console.log(`[${nowIso()}] healthy`);
+        void telemetry.emit({
+          scope: "orchestrator:monitor",
+          text: "monitor_healthy: no incidents detected",
+          direction: "assistant",
+          attributes: { event_type: "monitor_healthy" },
+        });
       } else {
         pushEvent(state, "incident_detected", `Detected ${incidents.length} incident(s)`, {
           count: incidents.length,
           keys: incidents.map((item) => item.key),
+        });
+        void telemetry.emit({
+          scope: "orchestrator:monitor",
+          text: `incident_detected: ${incidents.length} incident(s)`,
+          direction: "assistant",
+          attributes: {
+            event_type: "incident_detected",
+            count: incidents.length,
+            keys: incidents.map((item) => item.key),
+          },
         });
         for (const incident of incidents) {
           await handleIncident(cfg, ai, state, incident, metrics);
@@ -265,6 +321,12 @@ async function runLoop() {
       const message = error?.message || String(error);
       console.error(`[${nowIso()}] orchestrator error:`, message);
       pushEvent(state, "error", "Cycle failed", { message });
+      void telemetry.emit({
+        scope: "orchestrator:monitor",
+        text: `error: ${message}`,
+        direction: "assistant",
+        attributes: { event_type: "error" },
+      });
       persist(cfg, state, { lastCycle: "error", error: message });
     }
     await sleep(cfg.pollSeconds * 1000);

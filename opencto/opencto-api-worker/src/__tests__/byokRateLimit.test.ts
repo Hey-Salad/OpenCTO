@@ -136,6 +136,10 @@ class MockD1Database {
       return { meta: { changes: 0 } }
     }
 
+    if (sql.startsWith('insert into users')) {
+      return { meta: { changes: 1 } }
+    }
+
     if (sql.startsWith('insert into user_provider_keys')) {
       const [id, userId, workspaceId, provider, keyHint, encryptedKey, iv, createdAt, updatedAt] = args
       const idValue = String(id ?? '')

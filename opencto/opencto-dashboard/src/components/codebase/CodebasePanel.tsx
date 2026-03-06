@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  approveCodebaseRun,
   cancelCodebaseRun,
   createCodebaseRun,
-  getCodebaseMetrics,
+  denyCodebaseRun,
   getCodebaseRun,
-  getCodebaseRunArtifactDownloadUrl,
   getCodebaseRunEvents,
-  listCodebaseRunArtifacts,
-  streamCodebaseRunEvents,
 } from '../../api/codebaseRunsClient'
 import type { GitHubConnectionStatus, GitHubOrgSummary, GitHubRepoSummary } from '../../api/githubClient'
-import type { CodebaseMetrics, CodebaseRun, CodebaseRunArtifact, CodebaseRunEvent } from '../../types/codebaseRuns'
+import type { CodebaseRun, CodebaseRunEvent } from '../../types/codebaseRuns'
 
 interface CodebasePanelProps {
   status: GitHubConnectionStatus | null
@@ -50,6 +48,10 @@ function runStatusClass(status: CodebaseRun['status']): string {
   return 'run-status-queued'
 }
 
+function isPendingApproval(run: CodebaseRun): boolean {
+  return run.approval?.state === 'pending'
+}
+
 export function CodebasePanel({
   status,
   syncMessage,
@@ -67,9 +69,6 @@ export function CodebasePanel({
   const [lastSeqByRunId, setLastSeqByRunId] = useState<Record<string, number>>({})
   const [runError, setRunError] = useState<string | null>(null)
   const [runBusy, setRunBusy] = useState(false)
-  const [metrics, setMetrics] = useState<CodebaseMetrics | null>(null)
-  const [metricsError, setMetricsError] = useState<string | null>(null)
-  const [artifactsByRunId, setArtifactsByRunId] = useState<Record<string, CodebaseRunArtifact[]>>({})
   const [repoUrl, setRepoUrl] = useState('')
   const [commands, setCommands] = useState('git clone <repo-url>\nnpm install\nnpm test\nnpm run build')
   const [pollDelayMs, setPollDelayMs] = useState(INITIAL_POLL_DELAY_MS)
@@ -78,12 +77,6 @@ export function CodebasePanel({
   const connectedUpdated = status?.updatedAt
     ? new Date(status.updatedAt).toLocaleString()
     : 'Not synced yet'
-  const recentlyPushedRepos = repos.filter((repo) => {
-    if (!repo.pushedAt) return false
-    return Date.now() - new Date(repo.pushedAt).getTime() <= 1000 * 60 * 60 * 24 * 30
-  }).length
-  const privateRepos = repos.filter((repo) => repo.private).length
-  const archivedRepos = repos.filter((repo) => repo.archived).length
 
   const selectedRun = useMemo(
     () => runs.find((run) => run.id === selectedRunId) ?? null,
@@ -91,19 +84,16 @@ export function CodebasePanel({
   )
 
   const selectedRunEvents = selectedRunId ? (eventsByRunId[selectedRunId] ?? []) : []
-  const selectedRunArtifacts = selectedRunId ? (artifactsByRunId[selectedRunId] ?? []) : []
 
   const loadSelectedRun = useCallback(async (runId: string) => {
-    const [{ run }, eventsResponse, artifactsResponse] = await Promise.all([
+    const [{ run }, eventsResponse] = await Promise.all([
       getCodebaseRun(runId),
       getCodebaseRunEvents(runId, { afterSeq: 0, limit: 500 }),
-      listCodebaseRunArtifacts(runId),
     ])
 
     setRuns((prev) => upsertRun(prev, run))
     setEventsByRunId((prev) => ({ ...prev, [runId]: eventsResponse.events }))
     setLastSeqByRunId((prev) => ({ ...prev, [runId]: eventsResponse.lastSeq }))
-    setArtifactsByRunId((prev) => ({ ...prev, [runId]: artifactsResponse.artifacts }))
   }, [])
 
   const handleCreateRun = async () => {
@@ -122,9 +112,6 @@ export function CodebasePanel({
       setRuns((prev) => upsertRun(prev, response.run))
       setSelectedRunId(response.run.id)
       setPollDelayMs(INITIAL_POLL_DELAY_MS)
-      const nextMetrics = await getCodebaseMetrics()
-      setMetrics(nextMetrics)
-      setMetricsError(null)
     } catch (error) {
       setRunError(error instanceof Error ? error.message : 'Failed to create run')
     } finally {
@@ -138,9 +125,6 @@ export function CodebasePanel({
     try {
       const response = await cancelCodebaseRun(runId)
       setRuns((prev) => upsertRun(prev, response.run))
-      const nextMetrics = await getCodebaseMetrics()
-      setMetrics(nextMetrics)
-      setMetricsError(null)
     } catch (error) {
       setRunError(error instanceof Error ? error.message : 'Failed to cancel run')
     } finally {
@@ -148,24 +132,33 @@ export function CodebasePanel({
     }
   }
 
-  useEffect(() => {
-    let canceled = false
-    void (async () => {
-      try {
-        const nextMetrics = await getCodebaseMetrics()
-        if (canceled) return
-        setMetrics(nextMetrics)
-        setMetricsError(null)
-      } catch (error) {
-        if (canceled) return
-        setMetricsError(error instanceof Error ? error.message : 'Failed to load codebase metrics')
-      }
-    })()
-
-    return () => {
-      canceled = true
+  const handleApproveRun = async (runId: string) => {
+    setRunBusy(true)
+    setRunError(null)
+    try {
+      const response = await approveCodebaseRun(runId)
+      setRuns((prev) => upsertRun(prev, response.run))
+      await loadSelectedRun(runId)
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : 'Failed to approve run')
+    } finally {
+      setRunBusy(false)
     }
-  }, [])
+  }
+
+  const handleDenyRun = async (runId: string) => {
+    setRunBusy(true)
+    setRunError(null)
+    try {
+      const response = await denyCodebaseRun(runId)
+      setRuns((prev) => upsertRun(prev, response.run))
+      await loadSelectedRun(runId)
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : 'Failed to deny run')
+    } finally {
+      setRunBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!selectedRunId) return
@@ -187,65 +180,53 @@ export function CodebasePanel({
   useEffect(() => {
     if (!selectedRunId || !selectedRun || TERMINAL_STATUSES.has(selectedRun.status)) return
 
-    const abortController = new AbortController()
     let canceled = false
+    let timer: number | null = null
 
-    const startStream = async () => {
+    const poll = async () => {
+      if (canceled) return
+      const afterSeq = lastSeqByRunId[selectedRunId] ?? 0
       try {
-        await streamCodebaseRunEvents(selectedRunId, {
-          afterSeq: lastSeqByRunId[selectedRunId] ?? 0,
-          signal: abortController.signal,
-          onEvents: (events, lastSeq) => {
-            if (canceled || events.length === 0) return
-            setEventsByRunId((prev) => ({
-              ...prev,
-              [selectedRunId]: [...(prev[selectedRunId] ?? []), ...events],
-            }))
-            setLastSeqByRunId((prev) => ({ ...prev, [selectedRunId]: lastSeq }))
-          },
-          onRun: (run) => {
-            if (canceled) return
-            setRuns((prev) => upsertRun(prev, run))
-          },
-          onError: () => {
-            if (canceled) return
-            setRunError('Live stream disconnected. Falling back to polling.')
-          },
-        })
+        const [runResponse, eventsResponse] = await Promise.all([
+          getCodebaseRun(selectedRunId),
+          getCodebaseRunEvents(selectedRunId, { afterSeq, limit: 200 }),
+        ])
+
+        if (canceled) return
+
+        setRuns((prev) => upsertRun(prev, runResponse.run))
+        if (eventsResponse.events.length > 0) {
+          setEventsByRunId((prev) => ({
+            ...prev,
+            [selectedRunId]: [...(prev[selectedRunId] ?? []), ...eventsResponse.events],
+          }))
+          setLastSeqByRunId((prev) => ({ ...prev, [selectedRunId]: eventsResponse.lastSeq }))
+        }
+
+        setPollDelayMs(INITIAL_POLL_DELAY_MS)
+        timer = window.setTimeout(() => {
+          void poll()
+        }, INITIAL_POLL_DELAY_MS)
       } catch {
         if (canceled) return
-        const afterSeq = lastSeqByRunId[selectedRunId] ?? 0
-        setRunError('Live stream unavailable. Falling back to polling.')
-        try {
-          const [runResponse, eventsResponse] = await Promise.all([
-            getCodebaseRun(selectedRunId),
-            getCodebaseRunEvents(selectedRunId, { afterSeq, limit: 200 }),
-          ])
-          if (canceled) return
-          setRuns((prev) => upsertRun(prev, runResponse.run))
-          if (eventsResponse.events.length > 0) {
-            setEventsByRunId((prev) => ({
-              ...prev,
-              [selectedRunId]: [...(prev[selectedRunId] ?? []), ...eventsResponse.events],
-            }))
-            setLastSeqByRunId((prev) => ({ ...prev, [selectedRunId]: eventsResponse.lastSeq }))
-          }
-          setPollDelayMs(INITIAL_POLL_DELAY_MS)
-        } catch {
-          if (canceled) return
-          setPollDelayMs((prev) => Math.min(MAX_POLL_DELAY_MS, prev * 2))
-        }
+        setRunError('Live log polling failed. Retrying with backoff.')
+        setPollDelayMs((prev) => {
+          const nextDelay = Math.min(MAX_POLL_DELAY_MS, prev * 2)
+          timer = window.setTimeout(() => {
+            void poll()
+          }, nextDelay)
+          return nextDelay
+        })
       }
     }
 
-    const timer = window.setTimeout(() => {
-      void startStream()
+    timer = window.setTimeout(() => {
+      void poll()
     }, pollDelayMs)
 
     return () => {
       canceled = true
-      abortController.abort()
-      window.clearTimeout(timer)
+      if (timer !== null) window.clearTimeout(timer)
     }
   }, [lastSeqByRunId, pollDelayMs, selectedRun, selectedRunId])
 
@@ -285,39 +266,6 @@ export function CodebasePanel({
         )}
         {syncMessage ? <p className="muted">{syncMessage}</p> : null}
       </div>
-
-      <section className="codebase-runs-panel codebase-github-kpi-panel">
-        <header className="codebase-runs-header">
-          <h3>GitHub Overview</h3>
-          <p className="muted">KPI snapshot for synced organizations and repositories in the current filter.</p>
-        </header>
-        <div className="codebase-metrics-grid">
-          <div className="codebase-metric-card">
-            <span className="muted">Organizations</span>
-            <strong>{orgs.length}</strong>
-          </div>
-          <div className="codebase-metric-card">
-            <span className="muted">Repositories</span>
-            <strong>{repos.length}</strong>
-          </div>
-          <div className="codebase-metric-card">
-            <span className="muted">Private Repos</span>
-            <strong>{privateRepos}</strong>
-          </div>
-          <div className="codebase-metric-card">
-            <span className="muted">Active (30d)</span>
-            <strong>{recentlyPushedRepos}</strong>
-          </div>
-          <div className="codebase-metric-card">
-            <span className="muted">Archived</span>
-            <strong>{archivedRepos}</strong>
-          </div>
-          <div className="codebase-metric-card">
-            <span className="muted">Last GitHub Sync</span>
-            <strong>{connectedUpdated}</strong>
-          </div>
-        </div>
-      </section>
 
       <div className="codebase-grid">
         <article>
@@ -359,41 +307,28 @@ export function CodebasePanel({
           ) : repos.length === 0 ? (
             <p className="muted">No repositories available for this selection.</p>
           ) : (
-            <div className="codebase-table-wrap codebase-repo-list">
-              <table className="codebase-table">
-                <thead>
-                  <tr>
-                    <th>Repository</th>
-                    <th>Visibility</th>
-                    <th>Branch</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {repos.map((repo) => (
-                    <tr key={repo.fullName}>
-                      <td>{repo.fullName}</td>
-                      <td>{repo.private ? 'Private' : 'Public'}</td>
-                      <td>{repo.defaultBranch ?? 'main'}</td>
-                      <td>
-                        <div className="codebase-repo-actions">
-                          <button
-                            type="button"
-                            className="secondary-button codebase-repo-link"
-                            onClick={() => setRepoUrl(`https://github.com/${repo.fullName}.git`)}
-                          >
-                            Use
-                          </button>
-                          <a href={repo.htmlUrl} target="_blank" rel="noreferrer" className="secondary-button codebase-repo-link">
-                            Open
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ul className="plain-list codebase-repo-list">
+              {repos.map((repo) => (
+                <li key={repo.fullName} className="list-row">
+                  <div>
+                    <p>{repo.fullName}</p>
+                    <p className="muted">{repo.private ? 'Private' : 'Public'} · {repo.defaultBranch ?? 'main'}</p>
+                  </div>
+                  <div className="codebase-repo-actions">
+                    <button
+                      type="button"
+                      className="secondary-button codebase-repo-link"
+                      onClick={() => setRepoUrl(`https://github.com/${repo.fullName}.git`)}
+                    >
+                      Use
+                    </button>
+                    <a href={repo.htmlUrl} target="_blank" rel="noreferrer" className="secondary-button codebase-repo-link">
+                      Open
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </article>
       </div>
@@ -401,28 +336,8 @@ export function CodebasePanel({
       <section className="codebase-runs-panel">
         <header className="codebase-runs-header">
           <h3>Codebase Runs</h3>
-          <p className="muted">Container execution orchestration with live logs and downloadable artifacts.</p>
+          <p className="muted">MVP placeholder for container execution orchestration.</p>
         </header>
-
-        <div className="codebase-metrics-grid">
-          <div className="codebase-metric-card">
-            <span className="muted">Total (24h)</span>
-            <strong>{metrics?.totals.totalRuns ?? 0}</strong>
-          </div>
-          <div className="codebase-metric-card">
-            <span className="muted">Succeeded</span>
-            <strong>{metrics?.totals.succeededRuns ?? 0}</strong>
-          </div>
-          <div className="codebase-metric-card">
-            <span className="muted">Failed</span>
-            <strong>{metrics?.totals.failedRuns ?? 0}</strong>
-          </div>
-          <div className="codebase-metric-card">
-            <span className="muted">Avg Duration</span>
-            <strong>{metrics?.totals.avgDurationSeconds ?? 0}s</strong>
-          </div>
-        </div>
-        {metricsError ? <p className="billing-error">{metricsError}</p> : null}
 
         <div className="codebase-run-form">
           <label>
@@ -460,40 +375,43 @@ export function CodebasePanel({
                 <button type="button" className="secondary-button" onClick={() => setRunError(null)}>Retry</button>
               </div>
             ) : (
-              <div className="codebase-table-wrap codebase-runs-list">
-                <table className="codebase-table">
-                  <thead>
-                    <tr>
-                      <th>Branch</th>
-                      <th>Status</th>
-                      <th>Created</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runs.map((run) => (
-                      <tr key={run.id} className={selectedRunId === run.id ? 'codebase-run-row-active' : ''}>
-                        <td>
-                          <button type="button" className="codebase-run-select" onClick={() => setSelectedRunId(run.id)}>
-                            {run.targetBranch}
-                          </button>
-                        </td>
-                        <td><span className={`run-status-badge ${runStatusClass(run.status)}`}>{run.status}</span></td>
-                        <td>{formatTime(run.createdAt)}</td>
-                        <td>
-                          {!TERMINAL_STATUSES.has(run.status) ? (
-                            <button type="button" className="secondary-button" onClick={() => void handleCancelRun(run.id)} disabled={runBusy}>
-                              Cancel
-                            </button>
-                          ) : (
-                            <span className="muted">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ul className="plain-list codebase-runs-list">
+                {runs.map((run) => (
+                  <li key={run.id} className={`codebase-run-row ${selectedRunId === run.id ? 'codebase-run-row-active' : ''}`}>
+                    <button type="button" className="codebase-run-select" onClick={() => setSelectedRunId(run.id)}>
+                      <span>{run.targetBranch}</span>
+                      <span className="muted">{formatTime(run.createdAt)}</span>
+                      <span className={`run-status-badge ${runStatusClass(run.status)}`}>{run.status}</span>
+                      {isPendingApproval(run) ? <span className="muted">Human approval required</span> : null}
+                    </button>
+                    {isPendingApproval(run) && (
+                      <>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void handleDenyRun(run.id)}
+                          disabled={runBusy}
+                        >
+                          Deny
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={() => void handleApproveRun(run.id)}
+                          disabled={runBusy}
+                        >
+                          Approve
+                        </button>
+                      </>
+                    )}
+                    {!TERMINAL_STATUSES.has(run.status) && (
+                      <button type="button" className="secondary-button" onClick={() => void handleCancelRun(run.id)} disabled={runBusy}>
+                        Cancel
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </article>
 
@@ -505,8 +423,37 @@ export function CodebasePanel({
               <>
                 <p className="muted">Run: {selectedRun.id}</p>
                 <p className="muted">Status: {selectedRun.status}</p>
+                {isPendingApproval(selectedRun) ? (
+                  <p className="muted">Awaiting human approval before execution.</p>
+                ) : null}
                 {selectedRun.errorMessage ? <p className="billing-error">Failure reason: {selectedRun.errorMessage}</p> : null}
                 <div className="codebase-run-actions-inline">
+                  {isPendingApproval(selectedRun) ? (
+                    <>
+                      <button
+                        type="button"
+                        className="ghost-danger-button"
+                        onClick={() => {
+                          if (!selectedRunId) return
+                          void handleDenyRun(selectedRunId)
+                        }}
+                        disabled={runBusy}
+                      >
+                        Deny Run
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => {
+                          if (!selectedRunId) return
+                          void handleApproveRun(selectedRunId)
+                        }}
+                        disabled={runBusy}
+                      >
+                        Approve Run
+                      </button>
+                    </>
+                  ) : null}
                   <button
                     type="button"
                     className="secondary-button"
@@ -524,66 +471,14 @@ export function CodebasePanel({
                   {selectedRunEvents.length === 0 ? (
                     <p className="muted">No events yet.</p>
                   ) : (
-                    <table className="codebase-table codebase-log-table">
-                      <thead>
-                        <tr>
-                          <th>#</th>
-                          <th>Time</th>
-                          <th>Level</th>
-                          <th>Event</th>
-                          <th>Message</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedRunEvents.map((event) => (
-                          <tr key={event.id} className={`codebase-log-${event.level}`}>
-                            <td className="codebase-log-seq">#{event.seq}</td>
-                            <td>{formatTime(event.createdAt)}</td>
-                            <td>{event.level}</td>
-                            <td>{event.eventType}</td>
-                            <td>{event.message}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-                <div className="codebase-artifacts">
-                  <h5>Artifacts</h5>
-                  {selectedRunArtifacts.length === 0 ? (
-                    <p className="muted">No artifacts available.</p>
-                  ) : (
-                    <div className="codebase-table-wrap">
-                      <table className="codebase-table">
-                        <thead>
-                          <tr>
-                            <th>Artifact</th>
-                            <th>Kind</th>
-                            <th>Created</th>
-                            <th>Download</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedRunArtifacts.map((artifact) => (
-                            <tr key={artifact.id}>
-                              <td>{artifact.path}</td>
-                              <td>{artifact.kind}</td>
-                              <td>{formatTime(artifact.createdAt)}</td>
-                              <td>
-                                <a
-                                  className="secondary-button codebase-repo-link"
-                                  href={getCodebaseRunArtifactDownloadUrl(selectedRun.id, artifact.id)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  Download
-                                </a>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <ul className="plain-list codebase-log-lines">
+                      {selectedRunEvents.map((event) => (
+                        <li key={event.id} className={`codebase-log-line codebase-log-${event.level}`}>
+                          <span className="codebase-log-seq">#{event.seq}</span>
+                          <span>{event.message}</span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               </>

@@ -126,3 +126,32 @@ journalctl --user -u opencto-cto-orchestrator.service --no-pager -n 100
 - Use least-privilege `GITHUB_TOKEN` with issue read/write scope only.
 - Keep `OPENCTO_DRY_RUN=true` until you verify repository targets and labels.
 - The model output is validated and action types are allow-listed.
+
+## Tracing (OpenLLMetry)
+
+To trace orchestrator model activity into Traceloop:
+
+```bash
+OPENCTO_TRACE_ENABLED=true
+OPENCTO_TRACE_SERVICE_NAME=opencto-cto-orchestrator
+TRACELOOP_API_KEY=...
+# optional if exporting to custom OTLP endpoint
+OTEL_EXPORTER_OTLP_ENDPOINT=https://...
+```
+
+Tracing is initialized at process bootstrap before the orchestrator loop starts.
+
+To also mirror runtime events into the shared Anyway sidecar path:
+
+```bash
+OPENCTO_SIDECAR_ENABLED=true
+OPENCTO_SIDECAR_URL=https://anyway-sdk-sidecar.opencto.works/trace/event
+OPENCTO_SIDECAR_TOKEN=...
+OPENCTO_AGENT_MODEL_PLANNER=gpt-5.4
+OPENCTO_AGENT_MODEL_EXECUTOR=gpt-5.3-codex
+OPENCTO_AGENT_MODEL_REVIEWER=gemini-2.5-pro
+```
+
+With both enabled, the orchestrator emits:
+- model traces through Traceloop / OTLP
+- lifecycle, autonomy, and Telegram bot events through the shared sidecar so they also appear in Anyway

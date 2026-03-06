@@ -8,6 +8,7 @@ This worker provides the backend API for:
 - Authentication (session, devices, passkeys)
 - Compliance checks and evidence export
 - Billing (Stripe integration, subscriptions, invoices)
+- Marketplace billing (Stripe Connect account onboarding + agent rentals)
 - Webhook handling with signature verification and idempotency
 
 ## Project Structure
@@ -45,6 +46,7 @@ npm install
 Set the following secrets using Wrangler:
 
 ```bash
+wrangler secret put OPENAI_API_KEY
 wrangler secret put STRIPE_SECRET_KEY
 wrangler secret put STRIPE_WEBHOOK_SECRET
 wrangler secret put JWT_SECRET
@@ -126,6 +128,8 @@ This deploys the worker to Cloudflare Workers.
 - `GET /api/v1/codebase/runs/:id` - Get run status and metrics
 - `GET /api/v1/codebase/runs/:id/events` - Poll run events/log lines
 - `POST /api/v1/codebase/runs/:id/cancel` - Cancel queued/running run
+- `POST /api/v1/codebase/runs/:id/approve` - Human-approve a pending dangerous run
+- `POST /api/v1/codebase/runs/:id/deny` - Deny and cancel a pending dangerous run
 
 Runtime controls:
 - Command normalization + allowlist template enforcement
@@ -133,10 +137,22 @@ Runtime controls:
 - Per-user concurrent and daily run quotas
 - Timeout clamp (`min/default/max`)
 - Redaction for common token/key patterns in persisted logs/events
+- Human approval gate for high-risk runs (`git push` and protected target branches)
 
 Execution mode:
 - `CODEBASE_EXECUTION_MODE=stub` (default): creates local stub runs/events
 - `CODEBASE_EXECUTION_MODE=container`: dispatches the run to `CODEBASE_EXECUTOR` container binding
+
+Internal worker-to-worker API for the Slack coding agent:
+- `POST /api/v1/internal/codebase/runs?dispatch=async` - queue an async container run without end-user auth
+- `GET /api/v1/internal/codebase/runs/:id` - fetch run status
+- `GET /api/v1/internal/codebase/runs/:id/events` - fetch recent run events
+- `POST /api/v1/internal/codebase/runs/:id/cancel` - cancel a queued/running run
+
+Internal API requirements:
+- send `x-opencto-internal-token` with the shared secret from `OPENCTO_INTERNAL_API_TOKEN`
+- optionally send `x-opencto-service-user-email` to tag the service caller
+- internal routes use the same command allowlist, quota, approval, and trace behavior as public codebase runs
 
 Container runtime image:
 - `container-runtime/codebase-executor/Dockerfile`
@@ -150,6 +166,17 @@ Container runtime image:
 - `POST /api/v1/billing/checkout/session` - Create Stripe checkout session
 - `POST /api/v1/billing/portal/session` - Create billing portal session
 - `POST /api/v1/billing/webhooks/stripe` - Stripe webhook endpoint
+
+### Marketplace (Connect)
+
+- `POST /api/v1/marketplace/connect/accounts` - Create Stripe connected account for workspace
+- `POST /api/v1/marketplace/connect/accounts/:id/onboarding-link` - Create onboarding link
+- `POST /api/v1/marketplace/agent-rentals/checkout/session` - Create rental contract and checkout session
+- `GET /api/v1/marketplace/agent-rentals` - List caller rental contracts
+
+Marketplace redirect behavior:
+- Stripe Connect onboarding links use `MARKETPLACE_BASE_URL` (fallback: `APP_BASE_URL`)
+- Rental checkout success/cancel URLs use `MARKETPLACE_BASE_URL` (fallback: `APP_BASE_URL`)
 
 ## Security Features
 
@@ -172,6 +199,11 @@ Container runtime image:
 - JWT-based authentication (stub implementation, needs completion)
 - Device trust tracking
 - Passkey support (WebAuthn)
+
+### 5. Prompt and Scam Guardrails
+- Codebase run requests enforce repo URL safety checks (blocks local/private/file targets).
+- Prompt injection and secret-exfiltration patterns are blocked on chat persistence and run creation.
+- Scam/social-engineering payment patterns are blocked with explicit `403 FORBIDDEN` responses.
 
 ## Testing
 
@@ -200,11 +232,15 @@ npm test
 - `ENVIRONMENT` - Environment name (production, staging, etc.)
 
 ### Secrets (set via `wrangler secret put`)
+- `OPENAI_API_KEY` - OpenAI API key used by backend integrations
 - `STRIPE_SECRET_KEY` - Stripe API secret key
 - `STRIPE_WEBHOOK_SECRET` - Stripe webhook signing secret
 - `JWT_SECRET` - Secret for JWT signing
 - `WEBAUTHN_RP_ID` - WebAuthn relying party ID
 - `WEBAUTHN_RP_NAME` - WebAuthn relying party name
+- `OPENCTO_INTERNAL_API_TOKEN` - shared secret for trusted worker-to-worker codebase run requests
+- `OPENCTO_MARKETPLACE_PLATFORM_FEE_PERCENT` - Optional default platform fee percent for marketplace rentals
+- `MARKETPLACE_BASE_URL` - Optional marketplace frontend URL (e.g. `https://market.opencto.works`)
 
 ## Frontend Integration
 
