@@ -2,7 +2,7 @@
 
 ## 🏆 **Project Overview**
 
-**Project Name**: OpenCTO SDK + CEO Claw Extension  
+**Project Name**: OPENCTO SDK + CEO Claw Extension  
 **Platform**: Built on **OpenClaw** (Open Source Agentic Engineering Platform)  
 **Goal**: Create a CTO-as-a-Service SDK that helps OSS maintainers with technical leadership
 
@@ -34,11 +34,11 @@
 
 ### **Architecture Highlights:**
 ```
-Open Source Agentic Engineering → OpenClaw Platform → OpenCTO SDK → CTO-as-a-Service
+Open Source Agentic Engineering → OpenClaw Platform → OPENCTO SDK → CTO-as-a-Service
 ```
 
 ### **Key Components:**
-1. **OpenCTO SDK**: Framework for AI-powered technical agents
+1. **OPENCTO SDK**: Framework for AI-powered technical agents
 2. **Marketplace**: Platform for sharing and monetizing agents
 3. **CEO Extension**: Business strategy capabilities (hackathon focus)
 4. **Distributed System**: Scalable architecture for real-world usage
@@ -86,14 +86,14 @@ Open Source Agentic Engineering → OpenClaw Platform → OpenCTO SDK → CTO-as
 - Community impact assessment
 
 ### **Public Evidence:**
-- GitHub repository: `Hey-Salad/OpenCTO`
+- GitHub repository: `Hey-Salad/OPENCTO`
 - Active development branch
 - Professional documentation practices
 - Real security needs (34 vulnerabilities to address)
 
 ## 🎯 **Conclusion**
 
-We're building **OpenCTO** on **OpenClaw** to help OSS maintainers with the technical leadership challenges they face daily. With OpenAI Codex for OSS benefits, we can accelerate this platform's development, improve its security, and maximize its impact on the open-source community.
+We're building **OPENCTO** on **OpenClaw** to help OSS maintainers with the technical leadership challenges they face daily. With OpenAI Codex for OSS benefits, we can accelerate this platform's development, improve its security, and maximize its impact on the open-source community.
 
 **We're ready to leverage Codex benefits** to build better tools for OSS maintainers everywhere.
 

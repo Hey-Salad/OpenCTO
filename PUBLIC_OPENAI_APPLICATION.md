@@ -1,8 +1,8 @@
-# OpenCTO: CTO-as-a-Service for OSS Maintainers
+# OPENCTO: CTO-as-a-Service for OSS Maintainers
 
 ## Project Overview
 
-**OpenCTO** is an open-source platform that provides AI-powered technical leadership for development teams. Built on **OpenClaw** (an open-source agentic engineering platform), OpenCTO helps OSS maintainers with the complex technical decisions and leadership challenges they face daily.
+**OPENCTO** is an open-source platform that provides AI-powered technical leadership for development teams. Built on **OpenClaw** (an open-source agentic engineering platform), OPENCTO helps OSS maintainers with the complex technical decisions and leadership challenges they face daily.
 
 ## The Problem
 
@@ -15,7 +15,7 @@ Open-source maintainers often struggle with:
 
 ## Our Solution
 
-OpenCTO provides a **CTO-as-a-Service** through:
+OPENCTO provides a **CTO-as-a-Service** through:
 
 ### 1. **AI-Powered Technical Agents**
 - Code review and quality assessment
@@ -37,7 +37,7 @@ OpenCTO provides a **CTO-as-a-Service** through:
 
 ## Current Hackathon Focus: CEO Extension
 
-We're extending OpenCTO with **CEO capabilities** for the hackathon:
+We're extending OPENCTO with **CEO capabilities** for the hackathon:
 - **Business Strategy Module**: Market analysis, positioning
 - **Marketing & Growth**: Campaign planning, content generation
 - **Financial Management**: Modeling, projections, budgeting
@@ -82,7 +82,7 @@ Built with modern best practices:
 
 ## GitHub Repository
 
-**Active Development**: `https://github.com/Hey-Salad/OpenCTO`
+**Active Development**: `https://github.com/Hey-Salad/OPENCTO`
 
 **Current Status**:
 - Active development branch
@@ -92,7 +92,7 @@ Built with modern best practices:
 
 ## Conclusion
 
-OpenCTO represents a new approach to technical leadership in open source. By combining the power of **OpenClaw** with AI capabilities, we're creating tools that help OSS maintainers focus on what matters most: building great software.
+OPENCTO represents a new approach to technical leadership in open source. By combining the power of **OpenClaw** with AI capabilities, we're creating tools that help OSS maintainers focus on what matters most: building great software.
 
 With **OpenAI Codex for OSS** support, we can accelerate this vision and help more maintainers succeed.
 
