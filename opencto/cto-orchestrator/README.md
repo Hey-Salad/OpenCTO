@@ -1,60 +1,72 @@
 # OpenCTO CTO Orchestrator
 
-Autonomous incident triage loop for OpenCTO.
+Autonomous incident-triage and governance loop for OpenCTO.
 
-It polls the local system monitor API, detects sustained risk signals, asks OpenAI for triage,
-and updates GitHub issues in your target repository.
+It polls system metrics, generates model-backed triage, updates GitHub issues, and can optionally interact via Telegram.
 
-## What it does
+## Capabilities
 
-- Reads metrics from `OPENCTO_MONITOR_URL`
-- Detects high CPU / memory / disk pressure
-- Produces structured triage using OpenAI SDK
-- Creates or reuses incident issues in GitHub
-- Sends Telegram alerts (optional)
-- Supports Telegram natural-language bot mode with safe tool calling
-- Posts periodic incident updates with cooldown and comment caps
-- Persists local state for dedupe and restart safety
-- Writes a machine-readable status file for dashboards
+- Poll metrics from `OPENCTO_MONITOR_URL`
+- Detect sustained resource pressure (CPU/memory/disk)
+- Generate triage via OpenAI SDK
+- Create/reuse GitHub incidents
+- Send Telegram alerts and support bot-mode interactions
+- Run autonomous governance cycles over roadmap/issues/PRs
+- Emit telemetry to Traceloop and Anyway sidecar
 
-## Quick start
+## Prerequisites
 
-1. Install dependencies:
+- Node.js `>= 18`
+- npm
+- Valid `OPENAI_API_KEY`
+- GitHub token with required repo scope for issue/PR operations
+
+## Quick Start
+
+### 1) Install
 
 ```bash
+cd opencto/cto-orchestrator
 npm install
 ```
 
-2. Configure environment:
+### 2) Configure
 
 ```bash
 cp .env.example .env
-# edit .env and set OPENAI_API_KEY + GITHUB_TOKEN
 ```
 
-3. Dry-run locally:
+Minimum required for a useful local run:
+
+```bash
+OPENAI_API_KEY=...
+GITHUB_TOKEN=...
+OPENCTO_MONITOR_URL=http://127.0.0.1:8787/api/metrics
+OPENCTO_DRY_RUN=true
+```
+
+### 3) Run
 
 ```bash
 npm start
 ```
 
-4. Run tests:
+### 4) Test
 
 ```bash
 npm test
 ```
 
-## Production mode
+## Operating Modes
 
-Set in `.env`:
+- `OPENCTO_DRY_RUN=true`: safe mode, no external mutations
+- `OPENCTO_DRY_RUN=false`: production mode, applies live actions
 
-```bash
-OPENCTO_DRY_RUN=false
-```
+Keep dry-run enabled until repository target, labels, and alerting are verified.
 
-## Telegram setup (optional)
+## Telegram Mode (Optional)
 
-Set in `.env`:
+Enable in `.env`:
 
 ```bash
 OPENCTO_TELEGRAM_ENABLED=true
@@ -62,37 +74,17 @@ OPENCTO_TELEGRAM_BOT_TOKEN=123456:ABC...
 OPENCTO_TELEGRAM_CHAT_IDS=123456789
 OPENCTO_TELEGRAM_BOT_MODE=true
 OPENCTO_TELEGRAM_POLL_SECONDS=3
-OPENCTO_AGENT_MODEL=gpt-4.1-mini
+OPENCTO_REQUIRE_APPROVALS=true
 ```
 
-If you need your numeric chat ID, message your bot first and then call:
+Approval flow for risky operations:
 
-```bash
-curl "https://api.telegram.org/bot<token>/getUpdates"
-```
+1. Bot returns an `approval_id`
+2. Operator runs `/approve <approval_id>` or `/deny <approval_id>`
 
-### Telegram bot behavior
+## Autonomous Governance Loop
 
-- Natural language chat is enabled for configured chat IDs.
-- The bot auto-routes each request to relevant installed playbooks (always includes CTO baseline).
-- Read-only safe tools are auto-executed: machine metrics, service status, service logs, pending approvals.
-- Risky operation (`restart_service`) is approval-gated:
-  - bot queues approval and returns an `approval_id`
-  - user must run `/approve <approval_id>` or `/deny <approval_id>`
-
-Default is approval-gated (`OPENCTO_REQUIRE_APPROVALS=true`).
-Set `OPENCTO_REQUIRE_APPROVALS=false` only if you explicitly want full-autonomous execution mode.
-
-## Autonomous governance loop
-
-The orchestrator can run a continuous GitHub governance cycle:
-
-- reads roadmap sections and ensures tracking issues exist
-- posts autonomous issue discussion updates
-- reviews open PRs with model-backed summaries
-- auto-merges approved PRs that carry the configured merge label and have green checks
-
-Key env vars:
+Enable continuous roadmap/issues/PR cycle:
 
 ```bash
 OPENCTO_AUTONOMY_ENABLED=true
@@ -104,9 +96,29 @@ OPENCTO_AUTONOMY_AUTO_MERGE=false
 OPENCTO_AUTONOMY_MERGE_LABEL=auto-merge
 ```
 
-## Systemd (user service)
+## Observability
 
-Install the unit:
+### Traceloop / OpenLLMetry
+
+```bash
+OPENCTO_TRACE_ENABLED=true
+OPENCTO_TRACE_SERVICE_NAME=opencto-cto-orchestrator
+TRACELOOP_API_KEY=...
+OTEL_EXPORTER_OTLP_ENDPOINT=https://...  # optional
+```
+
+### Anyway Sidecar Mirroring
+
+```bash
+OPENCTO_SIDECAR_ENABLED=true
+OPENCTO_SIDECAR_URL=https://anyway-sdk-sidecar.opencto.works/trace/event
+OPENCTO_SIDECAR_TOKEN=...
+OPENCTO_AGENT_MODEL_PLANNER=gpt-5.4
+OPENCTO_AGENT_MODEL_EXECUTOR=gpt-5.3-codex
+OPENCTO_AGENT_MODEL_REVIEWER=gemini-2.5-pro
+```
+
+## Systemd User Service
 
 ```bash
 cp deploy/opencto-cto-orchestrator.service ~/.config/systemd/user/opencto-cto-orchestrator.service
@@ -120,38 +132,43 @@ Logs:
 journalctl --user -u opencto-cto-orchestrator.service --no-pager -n 100
 ```
 
-## Security notes
+## Security Notes
 
-- Keep `.env` out of git.
-- Use least-privilege `GITHUB_TOKEN` with issue read/write scope only.
-- Keep `OPENCTO_DRY_RUN=true` until you verify repository targets and labels.
-- The model output is validated and action types are allow-listed.
+- Never commit `.env`.
+- Use least-privilege GitHub tokens.
+- Keep approvals enabled unless full autonomy is explicitly intended.
+- Model outputs are validated and actions are allow-listed, but still treat runtime mutations as privileged operations.
 
-## Tracing (OpenLLMetry)
+## How-To Guides
 
-To trace orchestrator model activity into Traceloop:
+### How to run a safe local triage loop
 
-```bash
-OPENCTO_TRACE_ENABLED=true
-OPENCTO_TRACE_SERVICE_NAME=opencto-cto-orchestrator
-TRACELOOP_API_KEY=...
-# optional if exporting to custom OTLP endpoint
-OTEL_EXPORTER_OTLP_ENDPOINT=https://...
-```
+1. Copy `.env.example` to `.env`.
+2. Set `OPENAI_API_KEY`, `GITHUB_TOKEN`, and `OPENCTO_MONITOR_URL`.
+3. Keep `OPENCTO_DRY_RUN=true`.
+4. Run `npm start`.
+5. Validate logs show polling + triage output without writing live mutations.
 
-Tracing is initialized at process bootstrap before the orchestrator loop starts.
+### How to enable Telegram approvals
 
-To also mirror runtime events into the shared Anyway sidecar path:
+1. Set `OPENCTO_TELEGRAM_ENABLED=true` and bot credentials.
+2. Set `OPENCTO_REQUIRE_APPROVALS=true`.
+3. Send a risky command and confirm bot returns `approval_id`.
+4. Use `/approve <approval_id>` and confirm controlled action execution.
 
-```bash
-OPENCTO_SIDECAR_ENABLED=true
-OPENCTO_SIDECAR_URL=https://anyway-sdk-sidecar.opencto.works/trace/event
-OPENCTO_SIDECAR_TOKEN=...
-OPENCTO_AGENT_MODEL_PLANNER=gpt-5.4
-OPENCTO_AGENT_MODEL_EXECUTOR=gpt-5.3-codex
-OPENCTO_AGENT_MODEL_REVIEWER=gemini-2.5-pro
-```
+### How to run continuously on one machine
 
-With both enabled, the orchestrator emits:
-- model traces through Traceloop / OTLP
-- lifecycle, autonomy, and Telegram bot events through the shared sidecar so they also appear in Anyway
+1. Install systemd user service file from `deploy/`.
+2. Run `systemctl --user daemon-reload`.
+3. Run `systemctl --user enable --now opencto-cto-orchestrator.service`.
+4. Monitor logs with `journalctl --user -u opencto-cto-orchestrator.service -n 100`.
+
+## References (Chicago 17th, Bibliography)
+
+GitHub. n.d. "REST API Documentation." Accessed March 6, 2026. https://docs.github.com/en/rest.
+
+OpenAI. n.d. "Responses API." OpenAI Platform Docs. Accessed March 6, 2026. https://platform.openai.com/docs/api-reference/responses.
+
+Telegram. n.d. "Bot API." Accessed March 6, 2026. https://core.telegram.org/bots/api.
+
+Traceloop. n.d. "Traceloop Documentation." Accessed March 6, 2026. https://docs.traceloop.com/.

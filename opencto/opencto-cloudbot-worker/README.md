@@ -1,7 +1,18 @@
 # OpenCTO CloudBot Worker
 
-Cloudflare Worker powering OpenCTO across Telegram, Slack, Discord, WhatsApp, and SMS.
-It runs a shared AI orchestration path with persistent memory, task management, daily activity logs, and optional semantic RAG.
+Cloudflare Worker that powers OpenCTO conversational operations across Telegram, Slack, Discord, WhatsApp, and SMS.
+
+It uses one shared orchestration path with persistent memory, task tracking, activity logs, optional vector RAG, coding-agent dispatch, and Android relay support.
+
+## Core Responsibilities
+
+- Normalize inbound webhook events into channel-scoped chat sessions
+- Persist activity, tasks, and memory in Cloudflare KV
+- Optionally enrich context with Vectorize semantic retrieval
+- Execute assistant turns with OpenAI
+- Route optional coding commands into `opencto-api-worker`
+- Route optional Android commands into Android control-plane endpoints
+- Forward observability events to Anyway sidecar (fail-open)
 
 ## Architecture
 
@@ -22,75 +33,39 @@ flowchart LR
   W --> OBS[Anyway Tracing]
 ```
 
-## Information Flow
+## Prerequisites
 
-1. Channel webhook receives a user event.
-2. Worker normalizes event into a channel scope (`telegram:<id>`, `slack:<team>:<channel>:<thread>`, `infobip:whatsapp:<phone>`).
-3. User event is logged to daily activity (`KV`).
-4. Shared chat turn executes, with direct status interception for grounded progress questions.
-5. Commands (`/help`, `/remember`, `/task`, `/tasks`, `/daily`) are handled if present.
-6. Otherwise, RAG context is built from lexical memory (`KV`) and semantic memory (`Vectorize`, if enabled).
-7. OpenAI generates assistant response.
-8. Worker sends reply to originating channel.
-9. Bot reply (or error/status) is logged to activity for observability and replay.
+- Node.js `>= 18`
+- npm
+- Wrangler CLI
+- Cloudflare account with Worker + KV (and optional Vectorize)
+- Channel credentials for any channel you enable
 
-## Channel Behavior
+## Quick Start
 
-- Telegram: admin webhook at `/webhook/telegram`, consumer webhook at `/webhook/telegram-consumer`; each replies with its own bot token.
-- Slack: verifies signature/timestamp, handles mentions/DMs/active thread replies, and keeps thread context in KV.
-- Discord: verifies Ed25519 request signature, accepts Interactions at `/webhook/discord`, and reuses shared command/chat logic.
-- Infobip WhatsApp/SMS: inbound message webhooks, delivery/read callback logging, 24h WhatsApp free-form window, and template fallback outside the window.
-
-## Data Model (KV / Vectorize)
-
-- Session: short conversational memory (`session:<scope>`)
-- Persistent memory entries + memory index (`memory:*`, `memory_index:*`)
-- Tasks and task index (`task:*`, `task_index:*`)
-- Activity timeline (`activity:<scope>:YYYY-MM-DD`)
-- Slack active thread markers (`slack_thread:*`)
-- Infobip last inbound marker (`infobip_last_inbound:*`)
-- Semantic vectors in `OPENCTO_VECTOR_INDEX` (optional)
-
-## Setup
-
-1. Install:
+### 1) Install
 
 ```bash
+cd opencto/opencto-cloudbot-worker
 npm install
 ```
 
-2. Configure `wrangler.toml` bindings/vars:
+### 2) Configure `wrangler.toml` vars
+
+Minimum recommended baseline:
 
 ```toml
 [vars]
 OPENCTO_AGENT_MODEL = "gpt-4.1-mini"
-OPENCTO_AGENT_MODEL_PLANNER = "gpt-5.4"
-OPENCTO_AGENT_MODEL_EXECUTOR = "gpt-5.3-codex"
-OPENCTO_AGENT_MODEL_REVIEWER = "gemini-2.5-pro"
-OPENCTO_VECTOR_RAG_ENABLED = "true"
-OPENCTO_EMBED_MODEL = "text-embedding-3-small"
+OPENCTO_VECTOR_RAG_ENABLED = "false"
 OPENCTO_ANYWAY_ENABLED = "true"
-OPENCTO_ANYWAY_ENDPOINT = "https://trace-dev-collector.anyway.sh/"
 OPENCTO_SIDECAR_ENABLED = "true"
 OPENCTO_SIDECAR_URL = "https://anyway-sdk-sidecar.opencto.works/trace/event"
 OPENCTO_CODE_AGENT_ENABLED = "true"
 OPENCTO_API_BASE_URL = "https://opencto-api.heysalad-o.workers.dev"
-OPENCTO_DISCORD_ALLOWED_CHANNELS = "123456789012345678,234567890123456789"
-OPENCTO_DISCORD_ALLOWED_GUILDS = "345678901234567890"
-OPENCTO_ANDROID_AUTODEV_ENABLED = "true"
-OPENCTO_ANDROID_AUTODEV_BASE_URL = "https://android-lab.heysalad.app"
-OPENCTO_ANDROID_AUTODEV_PUBLIC_BASE_URL = "https://android-lab.heysalad.app"
-
-OPENCTO_INFOBIP_BASE_URL = "https://<your-subdomain>.api.infobip.com"
-OPENCTO_INFOBIP_WHATSAPP_FROM = "<approved_whatsapp_sender>"
-OPENCTO_INFOBIP_SMS_FROM = "<sms_sender_id>"
-OPENCTO_INFOBIP_WHATSAPP_TEMPLATE_NAME = "<template_name_optional>"
-OPENCTO_INFOBIP_WHATSAPP_TEMPLATE_LANGUAGE = "en"
-
-OPENCTO_SLACK_ALLOWED_CHANNELS = "C12345,C67890"
 ```
 
-3. Add secrets:
+### 3) Add required secrets
 
 ```bash
 wrangler secret put OPENAI_API_KEY
@@ -105,15 +80,15 @@ wrangler secret put OPENCTO_ANYWAY_API_KEY
 wrangler secret put OPENCTO_SIDECAR_TOKEN
 wrangler secret put OPENCTO_ADMIN_TOKEN
 wrangler secret put OPENCTO_INTERNAL_API_TOKEN
-wrangler secret put OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_ID
-wrangler secret put OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_SECRET
 ```
 
-4. Optional semantic RAG (Vectorize):
+### 4) Optional Vectorize setup
 
 ```bash
 wrangler vectorize create opencto-memory-index --dimensions=1536 --metric=cosine
 ```
+
+Add binding:
 
 ```toml
 [[vectorize]]
@@ -121,141 +96,160 @@ binding = "OPENCTO_VECTOR_INDEX"
 index_name = "opencto-memory-index"
 ```
 
-5. Deploy:
+### 5) Run or deploy
 
 ```bash
-wrangler deploy
+npm run dev
+# or
+npm run deploy
 ```
 
-## Webhook Configuration
+## Event Flow
 
-- Telegram admin bot:
+1. Channel webhook receives user message/event.
+2. Worker normalizes scope (`telegram:<id>`, `slack:<team>:<channel>:<thread>`, `infobip:whatsapp:<phone>`).
+3. Event is logged to daily activity in KV.
+4. Command handling runs first (`/help`, `/remember`, `/task`, `/tasks`, `/daily`, `/code`, `/android`).
+5. Non-command turns build context from memory and optional semantic retrieval.
+6. OpenAI generates response.
+7. Worker replies to the source channel.
+8. Response and status are persisted and mirrored to observability paths.
+
+## Channel Configuration
+
+### Telegram
+
+- Admin webhook: `/webhook/telegram`
+- Consumer webhook: `/webhook/telegram-consumer`
 
 ```bash
 curl -sS "https://api.telegram.org/bot<ADMIN_TOKEN>/setWebhook?url=https://<worker-domain>/webhook/telegram"
-```
-
-- Telegram consumer bot:
-
-```bash
 curl -sS "https://api.telegram.org/bot<CONSUMER_TOKEN>/setWebhook?url=https://<worker-domain>/webhook/telegram-consumer"
 ```
 
-- Slack Events API request URL: `https://<worker-domain>/webhook/slack`
-- Slack required events: `app_mention`, `message.channels`, `message.groups`, `message.im`
-- Slack bot scope: `chat:write`
-- Discord Interactions Endpoint URL: `https://<worker-domain>/webhook/discord`
-- Discord secret required: `OPENCTO_DISCORD_PUBLIC_KEY` (from Discord Developer Portal)
-- Optional hardening: set `OPENCTO_DISCORD_ALLOWED_GUILDS` and `OPENCTO_DISCORD_ALLOWED_CHANNELS` (comma-separated IDs)
-- Infobip WhatsApp webhook: `https://<worker-domain>/webhook/infobip/whatsapp?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
-- Infobip SMS webhook: `https://<worker-domain>/webhook/infobip/sms?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
+### Slack
 
-## API Endpoints
+- Request URL: `https://<worker-domain>/webhook/slack`
+- Required events: `app_mention`, `message.channels`, `message.groups`, `message.im`
+- Bot scope: `chat:write`
+
+### Discord
+
+- Interactions URL: `https://<worker-domain>/webhook/discord`
+- Signature key secret: `OPENCTO_DISCORD_PUBLIC_KEY`
+- Optional channel/guild allowlists via env vars
+
+### Infobip (WhatsApp/SMS)
+
+- WhatsApp webhook: `https://<worker-domain>/webhook/infobip/whatsapp?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
+- SMS webhook: `https://<worker-domain>/webhook/infobip/sms?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
+
+## Worker API Endpoints
 
 - `GET /health`
-- `POST /api/log-activity` body: `{ "chatId": string|number, "type": string, "text": string }`
-- `POST /api/tasks` body: `{ "chatId": string|number, "title": string, "priority": "low|medium|high" }`
+- `POST /api/log-activity`
+- `POST /api/tasks`
 - `GET /api/tasks?chatId=<id>&status=open|done`
 - `GET /api/activity/daily?chatId=<id>&date=YYYY-MM-DD`
 - `GET /api/status?chatId=<id>&focus=general|android`
 
-If `OPENCTO_ADMIN_TOKEN` is set, include `x-opencto-admin-token` on `/api/*`.
+If `OPENCTO_ADMIN_TOKEN` is set, include `x-opencto-admin-token` for `/api/*` routes.
 
-## Telegram Commands
+## Coding Agent Integration
 
-- `/help`
-- `/remember <text>`
-- `/task add <title>`
-- `/task done <task_id>`
-- `/tasks`
-- `/status`
-- `/daily`
-- `/code help`
-- `/code run opencto/opencto-api-worker | smoke the build and test flow`
-- `/code status`
-- `/android help`
-- `/android status`
-- `/android screenshot`
-- `/android video 20`
-- `/android task Open Settings and capture a screenshot`
+When `OPENCTO_CODE_AGENT_ENABLED=true`, chat channels can start trusted code runs.
 
-## Coding Agent
+Supported commands:
 
-If `OPENCTO_CODE_AGENT_ENABLED=true`, Slack and the other channel surfaces can start trusted
-repo-validation runs through the internal API worker contract.
-
-Supported coding commands:
 - `/code help`
 - `/code run <repo scope> | <goal>`
 - `/code status [run_id]`
 
 Supported repo scopes:
+
 - `opencto/opencto-api-worker`
 - `opencto/opencto-dashboard`
 - `opencto/mobile-app`
 - `opencto/opencto-cloudbot-worker`
 
-Worker requirements for the coding path:
-- `OPENCTO_API_BASE_URL`
-- `OPENCTO_INTERNAL_API_TOKEN`
+Upstream internal API calls:
 
-The worker calls:
 - `POST /api/v1/internal/codebase/runs?dispatch=async`
 - `GET /api/v1/internal/codebase/runs/:id`
 - `GET /api/v1/internal/codebase/runs/:id/events`
 
-Natural-language repo requests are routed into this path when they clearly target one of the
-supported scopes. Android relay requests remain device-only and are rejected for repo/PR workflows.
+## Android Relay Integration
 
-## Android Relay
+When `OPENCTO_ANDROID_AUTODEV_ENABLED=true`, channels can relay Android intents:
 
-If `OPENCTO_ANDROID_AUTODEV_ENABLED=true`, Telegram/Slack/Discord/Infobip chat turns can
-forward Android requests to the live `android-autodev` control plane behind Cloudflare Access.
+- `/android status`
+- `/android screenshot`
+- `/android video 20`
+- `/android task <goal>`
 
-Supported relay behaviors:
-- explicit commands via `/android ...`
-- natural-language interception for common intents:
-  - device status
-  - capture screenshot
-  - record video
-  - queue Android task goals
+Target control-plane endpoints:
 
-The worker targets these live control-plane endpoints:
 - `GET /healthz`
 - `GET /v1/worker/status`
 - `POST /v1/worker/tasks`
 - `POST /v1/worker/capture/screenshot`
 - `POST /v1/worker/capture/video`
 
-The worker also answers grounded progress questions such as `where are we with android development?`
-from the current task list, recent activity log, and Android relay state when configured.
-
-If the Android relay is behind Cloudflare Zero Trust, also configure:
+If behind Cloudflare Access, set:
 
 ```bash
 wrangler secret put OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_ID
 wrangler secret put OPENCTO_ANDROID_AUTODEV_CF_ACCESS_CLIENT_SECRET
 ```
 
-When set, the worker forwards:
-- `CF-Access-Client-Id`
-- `CF-Access-Client-Secret`
+## Operational Notes
 
-on Android control-plane requests.
+- Tracing is fail-open and must never block replies.
+- Sidecar forwarding is fail-open and includes trace IDs for correlation.
+- Python sidecar service docs: `sidecar/README.md`.
 
-`OPENCTO_ANDROID_AUTODEV_TOKEN` is only needed if you also enforce a separate app token on the
-Android side. It is not the same as the Cloudflare Access service token.
+## Quick Demo
 
-## Quick Demo Script
-
-1. Open `@OpenCTO_ai_bot` and send `Hi`.
+1. Send `Hi` to `@OpenCTO_ai_bot`.
 2. Send `/task add Ship architecture demo`.
-3. Send `/tasks` to confirm task persistence.
-4. Send a WhatsApp message.
-5. Verify status events with `GET /api/activity/daily?chatId=infobip:whatsapp:<number>&date=<today>`.
+3. Send `/tasks`.
+4. Send a WhatsApp message (if configured).
+5. Verify activity with `/api/activity/daily` for the channel scope.
 
-## Notes
+## How-To Guides
 
-- Tracing is fail-open: telemetry failures never block channel replies.
-- Sidecar forwarding is fail-open, carries the worker trace id in event metadata, and uses `OPENCTO_SIDECAR_TOKEN` via `x-opencto-sidecar-token`.
-- Python tracing sidecar lives in `sidecar/`.
+### How to activate one Telegram bot end-to-end
+
+1. Configure `TELEGRAM_BOT_TOKEN` secret.
+2. Deploy the worker (`npm run deploy`).
+3. Set Telegram webhook to `/webhook/telegram`.
+4. Send `/help` to the bot.
+5. Confirm inbound + outbound activity is persisted in KV and visible via `/api/activity/daily`.
+
+### How to enable coding commands
+
+1. Set `OPENCTO_CODE_AGENT_ENABLED=true`.
+2. Set `OPENCTO_API_BASE_URL` and `OPENCTO_INTERNAL_API_TOKEN`.
+3. Send `/code run <repo scope> | <goal>`.
+4. Track run status with `/code status`.
+
+### How to enable Android relay
+
+1. Set `OPENCTO_ANDROID_AUTODEV_ENABLED=true`.
+2. Set Android control-plane base URL variables.
+3. If protected by Cloudflare Access, set client ID/secret secrets.
+4. Send `/android status` and `/android screenshot` to confirm relay path.
+
+## References (Chicago 17th, Bibliography)
+
+Cloudflare. n.d. "Cloudflare Workers." Cloudflare Docs. Accessed March 6, 2026. https://developers.cloudflare.com/workers/.
+
+Cloudflare. n.d. "Vectorize." Cloudflare Docs. Accessed March 6, 2026. https://developers.cloudflare.com/vectorize/.
+
+Discord. n.d. "Receiving and Responding." Discord Developer Docs. Accessed March 6, 2026. https://discord.com/developers/docs/interactions/receiving-and-responding.
+
+OpenAI. n.d. "Responses API." OpenAI Platform Docs. Accessed March 6, 2026. https://platform.openai.com/docs/api-reference/responses.
+
+Slack. n.d. "Events API." Slack API Docs. Accessed March 6, 2026. https://api.slack.com/apis/events-api.
+
+Telegram. n.d. "Bot API: setWebhook." Accessed March 6, 2026. https://core.telegram.org/bots/api#setwebhook.

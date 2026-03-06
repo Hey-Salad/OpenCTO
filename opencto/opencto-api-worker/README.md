@@ -1,49 +1,60 @@
 # OpenCTO API Worker
 
-Cloudflare Workers backend for the OpenCTO dashboard (Phase 5 implementation).
+Cloudflare Workers backend for OpenCTO platform APIs.
 
-## Overview
+This service backs authentication, billing, compliance, codebase-run execution, and OpenClaw orchestration.
 
-This worker provides the backend API for:
-- Authentication (session, devices, passkeys)
+## What This Worker Owns
+
+- Auth/session/device/passkey API surface
 - Compliance checks and evidence export
-- Billing (Stripe integration, subscriptions, invoices)
-- Marketplace billing (Stripe Connect account onboarding + agent rentals)
-- Webhook handling with signature verification and idempotency
+- Stripe billing and webhooks
+- Marketplace Connect onboarding and rental checkout contracts
+- Codebase run orchestration (public + trusted internal dispatch)
+- OpenClaw task/assignment orchestration APIs
 
 ## Project Structure
 
-```
+```text
 opencto-api-worker/
 ├── src/
-│   ├── index.ts              # Main entry point and router
-│   ├── types.ts              # Shared TypeScript types
-│   ├── errors.ts             # Unified error handling
-│   ├── entitlements.ts       # Server-side entitlement enforcement
-│   ├── auth.ts               # Auth endpoints
-│   ├── compliance.ts         # Compliance endpoints
-│   ├── billing.ts            # Billing endpoints
-│   ├── webhooks.ts           # Stripe webhook handler
-│   └── __tests__/            # Test files
-├── migrations/               # D1 database migrations
-│   └── 0001_initial_schema.sql
-├── wrangler.toml             # Cloudflare Workers config
-├── package.json
-├── tsconfig.json
-└── vitest.config.ts
+│   ├── index.ts
+│   ├── auth.ts
+│   ├── billing.ts
+│   ├── compliance.ts
+│   ├── entitlements.ts
+│   ├── webhooks.ts
+│   ├── openclawPlanner.ts
+│   ├── openclawTasks.ts
+│   ├── types.ts
+│   └── __tests__/
+├── migrations/
+│   ├── 0001_initial_schema.sql
+│   ├── 0002_codebase_runs.sql
+│   ├── 0003_marketplace_connect.sql
+│   └── 0004_openclaw_tasks.sql
+├── container-runtime/codebase-executor/
+├── wrangler.toml
+└── package.json
 ```
 
-## Setup
+## Prerequisites
 
-### 1. Install Dependencies
+- Node.js `>= 18`
+- npm
+- Cloudflare account + Wrangler CLI
+- Stripe account (for billing/marketplace paths)
+
+## Quick Start (Local)
+
+### 1) Install
 
 ```bash
+cd opencto/opencto-api-worker
 npm install
 ```
 
-### 2. Configure Secrets
-
-Set the following secrets using Wrangler:
+### 2) Configure secrets
 
 ```bash
 wrangler secret put OPENAI_API_KEY
@@ -52,214 +63,189 @@ wrangler secret put STRIPE_WEBHOOK_SECRET
 wrangler secret put JWT_SECRET
 wrangler secret put WEBAUTHN_RP_ID
 wrangler secret put WEBAUTHN_RP_NAME
+wrangler secret put OPENCTO_INTERNAL_API_TOKEN
 ```
 
-### 3. Create D1 Database
+Optional marketplace/runtime secrets can be added later.
+
+### 3) Create D1 database
 
 ```bash
 wrangler d1 create opencto-production
 ```
 
-Update the `database_id` in `wrangler.toml` with the ID from the output.
+Update `database_id` in `wrangler.toml`.
 
-### 4. Run Migrations
+### 4) Run migrations in order
 
 ```bash
 wrangler d1 execute opencto-production --file=./migrations/0001_initial_schema.sql
+wrangler d1 execute opencto-production --file=./migrations/0002_codebase_runs.sql
+wrangler d1 execute opencto-production --file=./migrations/0003_marketplace_connect.sql
+wrangler d1 execute opencto-production --file=./migrations/0004_openclaw_tasks.sql
 ```
 
-## Development
-
-### Local Development
+### 5) Start dev server
 
 ```bash
 npm run dev
 ```
 
-This starts a local development server with hot reloading.
+## Validation Commands
 
-### Lint
+Required validation for this surface:
 
 ```bash
 npm run lint
-```
-
-### Build (Type Check)
-
-```bash
 npm run build
-```
-
-### Test
-
-```bash
 npm test
 ```
 
-## Deployment
-
-### Deploy to Production
-
-```bash
-npm run deploy
-```
-
-This deploys the worker to Cloudflare Workers.
-
-## API Endpoints
+## API Endpoint Map
 
 ### Auth
 
-- `GET /api/v1/auth/session` - Get current session
-- `GET /api/v1/auth/devices` - List trusted devices
-- `POST /api/v1/auth/devices/:id/revoke` - Revoke a device
-- `POST /api/v1/auth/passkeys/enroll/start` - Start passkey enrollment
-- `POST /api/v1/auth/passkeys/enroll/complete` - Complete passkey enrollment
+- `GET /api/v1/auth/session`
+- `GET /api/v1/auth/devices`
+- `POST /api/v1/auth/devices/:id/revoke`
+- `POST /api/v1/auth/passkeys/enroll/start`
+- `POST /api/v1/auth/passkeys/enroll/complete`
 
 ### Compliance
 
-- `POST /api/v1/compliance/checks` - Create compliance check
-- `GET /api/v1/compliance/checks` - List compliance checks
-- `POST /api/v1/compliance/evidence/export` - Export evidence package
-
-### Codebase Runs (MVP scaffold)
-
-- `POST /api/v1/codebase/runs` - Queue a codebase execution run
-- `GET /api/v1/codebase/runs/:id` - Get run status and metrics
-- `GET /api/v1/codebase/runs/:id/events` - Poll run events/log lines
-- `POST /api/v1/codebase/runs/:id/cancel` - Cancel queued/running run
-- `POST /api/v1/codebase/runs/:id/approve` - Human-approve a pending dangerous run
-- `POST /api/v1/codebase/runs/:id/deny` - Deny and cancel a pending dangerous run
-
-Runtime controls:
-- Command normalization + allowlist template enforcement
-- Shell chaining guard (`&&`, `;`, `|`, backticks, `$(`)
-- Per-user concurrent and daily run quotas
-- Timeout clamp (`min/default/max`)
-- Redaction for common token/key patterns in persisted logs/events
-- Human approval gate for high-risk runs (`git push` and protected target branches)
-
-Execution mode:
-- `CODEBASE_EXECUTION_MODE=stub` (default): creates local stub runs/events
-- `CODEBASE_EXECUTION_MODE=container`: dispatches the run to `CODEBASE_EXECUTOR` container binding
-
-Internal worker-to-worker API for the Slack coding agent:
-- `POST /api/v1/internal/codebase/runs?dispatch=async` - queue an async container run without end-user auth
-- `GET /api/v1/internal/codebase/runs/:id` - fetch run status
-- `GET /api/v1/internal/codebase/runs/:id/events` - fetch recent run events
-- `POST /api/v1/internal/codebase/runs/:id/cancel` - cancel a queued/running run
-
-Internal API requirements:
-- send `x-opencto-internal-token` with the shared secret from `OPENCTO_INTERNAL_API_TOKEN`
-- optionally send `x-opencto-service-user-email` to tag the service caller
-- internal routes use the same command allowlist, quota, approval, and trace behavior as public codebase runs
-
-Container runtime image:
-- `container-runtime/codebase-executor/Dockerfile`
-- `container-runtime/codebase-executor/server.js`
-- Endpoint contract: `POST /execute` accepts run payload and returns `{ status, logs, errorMessage? }`
+- `POST /api/v1/compliance/checks`
+- `GET /api/v1/compliance/checks`
+- `POST /api/v1/compliance/evidence/export`
 
 ### Billing
 
-- `GET /api/v1/billing/subscription` - Get subscription summary
-- `GET /api/v1/billing/invoices` - List invoices
-- `POST /api/v1/billing/checkout/session` - Create Stripe checkout session
-- `POST /api/v1/billing/portal/session` - Create billing portal session
-- `POST /api/v1/billing/webhooks/stripe` - Stripe webhook endpoint
+- `GET /api/v1/billing/subscription`
+- `GET /api/v1/billing/invoices`
+- `POST /api/v1/billing/checkout/session`
+- `POST /api/v1/billing/portal/session`
+- `POST /api/v1/billing/webhooks/stripe`
 
 ### Marketplace (Connect)
 
-- `POST /api/v1/marketplace/connect/accounts` - Create Stripe connected account for workspace
-- `POST /api/v1/marketplace/connect/accounts/:id/onboarding-link` - Create onboarding link
-- `POST /api/v1/marketplace/agent-rentals/checkout/session` - Create rental contract and checkout session
-- `GET /api/v1/marketplace/agent-rentals` - List caller rental contracts
+- `POST /api/v1/marketplace/connect/accounts`
+- `POST /api/v1/marketplace/connect/accounts/:id/onboarding-link`
+- `POST /api/v1/marketplace/agent-rentals/checkout/session`
+- `GET /api/v1/marketplace/agent-rentals`
 
-Marketplace redirect behavior:
-- Stripe Connect onboarding links use `MARKETPLACE_BASE_URL` (fallback: `APP_BASE_URL`)
-- Rental checkout success/cancel URLs use `MARKETPLACE_BASE_URL` (fallback: `APP_BASE_URL`)
+Redirect behavior:
 
-## Security Features
+- Connect onboarding uses `MARKETPLACE_BASE_URL` (fallback `APP_BASE_URL`)
+- Rental checkout success/cancel uses `MARKETPLACE_BASE_URL` (fallback `APP_BASE_URL`)
 
-### 1. Unified Error Handling
-- Never exposes secrets or sensitive data in error responses
-- Sanitizes error messages to remove tokens, keys, and secrets
-- Returns generic error messages to clients while logging details server-side
+### Codebase Runs (Public)
 
-### 2. Stripe Webhook Security
-- Signature verification using `STRIPE_WEBHOOK_SECRET`
-- Idempotent event processing (stores event IDs to prevent duplicates)
-- Rejects webhooks with invalid or missing signatures
+- `POST /api/v1/codebase/runs`
+- `GET /api/v1/codebase/runs/:id`
+- `GET /api/v1/codebase/runs/:id/events`
+- `POST /api/v1/codebase/runs/:id/cancel`
+- `POST /api/v1/codebase/runs/:id/approve`
+- `POST /api/v1/codebase/runs/:id/deny`
 
-### 3. Entitlement Enforcement
-- Server-side plan limits and feature checks
-- Blocks actions that exceed plan limits
-- Provides warnings when approaching limits
+Runtime controls include allowlists, shell-chaining guards, quotas, timeout clamping, and approval gating for risky operations.
 
-### 4. Authentication
-- JWT-based authentication (stub implementation, needs completion)
-- Device trust tracking
-- Passkey support (WebAuthn)
+Execution mode:
 
-### 5. Prompt and Scam Guardrails
-- Codebase run requests enforce repo URL safety checks (blocks local/private/file targets).
-- Prompt injection and secret-exfiltration patterns are blocked on chat persistence and run creation.
-- Scam/social-engineering payment patterns are blocked with explicit `403 FORBIDDEN` responses.
+- `CODEBASE_EXECUTION_MODE=stub` (default)
+- `CODEBASE_EXECUTION_MODE=container` (dispatch to `CODEBASE_EXECUTOR` binding)
 
-## Testing
+### Internal Codebase Run API (Trusted Workers)
 
-The project includes comprehensive tests for:
+- `POST /api/v1/internal/codebase/runs?dispatch=async`
+- `GET /api/v1/internal/codebase/runs/:id`
+- `GET /api/v1/internal/codebase/runs/:id/events`
+- `POST /api/v1/internal/codebase/runs/:id/cancel`
 
-### Entitlement Tests (`src/__tests__/entitlements.test.ts`)
-- Plan limit enforcement
-- Feature access control
-- Usage warnings
-- Upgrade requirements
+### Internal OpenClaw API
 
-### Webhook Tests (`src/__tests__/webhooks.test.ts`)
-- Signature verification
-- Idempotency checks
-- Event processing
-- Database updates
+- `POST /api/v1/internal/openclaw/tasks/plan`
+- `GET /api/v1/internal/openclaw/tasks/:id`
+- `GET /api/v1/internal/openclaw/assignments/next?role=&agentId=&swarm=`
+- `POST /api/v1/internal/openclaw/assignments/:id/heartbeat`
+- `POST /api/v1/internal/openclaw/assignments/:id/complete`
+- `POST /api/v1/internal/openclaw/assignments/:id/fail`
+- `POST /api/v1/internal/openclaw/assignments/:id/block`
+- `POST /api/v1/internal/openclaw/agents/heartbeat`
 
-Run tests with:
-```bash
-npm test
-```
+Internal route requirements:
 
-## Environment Variables
+- send `x-opencto-internal-token: <OPENCTO_INTERNAL_API_TOKEN>`
+- optional `x-opencto-service-user-email` for service attribution
 
-### Public (in wrangler.toml)
-- `ENVIRONMENT` - Environment name (production, staging, etc.)
+## Container Runtime Contract
 
-### Secrets (set via `wrangler secret put`)
-- `OPENAI_API_KEY` - OpenAI API key used by backend integrations
-- `STRIPE_SECRET_KEY` - Stripe API secret key
-- `STRIPE_WEBHOOK_SECRET` - Stripe webhook signing secret
-- `JWT_SECRET` - Secret for JWT signing
-- `WEBAUTHN_RP_ID` - WebAuthn relying party ID
-- `WEBAUTHN_RP_NAME` - WebAuthn relying party name
-- `OPENCTO_INTERNAL_API_TOKEN` - shared secret for trusted worker-to-worker codebase run requests
-- `OPENCTO_MARKETPLACE_PLATFORM_FEE_PERCENT` - Optional default platform fee percent for marketplace rentals
-- `MARKETPLACE_BASE_URL` - Optional marketplace frontend URL (e.g. `https://market.opencto.works`)
+Codebase executor runtime lives in:
 
-## Frontend Integration
+- `container-runtime/codebase-executor/Dockerfile`
+- `container-runtime/codebase-executor/server.js`
 
-This backend is compatible with the OpenCTO dashboard frontend (Phase 2-4):
-- Matches the API contracts defined in Phase 4
-- Implements all endpoints expected by the frontend clients
-- Maintains type compatibility with frontend TypeScript interfaces
+Endpoint contract:
 
-## Remaining Work
+- `POST /execute` accepts run payload and returns `{ status, logs, errorMessage? }`
 
-### TODO Items
+## Security Controls
+
+- Unified error sanitization to avoid leaking secrets
+- Stripe webhook signature verification + idempotency storage
+- Server-side entitlement enforcement
+- Prompt-injection and secret-exfiltration pattern guards
+- Repo URL safety checks for codebase runs
+
+## Current Gaps
+
+Known TODO areas:
+
 1. Complete JWT authentication implementation
-2. Implement full WebAuthn passkey verification
-3. Add R2 storage for evidence exports
-4. Add rate limiting
-5. Add request logging and monitoring
-6. Configure proper CORS policies
-7. Add API documentation (OpenAPI/Swagger)
+2. Complete full WebAuthn verification flows
+3. Add R2 evidence storage path
+4. Add explicit rate limiting middleware/policy
+5. Expand request logging and observability controls
+6. Finalize CORS policy for all frontend surfaces
+
+## How-To Guides
+
+### How to bring up the API worker from scratch
+
+1. Install dependencies: `npm install`.
+2. Configure required Wrangler secrets.
+3. Create D1 database and set `database_id` in `wrangler.toml`.
+4. Apply migrations `0001` to `0004` in order.
+5. Start dev server with `npm run dev`.
+6. Hit `/health` or a simple `GET` endpoint to confirm runtime readiness.
+
+### How to validate changes before PR
+
+1. `npm run lint`
+2. `npm run build`
+3. `npm test`
+4. Include failures/fixes and final output summary in PR description.
+
+### How to test internal route auth
+
+1. Ensure `OPENCTO_INTERNAL_API_TOKEN` is set as a secret.
+2. Call an internal endpoint with:
+   `x-opencto-internal-token: <token>`.
+3. Confirm valid token returns expected result.
+4. Confirm missing/invalid token is rejected.
 
 ## License
 
 Apache-2.0
+
+## References (Chicago 17th, Bibliography)
+
+Cloudflare. n.d. "Cloudflare Workers." Cloudflare Docs. Accessed March 6, 2026. https://developers.cloudflare.com/workers/.
+
+Cloudflare. n.d. "D1." Cloudflare Docs. Accessed March 6, 2026. https://developers.cloudflare.com/d1/.
+
+Cloudflare. n.d. "Wrangler." Cloudflare Docs. Accessed March 6, 2026. https://developers.cloudflare.com/workers/wrangler/.
+
+Stripe. n.d. "Webhooks." Stripe Docs. Accessed March 6, 2026. https://docs.stripe.com/webhooks.
+
+Stripe. n.d. "Hosted Onboarding." Stripe Docs. Accessed March 6, 2026. https://docs.stripe.com/connect/hosted-onboarding.
+
+World Wide Web Consortium (W3C). 2021. "Web Authentication: An API for Accessing Public Key Credentials Level 2." Accessed March 6, 2026. https://www.w3.org/TR/webauthn-2/.

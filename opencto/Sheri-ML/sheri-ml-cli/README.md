@@ -1,228 +1,182 @@
-# 🍓 @heysalad/sheri-ml-cli
+# @heysalad/sheri-ml-cli
 
-> **Sheri ML** — Autonomous Coding Assistant CLI
->
-> Your AI pair programmer that writes code, generates files, and helps you build faster.
-> Powered by Gemini & Claude. Works on any device — laptop, server, or Raspberry Pi 🍓
+Sheri ML CLI is a coding assistant runtime used in OpenCTO for interactive coding, MCP tool access, and OpenClaw swarm workers.
 
-[![npm version](https://img.shields.io/npm/v/@heysalad/sheri-ml-cli.svg)](https://www.npmjs.com/package/@heysalad/sheri-ml-cli)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+## What This CLI Supports
 
----
+- Interactive coding chat (`sheri`)
+- Direct prompt execution (`sheri "<prompt>"`)
+- MCP-domain tool usage
+- OpenClaw worker roles (`planner`, `coder`, `reviewer`, `qa`)
 
-## 🍓 Brand Identity
+## Prerequisites
 
-**HeySalad Colors:**
-- 🍓 **Cherry Red** `#ed4c4c` — Primary brand color
-- 🍓 **Peach** `#faa09a` — Secondary & success states
-- 🍓 **Light Peach** `#ffd0cd` — Accents & borders
-- 🍓 **White** `#ffffff` — Text & backgrounds
-
-**Fonts:**
-- **Grandstander** — Headlines & branding
-- **Figtree** — Body text & interface
-
-**Symbol:** 🍓 Strawberry — our friendly AI companion
-
----
+- Node.js `>= 18`
+- npm
+- At least one model credential:
+  - `GOOGLE_AI_STUDIO_KEY` (recommended)
+  - `ANTHROPIC_API_KEY`
 
 ## Install
 
+Global install:
+
 ```bash
 npm install -g @heysalad/sheri-ml-cli
 ```
 
-On Raspberry Pi:
-```bash
-curl -fsSL https://sheri-ml.heysalad.app/install.sh | bash
-# or manually:
-npm install -g @heysalad/sheri-ml-cli
-```
+Local repo install:
 
----
+```bash
+cd opencto/Sheri-ML/sheri-ml-cli
+npm install
+npm run build
+```
 
 ## Quick Start
 
+### 1) Configure credentials
+
 ```bash
-# 1. Configure your API key
 sheri config
-# Enter your Google AI Studio key (recommended: Gemini 3 Flash)
-# Get key from: https://aistudio.google.com/app/apikey
+```
 
-# 2. Start the interactive coding assistant
+Configuration is stored in `~/.sheri-ml/.env` with restricted file permissions.
+
+### 2) Start chat mode
+
+```bash
 sheri
-
-# You'll see the custom prompt:
-🍓 you ❯ create a REST API with Express
-
-# Sheri will generate code and offer to write files
-# Session stats show: [2.3s | 1 requests | 847 tokens | 0 files]
-
-# Commands within chat:
-/exit    - Exit chat
-/clear   - Clear screen
-/stats   - Show session stats
-/help    - Show help
 ```
 
----
-
-## Configuration
-
-Run `sheri config` to set up interactively, or set environment variables:
+### 3) Run a single prompt
 
 ```bash
-# ~/.sheri-ml/.env  (or export in shell)
-
-# Google AI Studio (recommended — Gemini 3 Flash)
-GOOGLE_AI_STUDIO_KEY=AIza...
-# Get key from: https://aistudio.google.com/app/apikey
-
-# Anthropic (alternative)
-ANTHROPIC_API_KEY=sk-ant-...
+sheri "create a REST API with Express and TypeScript"
 ```
 
-**Recommended Provider:** Google AI Studio (Gemini 3 Flash Preview)
-- Fast and reliable
-- Excellent for code generation
-- Free tier available
-
-Config is saved to `~/.sheri-ml/.env` (chmod 600).
-
----
-
-## Features
-
-### 🎯 Code Generation
-Generate production-ready code in any language:
-```bash
-🍓 you ❯ create a REST API with Express and TypeScript
-🍓 you ❯ write a function to parse CSV files
-🍓 you ❯ generate React component for user profile
-```
-
----
-
-## Chat Mode Commands
+## Environment Variables
 
 ```bash
-sheri --chat   # or just: sheri
+GOOGLE_AI_STUDIO_KEY=...
+ANTHROPIC_API_KEY=...
 ```
 
-Inside chat:
+If both are present, provider selection is controlled by CLI/model settings.
+
+## Chat Commands
 
 | Command | Description |
 |---------|-------------|
-| `/model` | Interactive model picker |
-| `/model gemini-31-pro` | Switch directly |
-| `/mcp what is our ICP?` | Query MCP knowledge base |
-| `/tool engineering create_github_issue title="Fix login"` | Call a domain tool |
-| `/models` | List all models |
-| `/router` | Enable SmartRouter |
-| `/help` | Show all commands |
-| `/exit` | Quit |
+| `/help` | Show available commands |
+| `/models` | List models |
+| `/model` | Open model picker |
+| `/model <id>` | Switch model directly |
+| `/mcp <query>` | Query MCP knowledge/tools |
+| `/tool <domain> <tool> ...` | Run a direct tool call |
+| `/router` | Toggle SmartRouter mode |
+| `/stats` | Show session usage stats |
+| `/clear` | Clear terminal output |
+| `/exit` | Exit session |
 
----
+## MCP Domains
 
-## MCP Domains & Tools
+Sheri supports the following domain families:
 
-The MCP provider gives you access to all 8 HeySalad domains:
+- `engineering`
+- `sales`
+- `customer-success`
+- `marketing`
+- `people`
+- `finance`
+- `data`
+- `executive`
 
-| Domain | Tools |
-|--------|-------|
-| `engineering` | create_github_issue, write_postmortem, generate_runbook |
-| `sales` | draft_outbound_email, create_prospect_brief, score_deal |
-| `customer-success` | answer_support_ticket, draft_churn_save_email |
-| `marketing` | draft_blog_post, create_social_post, draft_email_campaign |
-| `people` | draft_job_description, answer_hr_policy_question |
-| `finance` | get_financial_dashboard, calculate_unit_economics |
-| `data` | generate_weekly_metrics_report, detect_anomaly |
-| `executive` | get_company_dashboard, draft_investor_update |
+Direct call example:
 
-**Direct tool call:**
 ```bash
 sheri --chat
 # then:
 /tool sales draft_outbound_email company="Acme" pain_point="slow deploys"
 ```
 
----
+## OpenClaw Swarm Mode
 
-## Raspberry Pi Setup
+Sheri can run as a long-lived OpenClaw worker and claim assignments from `opencto-api-worker`.
 
-```bash
-# 1. Install Node.js 20 on RPi
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# 2. Install Sheri CLI
-npm install -g @heysalad/sheri-ml-cli
-
-# 3. Configure (only needs MCP API key — no GPU required)
-sheri config
-# → select "HeySalad MCP API Key"
-# → paste your key
-
-# 4. Test
-sheri "what is our engineering runbook process?"
-```
-
-The `mcp` model is the default and **requires no local GPU or large API quota** — it routes through the HeySalad cloud.
-
----
-
-## Examples
+### Required environment
 
 ```bash
-# Engineering
-sheri "write a postmortem for the payment outage"
-
-# Sales
-sheri --primary mcp "draft email to Acme about our AI tools"
-
-# Data / metrics
-sheri "generate weekly metrics report for this month"
-
-# Chat with model switching
-sheri --chat
-> /model gemini-31-pro
-> explain our infrastructure costs
-> /tool finance get_financial_dashboard
-> /exit
+export OPENCTO_INTERNAL_API_TOKEN=...
+export OPENCLAW_API_BASE_URL=https://opencto-api-worker.heysalad-o.workers.dev
+export OPENCLAW_SWARM=openclaw-dev
 ```
 
----
+### Run one worker manually
 
-## Architecture
-
-```
-sheri CLI
-  └─► MCPProvider → MCP Gateway (Cloudflare Worker)
-        └─► RAG (Vectorize) + 8 Domain Tools
-  └─► GeminiProvider → Google AI Studio
-  └─► VertexAIProvider → Google Vertex AI
-  └─► CheriMLProvider → cheri-ml.heysalad.app (self-hosted)
-  └─► SmartRouter → auto-fallback across all above
+```bash
+npx tsx src/cli-v2.ts openclaw-worker --role coder --agent-id openclaw-coder-01
 ```
 
----
+### Launch local multi-role swarm with tmux
 
-## Part of HeySalad AI
+```bash
+./start-openclaw-swarm.sh
+tmux attach -t openclaw-swarm
+```
 
-`@heysalad/sheri-ml-cli` is part of the HeySalad AI monorepo:
-[github.com/Hey-Salad/ai](https://github.com/Hey-Salad/ai)
+Roles launched by the helper:
 
-Related packages:
-- `@heysalad/harmony` — workforce management AI
-- `@heysalad/core` — shared AI utilities
+- `planner`
+- `coder`
+- `reviewer`
+- `qa`
 
----
+Behavior notes:
 
-## License
+- `coder` dispatches into internal `codebase/runs` execution APIs.
+- Other roles submit structured handoff and completion payloads for orchestration tracking.
 
-MIT © HeySalad Inc.
+## Raspberry Pi Notes
 
----
+Install and run using the same Node/npm steps. No local GPU is required for cloud-backed models.
 
-*Sheri ML — building the future of autonomous software teams*
+## Troubleshooting
+
+- If `sheri` fails at startup, verify `node -v` is `>= 18`.
+- If tool calls fail, confirm your MCP/API credentials are configured.
+- If OpenClaw workers do not claim work, confirm:
+  - `OPENCTO_INTERNAL_API_TOKEN` matches the API worker secret
+  - `OPENCLAW_API_BASE_URL` is reachable
+  - assignment queue has ready tasks for the role/swarm
+
+## How-To Guides
+
+### How to run a first interactive coding session
+
+1. Install CLI (`npm install -g @heysalad/sheri-ml-cli` or local build).
+2. Run `sheri config` and set at least one provider key.
+3. Run `sheri`.
+4. Execute one prompt and confirm output/files are generated as expected.
+
+### How to run one OpenClaw worker
+
+1. Export `OPENCTO_INTERNAL_API_TOKEN`, `OPENCLAW_API_BASE_URL`, and `OPENCLAW_SWARM`.
+2. Start a worker:
+   `npx tsx src/cli-v2.ts openclaw-worker --role coder --agent-id openclaw-coder-01`
+3. Verify the worker claims assignments and heartbeats successfully.
+
+### How to run a full local swarm
+
+1. Ensure `tmux` is installed.
+2. Run `./start-openclaw-swarm.sh`.
+3. Attach with `tmux attach -t openclaw-swarm`.
+4. Confirm all four roles are running and processing handoffs.
+
+## References (Chicago 17th, Bibliography)
+
+Node.js. n.d. "Node.js Documentation." Accessed March 6, 2026. https://nodejs.org/docs/latest/api/.
+
+npm, Inc. n.d. "npm CLI Docs." Accessed March 6, 2026. https://docs.npmjs.com/cli/v10/commands.
+
+tmux Project. n.d. "tmux GitHub Repository and Documentation." Accessed March 6, 2026. https://github.com/tmux/tmux.
