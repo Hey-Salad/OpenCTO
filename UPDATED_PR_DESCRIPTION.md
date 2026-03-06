@@ -20,7 +20,7 @@ This PR adds **safe, public-facing documentation** for our OpenAI Codex for OSS 
 
 ### **2. `PUBLIC_OPENAI_APPLICATION.md`** (3,476 bytes)
 - **Safe for public repository**
-- **High-level overview** of OPENCTO platform
+- **High-level overview** of OpenCTO platform
 - **Application narrative** for OpenAI submission
 - **Community focus** without technical exposure
 
@@ -42,7 +42,7 @@ This PR adds **safe, public-facing documentation** for our OpenAI Codex for OSS 
 
 ### **Platform Positioning:**
 ```
-Open Source Agentic Engineering → OpenClaw Platform → OPENCTO SDK → CTO-as-a-Service
+Open Source Agentic Engineering → OpenClaw Platform → OpenCTO SDK → CTO-as-a-Service
 ```
 
 ### **OpenAI Codex Alignment:**
@@ -98,7 +98,7 @@ Open Source Agentic Engineering → OpenClaw Platform → OPENCTO SDK → CTO-as
 - Builds trust through transparency
 
 ## 🔗 **GitHub PR Link**
-**Create PR here**: https://github.com/Hey-Salad/OPENCTO/pull/new/add-openai-documentation
+**Create PR here**: https://github.com/Hey-Salad/OpenCTO/pull/new/add-openai-documentation
 
 ## 📝 **Commit History**
 1. **Initial commit**: Added infrastructure docs (removed for security)
