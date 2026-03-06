@@ -1,6 +1,6 @@
 # OpenCTO CloudBot Worker
 
-Cloudflare Worker powering OpenCTO across Telegram, Slack, WhatsApp, and SMS.
+Cloudflare Worker powering OpenCTO across Telegram, Slack, Discord, WhatsApp, and SMS.
 It runs a shared AI orchestration path with persistent memory, task management, daily activity logs, and optional semantic RAG.
 
 ## Architecture
@@ -10,6 +10,7 @@ flowchart LR
   TG1[Telegram Admin Bot] --> W[OpenCTO CloudBot Worker]
   TG2[Telegram Consumer Bot] --> W
   SL[Slack Events API] --> W
+  DC[Discord Interactions API] --> W
   IB[Infobip Webhooks<br/>WhatsApp/SMS + Status] --> W
 
   W --> OA[OpenAI Responses API]
@@ -37,6 +38,7 @@ flowchart LR
 
 - Telegram: admin webhook at `/webhook/telegram`, consumer webhook at `/webhook/telegram-consumer`; each replies with its own bot token.
 - Slack: verifies signature/timestamp, handles mentions/DMs/active thread replies, and keeps thread context in KV.
+- Discord: verifies Ed25519 request signature, accepts Interactions at `/webhook/discord`, and reuses shared command/chat logic.
 - Infobip WhatsApp/SMS: inbound message webhooks, delivery/read callback logging, 24h WhatsApp free-form window, and template fallback outside the window.
 
 ## Data Model (KV / Vectorize)
@@ -65,7 +67,11 @@ OPENCTO_AGENT_MODEL = "gpt-4.1-mini"
 OPENCTO_VECTOR_RAG_ENABLED = "true"
 OPENCTO_EMBED_MODEL = "text-embedding-3-small"
 OPENCTO_ANYWAY_ENABLED = "true"
-OPENCTO_ANYWAY_ENDPOINT = "https://api.anyway.sh/v1/ingest"
+OPENCTO_ANYWAY_ENDPOINT = "https://trace-dev-collector.anyway.sh/"
+OPENCTO_SIDECAR_ENABLED = "true"
+OPENCTO_SIDECAR_URL = "https://anyway-sdk-sidecar.opencto.works/trace/event"
+OPENCTO_DISCORD_ALLOWED_CHANNELS = "123456789012345678,234567890123456789"
+OPENCTO_DISCORD_ALLOWED_GUILDS = "345678901234567890"
 
 OPENCTO_INFOBIP_BASE_URL = "https://<your-subdomain>.api.infobip.com"
 OPENCTO_INFOBIP_WHATSAPP_FROM = "<approved_whatsapp_sender>"
@@ -84,9 +90,11 @@ wrangler secret put TELEGRAM_BOT_TOKEN
 wrangler secret put OPENCTO_TELEGRAM_CONSUMER_BOT_TOKEN
 wrangler secret put OPENCTO_SLACK_BOT_TOKEN
 wrangler secret put OPENCTO_SLACK_SIGNING_SECRET
+wrangler secret put OPENCTO_DISCORD_PUBLIC_KEY
 wrangler secret put OPENCTO_INFOBIP_API_KEY
 wrangler secret put OPENCTO_INFOBIP_WEBHOOK_TOKEN
 wrangler secret put OPENCTO_ANYWAY_API_KEY
+wrangler secret put OPENCTO_SIDECAR_TOKEN
 wrangler secret put OPENCTO_ADMIN_TOKEN
 ```
 
@@ -125,6 +133,9 @@ curl -sS "https://api.telegram.org/bot<CONSUMER_TOKEN>/setWebhook?url=https://<w
 - Slack Events API request URL: `https://<worker-domain>/webhook/slack`
 - Slack required events: `app_mention`, `message.channels`, `message.groups`, `message.im`
 - Slack bot scope: `chat:write`
+- Discord Interactions Endpoint URL: `https://<worker-domain>/webhook/discord`
+- Discord secret required: `OPENCTO_DISCORD_PUBLIC_KEY` (from Discord Developer Portal)
+- Optional hardening: set `OPENCTO_DISCORD_ALLOWED_GUILDS` and `OPENCTO_DISCORD_ALLOWED_CHANNELS` (comma-separated IDs)
 - Infobip WhatsApp webhook: `https://<worker-domain>/webhook/infobip/whatsapp?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
 - Infobip SMS webhook: `https://<worker-domain>/webhook/infobip/sms?token=<OPENCTO_INFOBIP_WEBHOOK_TOKEN>`
 
@@ -158,4 +169,5 @@ If `OPENCTO_ADMIN_TOKEN` is set, include `x-opencto-admin-token` on `/api/*`.
 ## Notes
 
 - Tracing is fail-open: telemetry failures never block channel replies.
+- Sidecar forwarding is fail-open and uses `OPENCTO_SIDECAR_TOKEN` via `x-opencto-sidecar-token`.
 - Python tracing sidecar lives in `sidecar/`.

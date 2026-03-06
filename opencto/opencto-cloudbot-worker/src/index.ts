@@ -115,7 +115,7 @@ const MEMORY_LIMIT = 300;
 const TASK_LIMIT = 300;
 const DAY_ACTIVITY_LIMIT = 500;
 const VECTOR_TOP_K = 6;
-const ANYWAY_INGEST_DEFAULT = "https://api.anyway.sh/v1/ingest";
+const ANYWAY_INGEST_DEFAULT = "https://trace-dev-collector.anyway.sh/v1/ingest";
 const WHATSAPP_FREEFORM_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 type AnywaySpanStatus = {
@@ -165,6 +165,20 @@ function sidecarEnabled(env: Env) {
     Boolean(env.OPENCTO_SIDECAR_URL) &&
     Boolean(env.OPENCTO_SIDECAR_TOKEN)
   );
+}
+
+function resolveAnywayIngestEndpoint(raw: string | undefined): string {
+  const candidate = (raw || "").trim();
+  if (!candidate) return ANYWAY_INGEST_DEFAULT;
+  try {
+    const url = new URL(candidate);
+    if (url.pathname === "/" || url.pathname === "") {
+      url.pathname = "/v1/ingest";
+    }
+    return url.toString();
+  } catch {
+    return candidate;
+  }
 }
 
 async function sendSidecarEvent(env: Env, event: SidecarTraceEvent) {
@@ -233,7 +247,7 @@ class AnywayTraceBuffer {
 
   async flush() {
     if (!this.enabled || !this.spans.length || !this.env.OPENCTO_ANYWAY_API_KEY) return;
-    const endpoint = this.env.OPENCTO_ANYWAY_ENDPOINT || ANYWAY_INGEST_DEFAULT;
+    const endpoint = resolveAnywayIngestEndpoint(this.env.OPENCTO_ANYWAY_ENDPOINT);
     const traces = [{ trace_id: this.traceId, spans: this.spans }];
     try {
       const res = await fetch(endpoint, {
@@ -1817,7 +1831,7 @@ export default {
         vector_bound: Boolean(env.OPENCTO_VECTOR_INDEX),
         embed_model: env.OPENCTO_EMBED_MODEL || "text-embedding-3-small",
         anyway_enabled: anywayEnabled(env),
-        anyway_endpoint: env.OPENCTO_ANYWAY_ENDPOINT || ANYWAY_INGEST_DEFAULT,
+        anyway_endpoint: resolveAnywayIngestEndpoint(env.OPENCTO_ANYWAY_ENDPOINT),
         anyway_app_name: env.OPENCTO_ANYWAY_APP_NAME || "opencto-cloudbot-worker",
         sidecar_enabled: sidecarEnabled(env),
         sidecar_url: env.OPENCTO_SIDECAR_URL || null,
