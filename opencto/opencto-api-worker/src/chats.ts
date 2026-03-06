@@ -1,9 +1,11 @@
 import type { ChatMessageRecord, ChatSessionRecord, RequestContext } from './types'
 import { BadRequestException, InternalServerException, NotFoundException, jsonResponse } from './errors'
+import { enforcePromptGuardrails } from './guardrails'
 
 type ChatRow = {
   id: string
   user_id: string
+  trace_id: string | null
   title: string
   content_json: string
   created_at: string
@@ -21,12 +23,14 @@ async function ensureSchema(ctx: RequestContext): Promise<void> {
     `CREATE TABLE IF NOT EXISTS chats (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      trace_id TEXT,
       title TEXT NOT NULL,
       content_json TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`,
   ).run()
+  await ctx.env.DB.prepare('ALTER TABLE chats ADD COLUMN trace_id TEXT').run().catch(() => {})
   await ctx.env.DB.prepare(
     'CREATE INDEX IF NOT EXISTS idx_chats_user_updated ON chats (user_id, updated_at DESC)',
   ).run()
@@ -58,10 +62,11 @@ function parseMessages(raw: string): ChatMessageRecord[] {
 export async function listChats(ctx: RequestContext): Promise<Response> {
   await ensureSchema(ctx)
   const result = await ctx.env.DB.prepare(
-    'SELECT id, user_id, title, created_at, updated_at FROM chats WHERE user_id = ? ORDER BY updated_at DESC LIMIT 100',
+    'SELECT id, user_id, trace_id, title, created_at, updated_at FROM chats WHERE user_id = ? ORDER BY updated_at DESC LIMIT 100',
   ).bind(ctx.userId).all<{
     id: string
     user_id: string
+    trace_id: string | null
     title: string
     created_at: string
     updated_at: string
@@ -71,6 +76,7 @@ export async function listChats(ctx: RequestContext): Promise<Response> {
     (result.results ?? []).map((row) => ({
       id: row.id,
       userId: row.user_id,
+      traceId: row.trace_id,
       title: row.title,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -82,7 +88,7 @@ export async function listChats(ctx: RequestContext): Promise<Response> {
 export async function getChat(chatId: string, ctx: RequestContext): Promise<Response> {
   await ensureSchema(ctx)
   const row = await ctx.env.DB.prepare(
-    'SELECT id, user_id, title, content_json, created_at, updated_at FROM chats WHERE id = ? AND user_id = ?',
+    'SELECT id, user_id, trace_id, title, content_json, created_at, updated_at FROM chats WHERE id = ? AND user_id = ?',
   ).bind(chatId, ctx.userId).first<ChatRow>()
 
   if (!row) throw new NotFoundException('Chat not found')
@@ -90,6 +96,7 @@ export async function getChat(chatId: string, ctx: RequestContext): Promise<Resp
   const record: ChatSessionRecord = {
     id: row.id,
     userId: row.user_id,
+    traceId: row.trace_id,
     title: row.title,
     messages: parseMessages(row.content_json),
     createdAt: row.created_at,
@@ -107,6 +114,13 @@ export async function saveChat(
 
   const messages = Array.isArray(payload.messages) ? payload.messages : []
   if (messages.length === 0) throw new BadRequestException('messages are required')
+  const userText = messages
+    .filter((message) => message.role === 'USER')
+    .map((message) => message.text)
+    .join('\n')
+  if (userText) {
+    enforcePromptGuardrails(userText, 'chats.save')
+  }
 
   const id = (payload.id ?? '').trim() || crypto.randomUUID()
   const current = nowIso()
@@ -114,18 +128,20 @@ export async function saveChat(
   const contentJson = JSON.stringify(messages)
 
   await ctx.env.DB.prepare(
-    `INSERT INTO chats (id, user_id, title, content_json, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO chats (id, user_id, trace_id, title, content_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
+       trace_id = excluded.trace_id,
        title = excluded.title,
        content_json = excluded.content_json,
        updated_at = excluded.updated_at
      WHERE chats.user_id = excluded.user_id`,
-  ).bind(id, ctx.userId, title, contentJson, current, current).run()
+  ).bind(id, ctx.userId, ctx.traceContext.traceId, title, contentJson, current, current).run()
 
   const saved: ChatSessionRecord = {
     id,
     userId: ctx.userId,
+    traceId: ctx.traceContext.traceId,
     title,
     messages,
     createdAt: current,
