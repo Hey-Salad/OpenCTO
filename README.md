@@ -1,89 +1,156 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Hey-Salad/.github/refs/heads/main/HeySalad%20Logo%20%2B%20Tagline%20White.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Hey-Salad/.github/refs/heads/main/HeySalad%20Logo%20%2B%20Tagline%20Black.svg">
-  <img src="https://raw.githubusercontent.com/Hey-Salad/.github/refs/heads/main/HeySalad%20Logo%20%2B%20Tagline%20Black.svg" alt="HeySalad Logo" width="420"/>
-</picture>
+![OpenCTO Cover](assets/Agentic%20Engineering%20Platform-S1.svg)
 
-# HeySalad CTO
+# OpenCTO
 
-Build, run, and scale autonomous AI CTO workflows across coding, inference, and multi-agent operations.
+> Agentic engineering platform for building, running, and governing AI-powered software delivery.
 
-## Why This Exists
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![PR Quality](https://img.shields.io/badge/CI-PR%20Quality-1f6feb)](.github/workflows/pr-quality.yml)
+[![Security](https://img.shields.io/badge/CI-Security%20%26%20Smoke-0a7f3f)](.github/workflows/ci-security.yml)
+[![Dashboard](https://img.shields.io/badge/App-OpenCTO%20Dashboard-ed4c4c)](opencto/opencto-dashboard)
 
-HeySalad CTO is a unified control repo for three execution layers:
+## What This Repo Contains
 
-- `cheri-ml`: inference and model-serving runtime
-- `sheri-ml`: Codex-style coding workflows
-- `opencto`: multi-agent orchestration and operations
+This monorepo combines OpenCTO product surfaces, API/runtime services, SDK/CLI tooling, and platform documentation.
 
-The goal is simple: one operating system for AI engineering teams.
+- `opencto/`: product applications and platform modules
+- `docs/`: architecture specs, plans, runbooks, and roadmap docs
+- `cheri-ml/`: model-serving experiments
+- `sheri-ml/`: coding/runtime tooling workspace
+
+## Platform Surfaces
+
+### Core OpenCTO
+
+- `opencto/opencto-dashboard`: React + Vite dashboard (launchpad, auth, billing, codebase workflows)
+- `opencto/opencto-api-worker`: Cloudflare Worker API (auth, billing, compliance, webhooks, run orchestration)
+- `opencto/opencto-sdk-js`: TypeScript SDK (HTTP + MQTT + auth helpers)
+- `opencto/opencto-cli`: CLI wrapper around OpenCTO SDK workflows
+- `opencto/mobile-app`: Expo iOS-first app for auth, chat, voice/realtime, and run monitoring
+- `opencto/opencto-voice-backend`: FastAPI backend for voice/run endpoints
+- `opencto/opencto-landing`: static marketing site
+
+### Supporting Modules
+
+- `opencto/opencto-skills`: managed OpenCTO skill packs and manifest
+- `opencto/Sheri-ML`: legacy Sheri docs and components
+- `opencto/scripts`: release/install/demo scripts
+
+## Architecture At A Glance
+
+```text
+Dashboard + Mobile + CLI/SDK
+            |
+            v
+   OpenCTO API Worker (Cloudflare)
+   - Auth / OTP / OAuth
+   - Billing / Stripe Webhooks
+   - Compliance + Evidence
+   - Codebase Runs + Events
+   - Realtime Token Minting
+            |
+            v
+   D1 + Durable Objects + External Providers
+```
 
 ## Quick Start
 
+### 1) Dashboard
+
 ```bash
-# 1) Inference server
-cd cheri-ml
-python serve_model.py
+cd opencto/opencto-dashboard
+npm ci
+npm run dev
+```
 
-# 2) Codex workflows
-cd ../sheri-ml/codex-rs
-cargo build --release
+### 2) API Worker
 
-# 3) Agent orchestration
-cd ../../opencto/Sheri-ML/sheri-ml-cli
+```bash
+cd opencto/opencto-api-worker
+npm ci
+npm run dev
+```
+
+### 3) SDK + CLI
+
+```bash
+cd opencto/opencto-sdk-js
+npm ci && npm run build
+
+cd ../opencto-cli
+npm ci && npm run build
+```
+
+### 4) Mobile App
+
+```bash
+cd opencto/mobile-app
 npm install
-npm start
+npm run ios
+```
+
+## Validation Gates
+
+### Dashboard (`opencto/opencto-dashboard`)
+
+```bash
+npm run lint
+npm run build
+npm run test
+```
+
+### API Worker (`opencto/opencto-api-worker`)
+
+```bash
+npm run lint
+npm run build
+npm test
+```
+
+### Mobile App (`opencto/mobile-app`)
+
+```bash
+npm run lint
+npm run build
+npm run test
 ```
 
 ## Repository Layout
 
 ```text
-CTO/
-├── cheri-ml/      # inference server
-├── sheri-ml/      # coding/runtime tooling
-├── opencto/       # agent orchestration
-├── docs/          # architecture + guides
+CTO-AI/
+├── opencto/
+│   ├── opencto-dashboard/
+│   ├── opencto-api-worker/
+│   ├── opencto-sdk-js/
+│   ├── opencto-cli/
+│   ├── mobile-app/
+│   ├── opencto-voice-backend/
+│   ├── opencto-landing/
+│   └── opencto-skills/
+├── docs/
+├── cheri-ml/
+├── sheri-ml/
 ├── AGENTS.md
-├── CLAUDE.md
-└── VISION.md
+└── ROADMAP.md
 ```
 
-## Open Source + Commercial Use
+## Documentation Index
 
-This project is open source under Apache-2.0 and intended for broad adoption.
+- OpenCTO docs index: [docs/opencto/README.md](docs/opencto/README.md)
+- Platform spec: [docs/opencto/OPENCTO_PLATFORM_SPEC.md](docs/opencto/OPENCTO_PLATFORM_SPEC.md)
+- Frontend and monetisation spec: [docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md](docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md)
+- Implementation roadmap: [docs/opencto/IMPLEMENTATION_ROADMAP.md](docs/opencto/IMPLEMENTATION_ROADMAP.md)
+- Public roadmap: [ROADMAP.md](ROADMAP.md)
 
-If your team wants business implementation support (deployment, integration, managed operations), see [BUSINESS.md](BUSINESS.md).
+## CI, Releases, and Workflow
 
-## Legal
+- PR quality checks: `.github/workflows/pr-quality.yml`
+- Security and smoke checks: `.github/workflows/ci-security.yml`
+- Dashboard-specific CI: `.github/workflows/opencto-dashboard-ci.yml`
+- Release flow: `.github/workflows/release.yml`
 
-- License: [LICENSE](LICENSE) (Apache-2.0)
-- Attribution: [NOTICE](NOTICE) and [ATTRIBUTION.md](ATTRIBUTION.md)
-- Trademark policy: [TRADEMARKS.md](TRADEMARKS.md)
-- HeySalad is a registered trademark (UK00004063403)
-
-## Contact
-
-- Website: https://heysalad.io
-- Business implementation: investors@heysalad.io
-- Company: HeySalad Inc., 584 Castro St, Suite #4003, San Francisco, CA 94114, US
-
-## Repository Stats
-
-[![GitHub stars](https://img.shields.io/github/stars/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI/issues)
-[![GitHub pull requests](https://img.shields.io/github/issues-pr/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI/pulls)
-[![GitHub repo size](https://img.shields.io/github/repo-size/Hey-Salad/CTO-AI?style=for-the-badge)](https://github.com/Hey-Salad/CTO-AI)
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Hey-Salad%2FCTO-AI&type=Date)](https://star-history.com/#Hey-Salad/CTO-AI&Date)
-
-## Release and PR Process
-
-- Pull requests to `main` run quality checks via `.github/workflows/pr-quality.yml`.
-- Security and smoke checks run via `.github/workflows/ci-security.yml`.
-- Releases are created from tags like `v1.2.3` (or manual dispatch) via `.github/workflows/release.yml`.
-
-Example release flow:
+Tag-based release example:
 
 ```bash
 git checkout main
@@ -92,17 +159,26 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-## Architecture Docs
+## Security and Governance
 
-- OpenCTO docs index: [docs/opencto/README.md](docs/opencto/README.md)
-- Platform spec: [docs/opencto/OPENCTO_PLATFORM_SPEC.md](docs/opencto/OPENCTO_PLATFORM_SPEC.md)
-- Frontend, brand and monetisation spec: [docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md](docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md)
-- Implementation roadmap: [docs/opencto/IMPLEMENTATION_ROADMAP.md](docs/opencto/IMPLEMENTATION_ROADMAP.md)
+- Do not commit secrets, tokens, or credentials.
+- Use `.env.example` files for placeholders only.
+- Redact sensitive values in logs, screenshots, fixtures, and docs.
+- Follow repo contribution and branching rules in [AGENTS.md](AGENTS.md).
 
-## Product Roadmap and Community Feedback
+## Community
 
-- Public roadmap: [ROADMAP.md](ROADMAP.md)
-- iOS app roadmap: [docs/opencto/IOS_APP_ROADMAP.md](docs/opencto/IOS_APP_ROADMAP.md)
-- Open source sync playbook: [docs/opencto/OSS_SYNC_PLAYBOOK.md](docs/opencto/OSS_SYNC_PLAYBOOK.md)
-- Request a feature: https://github.com/Hey-Salad/CTO-AI/issues/new?template=feature_request.yml
-- Report a bug: https://github.com/Hey-Salad/CTO-AI/issues/new?template=bug_report.yml
+- Feature request: https://github.com/Hey-Salad/OpenCTO/issues/new?template=feature_request.yml
+- Bug report: https://github.com/Hey-Salad/OpenCTO/issues/new?template=bug_report.yml
+- Pull requests: https://github.com/Hey-Salad/OpenCTO/pulls
+
+## Legal
+
+- License: [LICENSE](LICENSE) (Apache-2.0)
+- Attribution: [NOTICE](NOTICE), [ATTRIBUTION.md](ATTRIBUTION.md)
+- Trademark policy: [TRADEMARKS.md](TRADEMARKS.md)
+
+## Contact
+
+- Website: https://opencto.works
+- Business inquiries: investors@heysalad.io
