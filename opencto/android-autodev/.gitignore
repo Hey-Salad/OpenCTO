@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local env
+.env
+.venv/
+venv/
+
+# Runtime artifacts
+runs/
+tasks/processed/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

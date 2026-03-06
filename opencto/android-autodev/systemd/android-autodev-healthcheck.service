@@ -1,0 +1,7 @@
+[Unit]
+Description=Android Autodev healthcheck
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/hs-chilu/heysalad-ai-projects/mobile-apps/android-autodev
+ExecStart=/home/hs-chilu/heysalad-ai-projects/mobile-apps/android-autodev/scripts/healthcheck.sh
