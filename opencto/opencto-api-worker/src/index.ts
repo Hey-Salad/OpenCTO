@@ -13,12 +13,16 @@ import * as onboarding from './onboarding'
 import * as github from './github'
 import * as codebaseRuns from './codebaseRuns'
 import * as marketplace from './marketplace'
+import * as providerKeys from './providerKeys'
+import { enforceRateLimit } from './rateLimit'
 import { appendTraceHeaders, extractTraceContext, tracePropagationHeaders, withTraceResponseHeaders } from './tracing'
 
 export class CodebaseExecutorContainer extends Container {
   defaultPort = 4000
   sleepAfter = '10m'
 }
+
+const DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE = 30
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -150,6 +154,21 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await auth.deleteAccount(ctx)
   }
 
+  // BYOK provider key endpoints
+  if (path === '/api/v1/llm/keys' && method === 'GET') {
+    return await providerKeys.listProviderKeys(request, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/llm\/keys\/([^/]+)$/) && method === 'PUT') {
+    const provider = path.split('/')[5] ?? ''
+    return await providerKeys.upsertProviderKey(provider, request, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/llm\/keys\/([^/]+)$/) && method === 'DELETE') {
+    const provider = path.split('/')[5] ?? ''
+    return await providerKeys.deleteProviderKey(provider, request, ctx)
+  }
+
   // Compliance endpoints
   if (path === '/api/v1/compliance/checks' && method === 'POST') {
     const body = await request.json() as { jobId: string; checkType: ComplianceCheckType }
@@ -266,6 +285,12 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
 
   // Realtime token endpoint — mints a short-lived ephemeral key for the browser WebSocket
   if (path === '/api/v1/realtime/token' && method === 'POST') {
+    const body = await request.clone().json().catch(() => ({})) as { workspaceId?: string }
+    await enforceRateLimit(ctx, 'realtime_token', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_REALTIME_PER_MINUTE, DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId: body.workspaceId,
+    })
     return await mintRealtimeToken(request, ctx)
   }
 
@@ -400,6 +425,13 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
 
   // 404 Not Found
   return jsonResponse({ error: 'Not found', code: 'NOT_FOUND' }, 404)
+}
+
+function parseRateLimit(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return parsed
 }
 
 // ---------------------------------------------------------------------------

@@ -40,8 +40,17 @@ export async function safeFetchJson<T>(
   })
 
   if (!response.ok) {
-    const error = new Error(`${fallbackMessage} (${response.status})`) as SafeApiError
-    error.code = codeFromStatus(response.status)
+    let serverMessage: string | undefined
+    let serverCode: string | undefined
+    try {
+      const body = await response.json() as { error?: unknown; code?: unknown }
+      if (typeof body.error === 'string' && body.error.trim()) serverMessage = body.error
+      if (typeof body.code === 'string' && body.code.trim()) serverCode = body.code
+    } catch {
+      // keep fallback message for non-json error responses
+    }
+    const error = new Error(serverMessage || `${fallbackMessage} (${response.status})`) as SafeApiError
+    error.code = serverCode || codeFromStatus(response.status)
     error.status = response.status
     throw error
   }

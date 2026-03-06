@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from '../../config/apiBase'
 import { getAuthHeaders } from '../authToken'
+import { getWorkspaceId } from '../workspace'
 
 export interface CTOAgentConfig {
   model: string
@@ -286,7 +287,11 @@ export async function parseMessagePayload(data: unknown): Promise<Record<string,
 }
 
 export async function proxyGet(path: string): Promise<string> {
-  const res = await fetch(`${API_BASE}${path}`, { headers: getAuthHeaders() })
+  const base = new URL(`${API_BASE}${path}`)
+  if (!base.searchParams.get('workspaceId')) {
+    base.searchParams.set('workspaceId', getWorkspaceId())
+  }
+  const res = await fetch(base.toString(), { headers: getAuthHeaders() })
   const text = await res.text()
   return res.ok ? text : JSON.stringify({ error: `HTTP ${res.status}`, details: text })
 }

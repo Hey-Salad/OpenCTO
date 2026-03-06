@@ -49,3 +49,31 @@ export interface GetCodebaseRunEventsResponse {
   lastSeq: number
   pollAfterMs: number
 }
+
+export interface CodebaseMetrics {
+  window: string
+  since: string
+  totals: {
+    totalRuns: number
+    succeededRuns: number
+    failedRuns: number
+    activeRuns: number
+    avgDurationSeconds: number
+  }
+}
+
+export interface CodebaseRunArtifact {
+  id: string
+  runId: string
+  kind: string
+  path: string
+  sizeBytes?: number | null
+  sha256?: string | null
+  url?: string | null
+  expiresAt?: string | null
+  createdAt: string
+}
+
+export interface ListCodebaseRunArtifactsResponse {
+  artifacts: CodebaseRunArtifact[]
+}

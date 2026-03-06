@@ -285,7 +285,7 @@ export async function getSubscriptionSummary(ctx: RequestContext): Promise<Respo
   await ensureBillingSchema(env)
   const workspaceId = getWorkspaceId(user.id)
 
-  const subResult = await env.DB.prepare(
+  let subResult = await env.DB.prepare(
     `SELECT workspace_id, stripe_customer_id, stripe_subscription_id, plan_code, status, interval, current_period_end, cancel_at_period_end
      FROM workspace_billing
      WHERE workspace_id = ?`
@@ -303,15 +303,41 @@ export async function getSubscriptionSummary(ctx: RequestContext): Promise<Respo
     }>()
 
   if (!subResult) {
-    throw new BadRequestException('No active subscription found')
+    // Bootstrap a default starter subscription row so first-time users can load billing without errors.
+    await env.DB.prepare(
+      `INSERT INTO workspace_billing (workspace_id, plan_code, interval, status, current_period_end, updated_at)
+       VALUES (?, ?, ?, ?, datetime('now', '+30 days'), datetime('now'))`,
+    ).bind(workspaceId, 'STARTER', 'MONTHLY', 'trialing').run()
+
+    subResult = await env.DB.prepare(
+      `SELECT workspace_id, stripe_customer_id, stripe_subscription_id, plan_code, status, interval, current_period_end, cancel_at_period_end
+       FROM workspace_billing
+       WHERE workspace_id = ?`,
+    ).bind(workspaceId).first<{
+      workspace_id: string
+      stripe_customer_id: string | null
+      stripe_subscription_id: string | null
+      plan_code: string
+      status: string
+      interval: string
+      current_period_end: string | null
+      cancel_at_period_end: number
+    }>()
   }
+
+  if (!subResult) {
+    throw new BadRequestException('Billing workspace could not be initialized')
+  }
+
+  const planCode = (subResult.plan_code in PLANS ? subResult.plan_code : 'STARTER') as PlanCode
+  const interval: BillingInterval = subResult.interval === 'YEARLY' ? 'YEARLY' : 'MONTHLY'
 
   const subscription: Subscription = {
     id: subResult.stripe_subscription_id || `sub-local-${workspaceId}`,
     customerId: subResult.stripe_customer_id || '',
-    planCode: subResult.plan_code as PlanCode,
+    planCode,
     status: subResult.status,
-    interval: subResult.interval as BillingInterval,
+    interval,
     currentPeriodStart: new Date().toISOString(),
     currentPeriodEnd: subResult.current_period_end || new Date().toISOString(),
     cancelAtPeriodEnd: subResult.cancel_at_period_end === 1,

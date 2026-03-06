@@ -161,6 +161,7 @@ interface AudioConfig {
 The Cloudflare Worker backend. Relevant endpoints:
 
 **Token endpoint** (already working):
+
 ```
 POST /api/v1/realtime/token
 Authorization: Bearer demo-token
@@ -171,6 +172,7 @@ Body: { "model": "gpt-4o-realtime-preview" }
 ```
 
 **Tool proxy endpoints** (already wired, need VERCEL_TOKEN / CF_API_TOKEN / CF_ACCOUNT_ID secrets set):
+
 ```
 GET /api/v1/cto/vercel/projects
 GET /api/v1/cto/vercel/projects/:id/deployments
@@ -318,6 +320,7 @@ getUserMedia({ audio: true })
 ```
 
 The worklet code (inline Blob) converts Float32 mic samples → Int16 PCM16:
+
 ```js
 class PcmCaptureProcessor extends AudioWorkletProcessor {
   process(inputs) {
@@ -368,7 +371,7 @@ Browser → sends { type: "response.create", response: {} }
 ### Server events to handle
 
 | Event type | What to do |
-|---|---|
+| --- | --- |
 | `session.created` | Log it; optionally send session.update here instead of on ws.onopen |
 | `session.updated` | Log it |
 | `conversation.item.input_audio_transcription.completed` | Emit `user_transcript` event with `event.transcript` |
@@ -385,7 +388,7 @@ Browser → sends { type: "response.create", response: {} }
 When `response.function_call_arguments.done` fires with `name`, dispatch to:
 
 | `name` | Worker endpoint | How to call |
-|---|---|---|
+| --- | --- | --- |
 | `list_vercel_projects` | `GET /api/v1/cto/vercel/projects` | no args |
 | `list_vercel_deployments` | `GET /api/v1/cto/vercel/projects/{projectId}/deployments` | args.projectId |
 | `get_vercel_deployment` | `GET /api/v1/cto/vercel/deployments/{deploymentId}` | args.deploymentId |
@@ -477,11 +480,13 @@ All must pass with 0 errors.
 ## Environment Variables
 
 `.env.local` (already set, do not change):
+
 ```
 VITE_API_BASE_URL=https://opencto-api-worker.heysalad-o.workers.dev
 ```
 
 Cloudflare Worker secrets (set separately with `wrangler secret put`):
+
 ```
 OPENAI_API_KEY   ← already set on the deployed worker
 VERCEL_TOKEN     ← set this for Vercel tool calls to work

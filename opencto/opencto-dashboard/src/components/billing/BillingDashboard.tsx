@@ -93,6 +93,17 @@ export function BillingDashboard({
         <span className={`status-badge status-${tone}`}>{statusLabel}</span>
       </section>
 
+      <section className="billing-beta-card">
+        <div>
+          <p className="muted">Early Beta</p>
+          <h3>$2 / month</h3>
+          <p className="muted">Ship faster with full app access while we onboard the first cohort.</p>
+        </div>
+        <button type="button" className="primary-button" disabled={actionsDisabled} onClick={onUpgrade}>
+          Start Beta ($2)
+        </button>
+      </section>
+
       <section className="usage-grid" aria-label="Usage summary">
         <article className="usage-item">
           <p className="muted">Jobs</p>

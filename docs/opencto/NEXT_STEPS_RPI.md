@@ -25,6 +25,7 @@ Move from scaffolded frontend/mocks to production-ready backend-backed auth, bil
 ## 3. RPi Execution Plan (Ordered)
 
 ### Step A: Sync and branch from latest main
+
 ```bash
 cd /home/admin/CTO-AI
 # or: cd /home/peter/CTO-AI-phase2-clean
@@ -36,6 +37,7 @@ git checkout -b feat/opencto-phase7-backend-auth-billing-compliance
 ```
 
 ### Step B: Validate local baseline before edits
+
 ```bash
 cd opencto/opencto-dashboard
 npm install
@@ -98,6 +100,7 @@ Frontend already has `signInWithProvider(provider)` contract. Next:
 - CI green on lint/build/test.
 
 ## 5. Recommended First RPi Prompt (Copy/Paste)
+
 ```text
 Implement Phase 7 backend-live integration for OpenCTO.
 
@@ -125,4 +128,3 @@ Rules:
 - Workstream 1: Backend auth/session.
 - Workstream 2: Billing + Stripe webhook pipeline.
 - Workstream 3: Jobs/compliance live data + websocket stream.
-

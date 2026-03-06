@@ -27,6 +27,10 @@ export interface Env {
   CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS?: string
   CODEBASE_RUN_MIN_TIMEOUT_SECONDS?: string
   CODEBASE_RUN_MAX_TIMEOUT_SECONDS?: string
+  RATE_LIMIT_REALTIME_PER_MINUTE?: string
+  RATE_LIMIT_CTO_PROXY_PER_MINUTE?: string
+  RATE_LIMIT_CTO_OPENAI_PER_MINUTE?: string
+  RATE_LIMIT_CTO_GITHUB_CHAT_PER_MINUTE?: string
 }
 
 export type UserRole = 'owner' | 'cto' | 'developer' | 'viewer' | 'auditor'

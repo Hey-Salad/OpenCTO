@@ -19,21 +19,23 @@ tag = "v1_codebase_executor_container"
 [env.production]
 name = "opencto-api"
 route = { pattern = "api.opencto.works/*", zone_name = "opencto.works" }
-vars = {
-  ENVIRONMENT = "production",
-  OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works",
-  APP_BASE_URL = "https://app.opencto.works",
-  API_BASE_URL = "https://api.opencto.works",
-  CODEBASE_EXECUTION_MODE = "stub",
-  CODEBASE_MAX_CONCURRENT_RUNS = "2",
-  CODEBASE_DAILY_RUN_LIMIT = "30",
-  CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS = "600",
-  CODEBASE_RUN_MIN_TIMEOUT_SECONDS = "60",
-  CODEBASE_RUN_MAX_TIMEOUT_SECONDS = "1800"
-}
-d1_databases = [
-  { binding = "DB", database_name = "opencto-chat-store", database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4" },
-]
+
+[env.production.vars]
+ENVIRONMENT = "production"
+OPENCTO_AGENT_BASE_URL = "https://cloud-services-api.opencto.works"
+APP_BASE_URL = "https://app.opencto.works"
+API_BASE_URL = "https://api.opencto.works"
+CODEBASE_EXECUTION_MODE = "stub"
+CODEBASE_MAX_CONCURRENT_RUNS = "2"
+CODEBASE_DAILY_RUN_LIMIT = "30"
+CODEBASE_RUN_DEFAULT_TIMEOUT_SECONDS = "600"
+CODEBASE_RUN_MIN_TIMEOUT_SECONDS = "60"
+CODEBASE_RUN_MAX_TIMEOUT_SECONDS = "1800"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "opencto-chat-store"
+database_id = "15dc6de2-6a21-406e-bcb2-f4caf94d45c4"
 
 [[env.production.durable_objects.bindings]]
 class_name = "CodebaseExecutorContainer"

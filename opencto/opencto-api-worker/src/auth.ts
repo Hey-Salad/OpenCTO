@@ -567,8 +567,12 @@ function sanitizeReturnTo(raw: string | null, fallback: string): string {
   const safeFallback = safeAppBaseUrl(fallback)
   if (!raw) return safeFallback
   try {
-    const fallbackUrl = new URL(safeFallback)
     const url = new URL(raw)
+    if (isAllowedMobileReturnTo(url)) {
+      return `${url.protocol}//${url.hostname}${url.pathname}${url.search}`
+    }
+
+    const fallbackUrl = new URL(safeFallback)
     if (url.protocol !== 'https:') return safeFallback
     const isSameHost = url.hostname === fallbackUrl.hostname
     const isSubdomain = url.hostname.endsWith(`.${fallbackUrl.hostname}`)
@@ -661,6 +665,12 @@ function safeAppBaseUrl(raw: string): string {
   } catch {
     return 'https://app.opencto.works'
   }
+}
+
+function isAllowedMobileReturnTo(url: URL): boolean {
+  if (url.protocol !== 'opencto:') return false
+  if (url.hostname !== 'auth') return false
+  return url.pathname === '/callback'
 }
 
 // Helper function to generate a cryptographic challenge

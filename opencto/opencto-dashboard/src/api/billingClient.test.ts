@@ -20,7 +20,6 @@ describe('BillingHttpClient', () => {
     await expect(client.getSubscriptionSummary()).rejects.toMatchObject({
       code: 'UPSTREAM_FAILURE',
       status: 503,
-      message: 'Failed to load billing summary (503)',
     })
   })
 
