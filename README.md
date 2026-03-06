@@ -141,6 +141,9 @@ CTO-AI/
 - Platform spec: [docs/opencto/OPENCTO_PLATFORM_SPEC.md](docs/opencto/OPENCTO_PLATFORM_SPEC.md)
 - Frontend and monetisation spec: [docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md](docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md)
 - Implementation roadmap: [docs/opencto/IMPLEMENTATION_ROADMAP.md](docs/opencto/IMPLEMENTATION_ROADMAP.md)
+- OpenAI guide: [docs/opencto/OPENAI_IMPLEMENTATION_GUIDE.md](docs/opencto/OPENAI_IMPLEMENTATION_GUIDE.md)
+- Anyway guide: [docs/opencto/ANYWAY_IMPLEMENTATION_GUIDE.md](docs/opencto/ANYWAY_IMPLEMENTATION_GUIDE.md)
+- Traceloop guide: [docs/opencto/TRACELOOP_IMPLEMENTATION_GUIDE.md](docs/opencto/TRACELOOP_IMPLEMENTATION_GUIDE.md)
 - Public roadmap: [ROADMAP.md](ROADMAP.md)
 
 ## CI, Releases, and Workflow
