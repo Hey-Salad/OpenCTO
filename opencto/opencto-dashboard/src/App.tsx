@@ -30,6 +30,7 @@ import './index.css'
 
 const DEFAULT_AUDIO_CONFIG: AudioConfig = {
   systemInstructions: 'You are an OpenCTO AI engineering agent. Help users build, review, and deploy software.',
+  agentProfile: 'dispatch',
   voice: 'sage',
   turnDetection: true,
   threshold: 0.65,

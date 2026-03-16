@@ -28,6 +28,7 @@ This monorepo combines OpenCTO product surfaces, API/runtime services, SDK/CLI t
 - `opencto/opencto-cli`: CLI wrapper around OpenCTO SDK workflows
 - `opencto/mobile-app`: Expo iOS-first app for auth, chat, voice/realtime, and run monitoring
 - `opencto/opencto-voice-backend`: FastAPI backend for voice/run endpoints
+- `opencto/opencto-google-live-backend`: FastAPI backend for Gemini/Vertex realtime sessions
 - `opencto/opencto-landing`: static marketing site
 
 ### Supporting Modules
@@ -89,6 +90,16 @@ npm install
 npm run ios
 ```
 
+### 5) Google Live Backend
+
+```bash
+cd opencto/opencto-google-live-backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app:app --reload --host 0.0.0.0 --port 8091
+```
+
 ## Validation Gates
 
 ### Dashboard (`opencto/opencto-dashboard`)
@@ -142,6 +153,7 @@ CTO-AI/
 - Frontend and monetisation spec: [docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md](docs/opencto/OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md)
 - Implementation roadmap: [docs/opencto/IMPLEMENTATION_ROADMAP.md](docs/opencto/IMPLEMENTATION_ROADMAP.md)
 - OpenAI guide: [docs/opencto/OPENAI_IMPLEMENTATION_GUIDE.md](docs/opencto/OPENAI_IMPLEMENTATION_GUIDE.md)
+- Google live guide: [docs/opencto/GOOGLE_LIVE_IMPLEMENTATION_GUIDE.md](docs/opencto/GOOGLE_LIVE_IMPLEMENTATION_GUIDE.md)
 - Anyway guide: [docs/opencto/ANYWAY_IMPLEMENTATION_GUIDE.md](docs/opencto/ANYWAY_IMPLEMENTATION_GUIDE.md)
 - Traceloop guide: [docs/opencto/TRACELOOP_IMPLEMENTATION_GUIDE.md](docs/opencto/TRACELOOP_IMPLEMENTATION_GUIDE.md)
 - Public roadmap: [ROADMAP.md](ROADMAP.md)

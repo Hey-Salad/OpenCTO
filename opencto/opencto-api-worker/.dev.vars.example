@@ -8,3 +8,6 @@ JWT_SECRET=local-dev-jwt-secret
 WEBAUTHN_RP_ID=localhost
 WEBAUTHN_RP_NAME=OpenCTO Dev
 OPENCTO_AGENT_BASE_URL=https://cloud-services-api.opencto.works
+GOOGLE_LIVE_BACKEND_URL=http://127.0.0.1:8091
+GOOGLE_LIVE_SHARED_SECRET=replace-with-shared-secret
+GOOGLE_LIVE_DEFAULT_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
