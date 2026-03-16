@@ -265,7 +265,9 @@ async function getRunApproval(runId: string, ctx: RequestContext) {
     try {
       const payload = approvedEvent.payload_json ? JSON.parse(approvedEvent.payload_json) as Record<string, unknown> : {}
       approvedByUserId = typeof payload.approvedByUserId === 'string' ? payload.approvedByUserId : null
-    } catch {}
+    } catch {
+      // Ignore malformed approval payloads and fall back to null metadata.
+    }
     return {
       required: true,
       state: 'approved' as const,
@@ -290,7 +292,9 @@ async function getRunApproval(runId: string, ctx: RequestContext) {
   try {
     const payload = requiredEvent.payload_json ? JSON.parse(requiredEvent.payload_json) as Record<string, unknown> : {}
     reason = typeof payload.reason === 'string' ? payload.reason : null
-  } catch {}
+  } catch {
+    // Ignore malformed approval payloads and fall back to a null reason.
+  }
 
   return {
     required: true,
