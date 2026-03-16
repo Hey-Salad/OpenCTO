@@ -22,6 +22,10 @@ async function runCommand(file, args, timeoutMs = 10000) {
   return { stdout: stdout.trim(), stderr: stderr.trim() };
 }
 
+function commandRunner(cfg) {
+  return typeof cfg?.runCommand === "function" ? cfg.runCommand : runCommand;
+}
+
 function ensureApprovalState(state) {
   if (!state.approvals || typeof state.approvals !== "object") {
     state.approvals = {};
@@ -125,6 +129,8 @@ export function toolDefinitions() {
 }
 
 export async function executeToolCall({ cfg, state, name, args }) {
+  const run = commandRunner(cfg);
+
   if (name === "get_machine_metrics") {
     const response = await fetch(cfg.monitorUrl, {
       headers: { Accept: "application/json" },
@@ -148,7 +154,7 @@ export async function executeToolCall({ cfg, state, name, args }) {
     if (!serviceAllowed(service)) {
       throw new Error("Service not allowed. Use opencto-*.service only.");
     }
-    const res = await runCommand("systemctl", ["--user", "status", service, "--no-pager", "-n", "25"]);
+    const res = await run("systemctl", ["--user", "status", service, "--no-pager", "-n", "25"]);
     return { service, status: res.stdout || res.stderr };
   }
 
@@ -158,7 +164,7 @@ export async function executeToolCall({ cfg, state, name, args }) {
       throw new Error("Service not allowed. Use opencto-*.service only.");
     }
     const lines = safeInt(args?.lines, 40, 5, 120);
-    const res = await runCommand("journalctl", ["--user", "-u", service, "--no-pager", "-n", String(lines)]);
+    const res = await run("journalctl", ["--user", "-u", service, "--no-pager", "-n", String(lines)]);
     return { service, lines, logs: res.stdout || res.stderr };
   }
 
@@ -175,6 +181,16 @@ export async function executeToolCall({ cfg, state, name, args }) {
     const reason = String(args?.reason || "No reason provided").slice(0, 300);
     if (!serviceAllowed(service)) {
       throw new Error("Service not allowed. Use opencto-*.service only.");
+    }
+    if (cfg?.requireApprovals === false) {
+      await run("systemctl", ["--user", "restart", service]);
+      return {
+        ok: true,
+        queued: false,
+        executed: true,
+        service,
+        message: `Restarted ${service}.`,
+      };
     }
     const approvals = ensureApprovalState(state);
     const id = approvalId();

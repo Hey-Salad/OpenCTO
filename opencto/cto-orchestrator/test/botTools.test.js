@@ -81,3 +81,37 @@ test("request_service_restart rejects non-opencto service names", async () => {
     /Service not allowed/i
   );
 });
+
+test("request_service_restart executes immediately when approvals are disabled", async () => {
+  const state = {};
+  const calls = [];
+  const cfg = {
+    requireApprovals: false,
+    runCommand: async (file, args) => {
+      calls.push({ file, args });
+      return { stdout: "", stderr: "" };
+    },
+  };
+
+  const result = await executeToolCall({
+    cfg,
+    state,
+    name: "request_service_restart",
+    args: {
+      service: "opencto-cto-orchestrator.service",
+      reason: "autonomous mode test",
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.queued, false);
+  assert.equal(result.executed, true);
+  assert.match(result.message, /Restarted opencto-cto-orchestrator\.service/i);
+  assert.equal(state.approvals, undefined);
+  assert.deepEqual(calls, [
+    {
+      file: "systemctl",
+      args: ["--user", "restart", "opencto-cto-orchestrator.service"],
+    },
+  ]);
+});
