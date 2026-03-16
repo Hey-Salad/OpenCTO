@@ -12,8 +12,10 @@ import * as chats from './chats'
 import * as onboarding from './onboarding'
 import * as github from './github'
 import * as codebaseRuns from './codebaseRuns'
+import * as marketplace from './marketplace'
 import * as providerKeys from './providerKeys'
 import { enforceRateLimit } from './rateLimit'
+import { appendTraceHeaders, extractTraceContext, tracePropagationHeaders, withTraceResponseHeaders } from './tracing'
 
 export class CodebaseExecutorContainer extends Container {
   defaultPort = 4000
@@ -21,20 +23,21 @@ export class CodebaseExecutorContainer extends Container {
 }
 
 const DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE = 30
-const DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE = 120
-const DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE = 90
-const DEFAULT_CTO_GITHUB_CHAT_RATE_LIMIT_PER_MINUTE = 60
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const traceContext = extractTraceContext(request)
+
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
+      const headers = new Headers({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key, x-opencto-trace-id, traceparent, tracestate, x-opencto-session-id',
+      })
+      appendTraceHeaders(headers, traceContext)
       return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key',
-        },
+        headers,
       })
     }
 
@@ -44,35 +47,38 @@ export default {
 
       // Health check endpoint (no auth required)
       if (path === '/health' || path === '/api/v1/health') {
-        return jsonResponse({ status: 'healthy', timestamp: new Date().toISOString() })
+        return withTraceResponseHeaders(
+          jsonResponse({ status: 'healthy', timestamp: new Date().toISOString() }),
+          traceContext,
+        )
       }
 
       // Webhook endpoint (no auth required, uses signature verification)
       if (path === '/api/v1/billing/webhooks/stripe' && request.method === 'POST') {
-        return await webhooks.handleStripeWebhook(request, env)
+        return withTraceResponseHeaders(await webhooks.handleStripeWebhook(request, env), traceContext)
       }
 
       // OAuth endpoints (no prior auth required)
       if (path === '/api/v1/auth/oauth/github/start' && request.method === 'GET') {
-        return await auth.startGitHubOAuth(request, env)
+        return withTraceResponseHeaders(await auth.startGitHubOAuth(request, env), traceContext)
       }
       if (path === '/api/v1/auth/oauth/github/callback' && request.method === 'GET') {
-        return await auth.completeGitHubOAuth(request, env)
+        return withTraceResponseHeaders(await auth.completeGitHubOAuth(request, env), traceContext)
       }
 
       // All other endpoints require authentication
-      const ctx = await authenticate(request, env)
+      const ctx = await authenticate(request, env, traceContext)
 
       // Route to handlers
-      return await route(path, request, ctx)
+      return withTraceResponseHeaders(await route(path, request, ctx), traceContext)
     } catch (error) {
-      return toJsonResponse(error)
+      return withTraceResponseHeaders(toJsonResponse(error), traceContext)
     }
   },
 }
 
 // Authentication middleware
-async function authenticate(request: Request, env: Env): Promise<RequestContext> {
+async function authenticate(request: Request, env: Env, traceContext = extractTraceContext(request)): Promise<RequestContext> {
   const authHeader = request.headers.get('Authorization')
   const accessEmail = request.headers.get('CF-Access-Authenticated-User-Email')
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null
@@ -85,6 +91,7 @@ async function authenticate(request: Request, env: Env): Promise<RequestContext>
         userId: sessionUser.id,
         user: sessionUser,
         env,
+        traceContext,
       }
     }
   }
@@ -108,6 +115,7 @@ async function authenticate(request: Request, env: Env): Promise<RequestContext>
     userId: user.id,
     user,
     env,
+    traceContext,
   }
 }
 
@@ -207,10 +215,6 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   }
 
   // Codebase run execution endpoints
-  if (path === '/api/v1/codebase/runs' && method === 'GET') {
-    return await codebaseRuns.listCodebaseRuns(request, ctx)
-  }
-
   if (path === '/api/v1/codebase/runs' && method === 'POST') {
     const body = await request.json().catch(() => ({})) as {
       repoUrl?: string
@@ -223,18 +227,9 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await codebaseRuns.createCodebaseRun(body, ctx)
   }
 
-  if (path === '/api/v1/codebase/metrics' && method === 'GET') {
-    return await codebaseRuns.getCodebaseMetrics(ctx)
-  }
-
   if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)$/) && method === 'GET') {
     const runId = path.split('/')[5] ?? ''
     return await codebaseRuns.getCodebaseRun(runId, ctx)
-  }
-
-  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/events\/stream$/) && method === 'GET') {
-    const runId = path.split('/')[5] ?? ''
-    return await codebaseRuns.streamCodebaseRunEvents(runId, request, ctx)
   }
 
   if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/events$/) && method === 'GET') {
@@ -242,30 +237,21 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await codebaseRuns.getCodebaseRunEvents(runId, request, ctx)
   }
 
-  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/artifacts$/) && method === 'GET') {
-    const runId = path.split('/')[5] ?? ''
-    return await codebaseRuns.listCodebaseRunArtifacts(runId, ctx)
-  }
-
-  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/artifacts\/([^/]+)$/) && method === 'GET') {
-    const runId = path.split('/')[5] ?? ''
-    const artifactId = path.split('/')[7] ?? ''
-    return await codebaseRuns.downloadCodebaseRunArtifact(runId, artifactId, ctx)
-  }
-
   if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/cancel$/) && method === 'POST') {
     const runId = path.split('/')[5] ?? ''
     return await codebaseRuns.cancelCodebaseRun(runId, ctx)
   }
 
-  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/pr$/) && method === 'GET') {
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/approve$/) && method === 'POST') {
     const runId = path.split('/')[5] ?? ''
-    return await codebaseRuns.getCodebaseRunPullRequest(runId, ctx)
+    const body = await request.json().catch(() => ({})) as { note?: string }
+    return await codebaseRuns.approveCodebaseRun(runId, body, ctx)
   }
 
-  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/post-to-pr$/) && method === 'POST') {
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/deny$/) && method === 'POST') {
     const runId = path.split('/')[5] ?? ''
-    return await codebaseRuns.postCodebaseRunToPullRequest(runId, ctx)
+    const body = await request.json().catch(() => ({})) as { note?: string }
+    return await codebaseRuns.denyCodebaseRun(runId, body, ctx)
   }
 
   // Onboarding endpoints
@@ -326,112 +312,115 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await billing.getInvoices(ctx)
   }
 
+  // Marketplace + Connect endpoints
+  if (path === '/api/v1/marketplace/connect/accounts' && method === 'POST') {
+    const body = await request.json().catch(() => ({})) as { businessName?: string; country?: string }
+    return await marketplace.createConnectedAccount(body, ctx)
+  }
+
+  if (path.match(/^\/api\/v1\/marketplace\/connect\/accounts\/([^/]+)\/onboarding-link$/) && method === 'POST') {
+    const accountId = path.split('/')[6] ?? ''
+    return await marketplace.createConnectedAccountOnboardingLink(accountId, ctx)
+  }
+
+  if (path === '/api/v1/marketplace/agent-rentals/checkout/session' && method === 'POST') {
+    const body = await request.json().catch(() => ({})) as {
+      providerWorkspaceId?: string
+      providerStripeAccountId?: string
+      agentSlug?: string
+      description?: string
+      amountUsd?: number
+      currency?: string
+      platformFeePercent?: number
+    }
+    return await marketplace.createAgentRentalCheckoutSession(body, ctx)
+  }
+
+  if (path === '/api/v1/marketplace/agent-rentals' && method === 'GET') {
+    return await marketplace.listMyAgentRentals(ctx)
+  }
+
   // CTO agent proxy routes — forward to external APIs using server-side tokens
 
   if (path === '/api/v1/cto/vercel/projects' && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
-    return await proxyVercel('/v9/projects?limit=20', ctx.env)
+    return await proxyVercel('/v9/projects?limit=20', ctx.env, ctx.traceContext)
   }
 
   if (path.match(/^\/api\/v1\/cto\/vercel\/projects\/([^/]+)\/deployments$/) && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const projectId = path.split('/')[6] ?? ''
-    return await proxyVercel(`/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=10`, ctx.env)
+    return await proxyVercel(`/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=10`, ctx.env, ctx.traceContext)
   }
 
   if (path.match(/^\/api\/v1\/cto\/vercel\/deployments\/([^/]+)$/) && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const deploymentId = path.split('/')[6] ?? ''
-    return await proxyVercel(`/v13/deployments/${encodeURIComponent(deploymentId)}`, ctx.env)
+    return await proxyVercel(`/v13/deployments/${encodeURIComponent(deploymentId)}`, ctx.env, ctx.traceContext)
   }
 
   if (path === '/api/v1/cto/cloudflare/workers' && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
-    return await proxyCF(`/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/workers/scripts`, ctx.env)
+    return await proxyCF(`/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/workers/scripts`, ctx.env, ctx.traceContext)
   }
 
   if (path === '/api/v1/cto/cloudflare/pages' && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
-    return await proxyCF(`/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/pages/projects`, ctx.env)
+    return await proxyCF(`/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/pages/projects`, ctx.env, ctx.traceContext)
   }
 
   if (path.match(/^\/api\/v1\/cto\/cloudflare\/workers\/([^/]+)\/usage$/) && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const scriptName = path.split('/')[6] ?? ''
     const now = new Date()
     const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
     return await proxyCF(
       `/client/v4/accounts/${ctx.env.CF_ACCOUNT_ID}/workers/scripts/${encodeURIComponent(scriptName)}/analytics/aggregate?since=${since}`,
       ctx.env,
+      ctx.traceContext,
     )
   }
 
   if (path === '/api/v1/cto/openai/models' && method === 'GET') {
-    const workspaceId = new URL(request.url).searchParams.get('workspaceId') ?? undefined
-    await enforceRateLimit(ctx, 'cto_openai_proxy', {
-      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_OPENAI_PER_MINUTE, DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE),
-      windowSeconds: 60,
-      workspaceId,
-    })
-    return await proxyOpenAI('/v1/models', request, ctx)
+    return await proxyOpenAI('/v1/models', ctx.env, ctx.traceContext)
   }
 
   if (path === '/api/v1/cto/openai/usage' && method === 'GET') {
-    const workspaceId = new URL(request.url).searchParams.get('workspaceId') ?? undefined
-    await enforceRateLimit(ctx, 'cto_openai_proxy', {
-      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_OPENAI_PER_MINUTE, DEFAULT_CTO_OPENAI_RATE_LIMIT_PER_MINUTE),
-      windowSeconds: 60,
-      workspaceId,
-    })
     const url = new URL(request.url)
     const start = url.searchParams.get('start') ?? ''
     const end = url.searchParams.get('end') ?? ''
-    return await proxyOpenAI(`/v1/usage?start_time=${start}&end_time=${end}`, request, ctx)
+    return await proxyOpenAI(`/v1/usage?start_time=${start}&end_time=${end}`, ctx.env, ctx.traceContext)
   }
 
   if (path === '/api/v1/cto/github/orgs' && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
-    return await proxyGitHub('/user/orgs?per_page=50', ctx.env)
+    return await proxyGitHub('/user/orgs?per_page=50', ctx.env, ctx.traceContext)
   }
 
   if (path.match(/^\/api\/v1\/cto\/github\/orgs\/([^/]+)\/repos$/) && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const org = path.split('/')[6] ?? ''
-    return await proxyGitHub(`/orgs/${encodeURIComponent(org)}/repos?sort=updated&per_page=50`, ctx.env)
+    return await proxyGitHub(`/orgs/${encodeURIComponent(org)}/repos?sort=updated&per_page=50`, ctx.env, ctx.traceContext)
   }
 
   if (path.match(/^\/api\/v1\/cto\/github\/repos\/([^/]+)\/([^/]+)\/pulls$/) && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const owner = path.split('/')[6] ?? ''
     const repo = path.split('/')[7] ?? ''
     return await proxyGitHub(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=all&sort=updated&direction=desc&per_page=20`,
       ctx.env,
+      ctx.traceContext,
     )
   }
 
   if (path.match(/^\/api\/v1\/cto\/github\/repos\/([^/]+)\/([^/]+)\/actions\/runs$/) && method === 'GET') {
-    await enforceRateLimit(ctx, 'cto_proxy', { limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_PROXY_PER_MINUTE, DEFAULT_CTO_PROXY_RATE_LIMIT_PER_MINUTE), windowSeconds: 60 })
     const owner = path.split('/')[6] ?? ''
     const repo = path.split('/')[7] ?? ''
     return await proxyGitHub(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/runs?per_page=20`,
       ctx.env,
+      ctx.traceContext,
     )
   }
 
   if (path === '/api/v1/cto/github/chat/completions' && method === 'POST') {
-    const body = await request.clone().json().catch(() => ({})) as { workspaceId?: string }
-    await enforceRateLimit(ctx, 'cto_github_chat', {
-      limit: parseRateLimit(ctx.env.RATE_LIMIT_CTO_GITHUB_CHAT_PER_MINUTE, DEFAULT_CTO_GITHUB_CHAT_RATE_LIMIT_PER_MINUTE),
-      windowSeconds: 60,
-      workspaceId: body.workspaceId,
-    })
-    return await proxyGitHubChatCompletions(request, ctx)
+    return await proxyGitHubChatCompletions(request, ctx.env, ctx.traceContext)
   }
 
   if (path === '/api/v1/agent/respond' && method === 'POST') {
-    return await proxySupervisorResponse(request, ctx.env)
+    return await proxySupervisorResponse(request, ctx.env, ctx.traceContext)
   }
 
   // 404 Not Found
@@ -449,12 +438,15 @@ function parseRateLimit(value: string | undefined, fallback: number): number {
 // CTO agent proxy helpers — keep external API tokens server-side
 // ---------------------------------------------------------------------------
 
-async function proxyVercel(apiPath: string, env: Env): Promise<Response> {
+async function proxyVercel(apiPath: string, env: Env, traceContext: RequestContext['traceContext']): Promise<Response> {
   if (!env.VERCEL_TOKEN) {
     return jsonResponse({ error: 'VERCEL_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
   }
   const res = await fetch(`https://api.vercel.com${apiPath}`, {
-    headers: { Authorization: `Bearer ${env.VERCEL_TOKEN}` },
+    headers: {
+      Authorization: `Bearer ${env.VERCEL_TOKEN}`,
+      ...tracePropagationHeaders(traceContext),
+    },
   })
   const body = await res.text()
   return new Response(body, {
@@ -466,12 +458,15 @@ async function proxyVercel(apiPath: string, env: Env): Promise<Response> {
   })
 }
 
-async function proxyCF(apiPath: string, env: Env): Promise<Response> {
+async function proxyCF(apiPath: string, env: Env, traceContext: RequestContext['traceContext']): Promise<Response> {
   if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) {
     return jsonResponse({ error: 'CF_API_TOKEN or CF_ACCOUNT_ID is not configured', code: 'CONFIG_ERROR' }, 500)
   }
   const res = await fetch(`https://api.cloudflare.com${apiPath}`, {
-    headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` },
+    headers: {
+      Authorization: `Bearer ${env.CF_API_TOKEN}`,
+      ...tracePropagationHeaders(traceContext),
+    },
   })
   const body = await res.text()
   return new Response(body, {
@@ -483,22 +478,15 @@ async function proxyCF(apiPath: string, env: Env): Promise<Response> {
   })
 }
 
-async function proxyOpenAI(apiPath: string, request: Request, ctx: RequestContext): Promise<Response> {
-  const workspaceId = new URL(request.url).searchParams.get('workspaceId')
-  let apiKey = ''
-  try {
-    apiKey = await providerKeys.resolveProviderApiKey('openai', workspaceId, ctx, ctx.env.OPENAI_API_KEY)
-  } catch {
-    if (!ctx.env.OPENAI_API_KEY) {
-      return jsonResponse({ error: 'OPENAI_API_KEY is not configured', code: 'CONFIG_ERROR' }, 500)
-    }
-    throw new Error('Unable to resolve OpenAI API key')
-  }
-  if (!apiKey) {
+async function proxyOpenAI(apiPath: string, env: Env, traceContext: RequestContext['traceContext']): Promise<Response> {
+  if (!env.OPENAI_API_KEY) {
     return jsonResponse({ error: 'OPENAI_API_KEY is not configured', code: 'CONFIG_ERROR' }, 500)
   }
   const res = await fetch(`https://api.openai.com${apiPath}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      ...tracePropagationHeaders(traceContext),
+    },
   })
   const body = await res.text()
   return new Response(body, {
@@ -510,31 +498,20 @@ async function proxyOpenAI(apiPath: string, request: Request, ctx: RequestContex
   })
 }
 
-async function proxyGitHubChatCompletions(request: Request, ctx: RequestContext): Promise<Response> {
+async function proxyGitHubChatCompletions(
+  request: Request,
+  env: Env,
+  traceContext: RequestContext['traceContext'],
+): Promise<Response> {
+  if (!env.GITHUB_TOKEN) {
+    return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
+  }
+
   const body = await request.json().catch(() => ({})) as {
     model?: string
     messages?: Array<{ role: string; content: string }>
     max_tokens?: number
     temperature?: number
-    workspaceId?: string
-  }
-
-  let githubToken = ''
-  try {
-    githubToken = await providerKeys.resolveProviderApiKey(
-      'github',
-      body.workspaceId,
-      ctx,
-      ctx.env.GITHUB_TOKEN,
-    )
-  } catch {
-    if (!ctx.env.GITHUB_TOKEN) {
-      return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
-    }
-    throw new Error('Unable to resolve GitHub API key')
-  }
-  if (!githubToken) {
-    return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
   }
 
   if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) {
@@ -554,8 +531,9 @@ async function proxyGitHubChatCompletions(request: Request, ctx: RequestContext)
   const res = await fetch('https://models.github.ai/inference/chat/completions', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${githubToken}`,
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
       'Content-Type': 'application/json',
+      ...tracePropagationHeaders(traceContext),
     },
     body: JSON.stringify(payload),
   })
@@ -570,7 +548,7 @@ async function proxyGitHubChatCompletions(request: Request, ctx: RequestContext)
   })
 }
 
-async function proxyGitHub(apiPath: string, env: Env): Promise<Response> {
+async function proxyGitHub(apiPath: string, env: Env, traceContext: RequestContext['traceContext']): Promise<Response> {
   if (!env.GITHUB_TOKEN) {
     return jsonResponse({ error: 'GITHUB_TOKEN is not configured', code: 'CONFIG_ERROR' }, 500)
   }
@@ -581,6 +559,7 @@ async function proxyGitHub(apiPath: string, env: Env): Promise<Response> {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'opencto-api-worker',
       'X-GitHub-Api-Version': '2022-11-28',
+      ...tracePropagationHeaders(traceContext),
     },
   })
 
@@ -594,7 +573,11 @@ async function proxyGitHub(apiPath: string, env: Env): Promise<Response> {
   })
 }
 
-async function proxySupervisorResponse(request: Request, env: Env): Promise<Response> {
+async function proxySupervisorResponse(
+  request: Request,
+  env: Env,
+  traceContext: RequestContext['traceContext'],
+): Promise<Response> {
   if (!env.OPENCTO_AGENT_BASE_URL) {
     return jsonResponse({ error: 'OPENCTO_AGENT_BASE_URL is not configured', code: 'CONFIG_ERROR' }, 500)
   }
@@ -608,6 +591,7 @@ async function proxySupervisorResponse(request: Request, env: Env): Promise<Resp
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...tracePropagationHeaders(traceContext),
       },
       body,
       signal: controller.signal,
@@ -632,35 +616,21 @@ async function proxySupervisorResponse(request: Request, env: Env): Promise<Resp
 }
 
 async function mintRealtimeToken(_request: Request, ctx: RequestContext): Promise<Response> {
-  const body = await _request.json().catch(() => ({})) as { model?: string; workspaceId?: string }
-  let apiKey = ''
-  try {
-    apiKey = await providerKeys.resolveProviderApiKey(
-      'openai',
-      body.workspaceId,
-      ctx,
-      ctx.env.OPENAI_API_KEY,
-    )
-  } catch {
-    if (!ctx.env.OPENAI_API_KEY) {
-      return jsonResponse({ error: 'OPENAI_API_KEY secret is not configured on this Worker', code: 'CONFIG_ERROR' }, 500)
-    }
-    throw new Error('Unable to resolve OpenAI API key')
-  }
-
-  if (!apiKey) {
+  if (!ctx.env.OPENAI_API_KEY) {
     return jsonResponse({ error: 'OPENAI_API_KEY secret is not configured on this Worker', code: 'CONFIG_ERROR' }, 500)
   }
 
   let rawBody: string
   try {
     // Realtime GA requires client secrets minted from this endpoint.
+    const body = await _request.json().catch(() => ({})) as { model?: string }
     const requestedModel = body.model ?? 'gpt-realtime-1.5'
     const res = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${ctx.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
+        ...tracePropagationHeaders(ctx.traceContext),
       },
       body: JSON.stringify({
         expires_after: { anchor: 'created_at', seconds: 600 },
