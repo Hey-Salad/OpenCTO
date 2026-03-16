@@ -12,6 +12,7 @@ interface ChatContextValue {
   loadChats: () => Promise<void>;
   openChat: (chatId: string) => Promise<void>;
   sendTextMessage: (content: string) => Promise<void>;
+  appendMessage: (input: Omit<ChatMessage, 'id' | 'chatId' | 'createdAt'> & { id?: string }) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -92,6 +93,39 @@ export const ChatProvider = ({ children }: PropsWithChildren) => {
     [activeChatId, api, messages]
   );
 
+  const appendMessage = useCallback(
+    async (input: Omit<ChatMessage, 'id' | 'chatId' | 'createdAt'> & { id?: string }) => {
+      const chatId = activeChatId ?? `chat_${Date.now()}`;
+      if (!activeChatId) {
+        setActiveChatId(chatId);
+      }
+
+      const nextMessage: ChatMessage = {
+        id: input.id ?? createId('msg'),
+        chatId,
+        role: input.role,
+        content: input.content,
+        kind: input.kind,
+        metadata: input.metadata,
+        createdAt: new Date().toISOString()
+      };
+
+      const nextMessages = [...messages, nextMessage];
+      setMessages(nextMessages);
+
+      try {
+        await api.chat.saveChat(api.client, {
+          chatId,
+          messages: nextMessages
+        });
+        setError(null);
+      } catch {
+        setError('Message saved locally. Sync will retry on next update.');
+      }
+    },
+    [activeChatId, api, messages]
+  );
+
   useEffect(() => {
     if (!session) {
       setChats([]);
@@ -119,7 +153,8 @@ export const ChatProvider = ({ children }: PropsWithChildren) => {
         error,
         loadChats,
         openChat,
-        sendTextMessage
+        sendTextMessage,
+        appendMessage
       }}
     >
       {children}

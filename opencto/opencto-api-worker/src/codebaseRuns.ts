@@ -737,6 +737,33 @@ export async function createCodebaseRun(
   }, 201)
 }
 
+// GET /api/v1/codebase/runs
+export async function listCodebaseRuns(request: Request, ctx: RequestContext): Promise<Response> {
+  await ensureSchema(ctx)
+
+  const url = new URL(request.url)
+  const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit') ?? '20', 10) || 20))
+  const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') ?? '0', 10) || 0)
+
+  const rows = await ctx.env.DB.prepare(
+    `SELECT id, user_id, trace_id, repo_url, repo_full_name, base_branch, target_branch, status, requested_commands_json,
+            command_allowlist_version, timeout_seconds, created_at, started_at, completed_at, canceled_at, error_message
+     FROM codebase_runs
+     WHERE user_id = ?
+     ORDER BY created_at DESC
+     LIMIT ?
+     OFFSET ?`,
+  ).bind(ctx.userId, limit, offset).all<CodebaseRunRow>()
+
+  const runs = (rows.results ?? []).map(mapRun)
+  const nextOffset = runs.length === limit ? offset + limit : null
+
+  return jsonResponse({
+    runs,
+    nextOffset,
+  })
+}
+
 // GET /api/v1/codebase/runs/:id
 export async function getCodebaseRun(runId: string, ctx: RequestContext): Promise<Response> {
   const row = await getRunRow(runId, ctx)

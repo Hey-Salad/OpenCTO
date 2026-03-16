@@ -148,6 +148,14 @@ class MockD1Database {
     const normalized = normalizeSql(sql)
 
     if (normalized.startsWith('select id, user_id, trace_id, repo_url, repo_full_name')) {
+      if (normalized.includes('where user_id = ? order by created_at desc limit ? offset ?')) {
+        const [userId, limit, offset] = args
+        const rows = Array.from(this.runs.values())
+          .filter((run) => run.user_id === String(userId))
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .slice(Number(offset), Number(offset) + Number(limit))
+        return { results: rows.map((row) => structuredClone(row) as T) } as T
+      }
       const [runId, userId] = args
       const row = this.runs.get(String(runId))
       if (!row || row.user_id !== String(userId)) return null
@@ -187,6 +195,15 @@ class MockD1Database {
 
   executeAll<T>(sql: string, args: unknown[]): { results: T[] } {
     const normalized = normalizeSql(sql)
+
+    if (normalized.startsWith('select id, user_id, trace_id, repo_url, repo_full_name') && normalized.includes('where user_id = ? order by created_at desc limit ? offset ?')) {
+      const [userId, limit, offset] = args
+      const rows = Array.from(this.runs.values())
+        .filter((run) => run.user_id === String(userId))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(Number(offset), Number(offset) + Number(limit))
+      return { results: rows.map((row) => structuredClone(row) as T) }
+    }
 
     if (normalized.startsWith('select id, run_id, seq, level, event_type, message, payload_json, created_at from codebase_run_events')) {
       const [runId, afterSeq, limit] = args
@@ -570,6 +587,35 @@ describe('Codebase run endpoints', () => {
 
     expect(res.status).toBe(200)
     expect(body.run.id).toBe(createdBody.run.id)
+  })
+
+  it('GET /api/v1/codebase/runs returns runs in reverse chronological order', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({ CODEBASE_MAX_CONCURRENT_RUNS: '5' }, db)
+
+    const first = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+    const second = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/OpenCTO.git',
+      commands: ['npm run build'],
+    })
+
+    const firstBody = await first.json() as { run: { id: string } }
+    const secondBody = await second.json() as { run: { id: string } }
+
+    const res = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/codebase/runs?limit=20&offset=0', {
+        headers: { Authorization: 'Bearer demo-token' },
+      }),
+      env,
+    )
+    const body = await res.json() as { runs: Array<{ id: string }>; nextOffset: number | null }
+
+    expect(res.status).toBe(200)
+    expect(body.runs.map((run) => run.id)).toEqual([secondBody.run.id, firstBody.run.id])
+    expect(body.nextOffset).toBeNull()
   })
 
   it('GET /api/v1/codebase/runs/:id returns 404 when missing', async () => {
