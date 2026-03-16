@@ -5334,7 +5334,6 @@ impl ChatWidget {
 
     /// Open a popup to choose the permissions mode (approval policy + sandbox policy).
     pub(crate) fn open_permissions_popup(&mut self) {
-        let include_read_only = cfg!(target_os = "windows");
         let current_approval = self.config.permissions.approval_policy.value();
         let current_sandbox = self.config.permissions.sandbox_policy.get();
         let mut items: Vec<SelectionItem> = Vec::new();
@@ -5353,9 +5352,6 @@ impl ChatWidget {
             && presets.iter().any(|preset| preset.id == "auto");
 
         for preset in presets.into_iter() {
-            if !include_read_only && preset.id == "read-only" {
-                continue;
-            }
             let is_current =
                 Self::preset_matches_current(current_approval, current_sandbox, &preset);
             let name = if preset.id == "auto" && windows_degraded_sandbox_enabled {
