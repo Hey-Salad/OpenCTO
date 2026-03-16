@@ -205,7 +205,7 @@ async function runAgent({ cfg, ai, state, chatId, userText, onEvent }) {
   return answer;
 }
 
-async function handleCommand({ cfg, state, chatId, text, onEvent }) {
+export async function handleCommand({ cfg, state, chatId, text, onEvent }) {
   if (text === "/help" || text === "/start") {
     return helpText();
   }
@@ -235,15 +235,17 @@ async function handleCommand({ cfg, state, chatId, text, onEvent }) {
       ...result.issues.map((i) => `- ${i.url}`),
     ].join("\n");
   }
-  if (text.startsWith("/approve ")) {
-    const id = text.split(/\s+/, 2)[1]?.trim();
+  const approveMatch = text.match(/^\/approve(?:\s+(.+))?$/);
+  if (approveMatch) {
+    const id = approveMatch[1]?.trim();
     if (!id) return "Usage: /approve <approval_id>";
     const result = await executeApprovedAction(state, id);
     onEvent?.("approval", result.message, { id, ok: result.ok });
     return result.message;
   }
-  if (text.startsWith("/deny ")) {
-    const id = text.split(/\s+/, 2)[1]?.trim();
+  const denyMatch = text.match(/^\/deny(?:\s+(.+))?$/);
+  if (denyMatch) {
+    const id = denyMatch[1]?.trim();
     if (!id) return "Usage: /deny <approval_id>";
     const result = denyApproval(state, id);
     onEvent?.("approval", result.message, { id, ok: result.ok });
