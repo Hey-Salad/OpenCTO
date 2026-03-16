@@ -58,6 +58,15 @@ export class ApiClient {
     }
   }
 
+  async createAuthHeaders(extra?: HeadersInit): Promise<Headers> {
+    const token = await this.getToken();
+    const headers = new Headers(extra ?? {});
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return headers;
+  }
+
   private async readErrorMessage(response: Response): Promise<string> {
     try {
       const body = await response.json();

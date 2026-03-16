@@ -215,6 +215,10 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
   }
 
   // Codebase run execution endpoints
+  if (path === '/api/v1/codebase/runs' && method === 'GET') {
+    return await codebaseRuns.listCodebaseRuns(request, ctx)
+  }
+
   if (path === '/api/v1/codebase/runs' && method === 'POST') {
     const body = await request.json().catch(() => ({})) as {
       repoUrl?: string
