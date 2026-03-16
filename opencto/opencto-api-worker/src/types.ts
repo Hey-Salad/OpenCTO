@@ -19,6 +19,7 @@ export interface Env {
   API_BASE_URL: string
   OPENCTO_AGENT_BASE_URL: string
   APP_BASE_URL: string
+  OPENCTO_MARKETPLACE_PLATFORM_FEE_PERCENT?: string
   CODEBASE_EXECUTOR?: DurableObjectNamespace
   CODEBASE_EXECUTION_MODE?: 'stub' | 'container'
   CODEBASE_MAX_CONCURRENT_RUNS?: string
@@ -170,6 +171,14 @@ export interface RequestContext {
   userId: string
   user: SessionUser
   env: Env
+  traceContext: TraceContext
+}
+
+export interface TraceContext {
+  traceId: string
+  traceparent: string
+  tracestate?: string
+  sessionId?: string
 }
 
 export interface ChatMessageRecord {
@@ -186,6 +195,7 @@ export interface ChatMessageRecord {
 export interface ChatSessionRecord {
   id: string
   userId: string
+  traceId?: string | null
   title: string
   messages: ChatMessageRecord[]
   createdAt: string
@@ -198,6 +208,7 @@ export type CodebaseRunEventLevel = 'system' | 'info' | 'warn' | 'error'
 export interface CodebaseRun {
   id: string
   userId: string
+  traceId?: string | null
   repoUrl: string
   repoFullName: string | null
   baseBranch: string
@@ -211,6 +222,17 @@ export interface CodebaseRun {
   completedAt: string | null
   canceledAt: string | null
   errorMessage: string | null
+  approval?: CodebaseRunApproval
+}
+
+export type CodebaseRunApprovalState = 'not_required' | 'pending' | 'approved' | 'denied'
+
+export interface CodebaseRunApproval {
+  required: boolean
+  state: CodebaseRunApprovalState
+  reason: string | null
+  approvedByUserId: string | null
+  decidedAt: string | null
 }
 
 export interface CodebaseRunEvent {

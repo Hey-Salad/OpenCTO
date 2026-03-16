@@ -1,13 +1,5 @@
 import { OpenCTOError, type OpenCTOClientOptions, type OpenCTORequestOptions } from './types.js'
 
-function trimTrailingSlashes(value: string): string {
-  let end = value.length
-  while (end > 0 && value.charCodeAt(end - 1) === 47) {
-    end -= 1
-  }
-  return value.slice(0, end)
-}
-
 export class OpenCTOClient {
   private readonly baseUrl: string
   private readonly token?: string
@@ -73,4 +65,12 @@ export class OpenCTOClient {
       clearTimeout(timeout)
     }
   }
+}
+
+function trimTrailingSlashes(input: string): string {
+  let end = input.length
+  while (end > 0 && input.charCodeAt(end - 1) === 47) {
+    end -= 1
+  }
+  return input.slice(0, end)
 }
