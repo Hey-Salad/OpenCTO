@@ -241,6 +241,11 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
     return await codebaseRuns.getCodebaseRunEvents(runId, request, ctx)
   }
 
+  if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/events\/stream$/) && method === 'GET') {
+    const runId = path.split('/')[5] ?? ''
+    return await codebaseRuns.streamCodebaseRunEvents(runId, request, ctx)
+  }
+
   if (path.match(/^\/api\/v1\/codebase\/runs\/([^/]+)\/cancel$/) && method === 'POST') {
     const runId = path.split('/')[5] ?? ''
     return await codebaseRuns.cancelCodebaseRun(runId, ctx)

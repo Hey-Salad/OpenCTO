@@ -920,6 +920,42 @@ export async function getCodebaseRunEvents(runId: string, request: Request, ctx:
   })
 }
 
+// GET /api/v1/codebase/runs/:id/events/stream
+export async function streamCodebaseRunEvents(runId: string, request: Request, ctx: RequestContext): Promise<Response> {
+  const row = await getRunRow(runId, ctx)
+
+  const url = new URL(request.url)
+  const afterSeq = Math.max(0, Number.parseInt(url.searchParams.get('afterSeq') ?? '0', 10) || 0)
+
+  const rows = await ctx.env.DB.prepare(
+    `SELECT id, run_id, seq, level, event_type, message, payload_json, created_at
+     FROM codebase_run_events
+     WHERE run_id = ? AND seq > ?
+     ORDER BY seq ASC
+     LIMIT 500`,
+  ).bind(runId, afterSeq).all<CodebaseRunEventRow>()
+
+  const events = (rows.results ?? []).map(mapEvent)
+  const lastSeq = events.at(-1)?.seq ?? afterSeq
+  const approval = await getRunApproval(runId, ctx)
+
+  const body = [
+    `event: run\ndata: ${JSON.stringify({ run: { ...mapRun(row), approval } })}\n`,
+    `event: events\ndata: ${JSON.stringify({ runId, events, lastSeq })}\n`,
+  ].join('\n')
+
+  return new Response(body, {
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+      'access-control-allow-origin': '*',
+      'access-control-allow-headers': 'Content-Type, Authorization',
+      'access-control-allow-methods': 'GET, POST, OPTIONS, DELETE',
+    },
+  })
+}
+
 // POST /api/v1/codebase/runs/:id/cancel
 export async function cancelCodebaseRun(runId: string, ctx: RequestContext): Promise<Response> {
   assertCodebaseRunWriteAccess(ctx)

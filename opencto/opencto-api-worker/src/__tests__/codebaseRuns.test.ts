@@ -710,6 +710,35 @@ describe('Codebase run endpoints', () => {
     expect(body.events.map((event) => event.seq)).toEqual([1, 2, 3])
   })
 
+  it('GET /api/v1/codebase/runs/:id/events/stream returns sse payload with run and events', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({}, db)
+    const created = await createRun(env)
+    const createdBody = await created.json() as { run: { id: string } }
+
+    await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/codebase/runs/${createdBody.run.id}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer demo-token' },
+      }),
+      env,
+    )
+
+    const res = await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/codebase/runs/${createdBody.run.id}/events/stream?afterSeq=0`, {
+        headers: { Authorization: 'Bearer demo-token' },
+      }),
+      env,
+    )
+    const body = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/event-stream')
+    expect(body).toContain('event: run')
+    expect(body).toContain('event: events')
+    expect(body).toContain(createdBody.run.id)
+  })
+
   it('POST /api/v1/codebase/runs/:id/cancel transitions queued/running to canceled', async () => {
     const db = new MockD1Database()
     const env = createMockEnv({}, db)
