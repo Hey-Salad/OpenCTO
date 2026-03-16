@@ -214,6 +214,18 @@ class MockD1Database {
       return { results: filtered }
     }
 
+    if (normalized.startsWith('select status, started_at, completed_at from codebase_runs where user_id = ? and created_at >= ?')) {
+      const [userId, since] = args
+      const filtered = Array.from(this.runs.values())
+        .filter((run) => run.user_id === String(userId) && run.created_at >= String(since))
+        .map((run) => ({
+          status: run.status,
+          started_at: run.started_at,
+          completed_at: run.completed_at,
+        }) as T)
+      return { results: filtered }
+    }
+
     throw new Error(`Unhandled all SQL: ${sql}`)
   }
 }
@@ -344,6 +356,21 @@ describe('Codebase run endpoints', () => {
     expect(body.details?.guardrailCodes).toContain('UNSAFE_REPO_URL')
   })
 
+  it('POST /api/v1/codebase/runs rejects non-GitHub repo URLs', async () => {
+    const env = createMockEnv()
+
+    const res = await createRun(env, {
+      repoUrl: 'https://gitlab.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+    const body = await res.json() as { code?: string; status?: number; error?: string }
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('BAD_REQUEST')
+    expect(body.status).toBe(400)
+    expect(body.error).toContain('github.com')
+  })
+
   it('POST /api/v1/codebase/runs rejects unauthorized requests', async () => {
     const env = createMockEnv({ ENVIRONMENT: 'production' })
 
@@ -371,9 +398,32 @@ describe('Codebase run endpoints', () => {
     const body = await res.json() as { code?: string; status?: number; error?: string }
 
     expect(res.status).toBe(429)
-    expect(body.code).toBe('QUOTA_EXCEEDED')
+    expect(body.code).toBe('CODEBASE_CONCURRENCY_LIMIT')
     expect(body.status).toBe(429)
     expect(body.error).toContain('Concurrent run quota')
+  })
+
+  it('POST /api/v1/codebase/runs returns quota error when daily cap is exceeded', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({
+      CODEBASE_MAX_CONCURRENT_RUNS: '5',
+      CODEBASE_DAILY_RUN_LIMIT: '1',
+    }, db)
+    await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+
+    const res = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
+      commands: ['npm run build'],
+    })
+    const body = await res.json() as { code?: string; status?: number; error?: string }
+
+    expect(res.status).toBe(429)
+    expect(body.code).toBe('CODEBASE_DAILY_LIMIT')
+    expect(body.status).toBe(429)
+    expect(body.error).toContain('Daily run quota')
   })
 
   it('POST /api/v1/codebase/runs rejects invalid timeout payloads', async () => {
@@ -533,6 +583,59 @@ describe('Codebase run endpoints', () => {
     )
 
     expect(res.status).toBe(404)
+  })
+
+  it('GET /api/v1/codebase/metrics returns per-user totals for the last 24 hours', async () => {
+    const db = new MockD1Database()
+    const env = createMockEnv({ CODEBASE_MAX_CONCURRENT_RUNS: '5' }, db)
+
+    const first = await createRun(env)
+    const second = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/OpenCTO.git',
+      commands: ['npm run build'],
+    })
+    const denied = await createRun(env, {
+      repoUrl: 'https://github.com/Hey-Salad/OpenCTO.git',
+      commands: ['git push origin main'],
+    })
+
+    const firstBody = await first.json() as { run: { id: string } }
+    const secondBody = await second.json() as { run: { id: string } }
+    const deniedBody = await denied.json() as { run: { id: string } }
+
+    db.setRunStatus(firstBody.run.id, 'succeeded')
+    db.setRunStatus(secondBody.run.id, 'failed')
+
+    await worker.fetch(
+      new Request(`https://api.opencto.works/api/v1/codebase/runs/${deniedBody.run.id}/deny`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer demo-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ note: 'deny in test' }),
+      }),
+      env,
+    )
+
+    const res = await worker.fetch(
+      new Request('https://api.opencto.works/api/v1/codebase/metrics', {
+        headers: { Authorization: 'Bearer demo-token' },
+      }),
+      env,
+    )
+    const body = await res.json() as {
+      totals: { created: number; succeeded: number; failed: number; canceled: number; avgDurationMs: number }
+      windowHours: number
+    }
+
+    expect(res.status).toBe(200)
+    expect(body.windowHours).toBe(24)
+    expect(body.totals.created).toBe(3)
+    expect(body.totals.succeeded).toBe(1)
+    expect(body.totals.failed).toBe(1)
+    expect(body.totals.canceled).toBe(1)
+    expect(body.totals.avgDurationMs).toBe(0)
   })
 
   it('GET /api/v1/codebase/runs/:id/events returns ordered events', async () => {

@@ -126,6 +126,7 @@ This deploys the worker to Cloudflare Workers.
 - `GET /api/v1/codebase/runs/:id` - Get run status and metrics
 - `GET /api/v1/codebase/runs/:id/events` - Poll run events/log lines
 - `POST /api/v1/codebase/runs/:id/cancel` - Cancel queued/running run
+- `GET /api/v1/codebase/metrics` - Get per-user 24h run totals and average duration
 
 Runtime controls:
 - Command normalization + allowlist template enforcement
