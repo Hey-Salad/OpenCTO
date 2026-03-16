@@ -51,8 +51,8 @@ export class ConflictException extends ApiException {
 }
 
 export class TooManyRequestsException extends ApiException {
-  constructor(message = 'Too many requests', details?: Record<string, unknown>) {
-    super(429, 'QUOTA_EXCEEDED', message, details)
+  constructor(message = 'Too many requests', code = 'QUOTA_EXCEEDED', details?: Record<string, unknown>) {
+    super(429, code, message, details)
     this.name = 'TooManyRequestsException'
   }
 }

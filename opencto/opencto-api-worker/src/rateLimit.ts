@@ -49,7 +49,7 @@ export async function enforceRateLimit(
 
   if (count > limit) {
     const retryAfterSeconds = Math.max(1, Math.ceil((windowEndMs - nowMs) / 1000))
-    throw new TooManyRequestsException('Rate limit exceeded', {
+    throw new TooManyRequestsException('Rate limit exceeded', 'QUOTA_EXCEEDED', {
       bucket,
       limit,
       windowSeconds,
