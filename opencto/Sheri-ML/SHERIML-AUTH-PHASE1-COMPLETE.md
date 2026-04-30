@@ -363,7 +363,7 @@ cd /home/peter/heysalad-sheri-auth
 npm install
 
 # Deploy to Cloudflare
-export CLOUDFLARE_API_TOKEN=your_cloudflare_api_token_here
+export CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
 wrangler deploy
 
 # Set secret
