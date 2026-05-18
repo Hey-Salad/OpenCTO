@@ -9,6 +9,7 @@ This worker provides the backend API for:
 - Compliance checks and evidence export
 - Billing (Stripe integration, subscriptions, invoices)
 - Webhook handling with signature verification and idempotency
+- Realtime session bootstrap for OpenAI and Google live backends
 
 ## Project Structure
 
@@ -152,6 +153,11 @@ Container runtime image:
 - `POST /api/v1/billing/portal/session` - Create billing portal session
 - `POST /api/v1/billing/webhooks/stripe` - Stripe webhook endpoint
 
+### Realtime
+
+- `POST /api/v1/realtime/token` - Mint OpenAI realtime client secret
+- `POST /api/v1/google-live/session` - Mint signed bootstrap payload for the Google live backend
+
 ## Security Features
 
 ### 1. Unified Error Handling
@@ -206,6 +212,8 @@ npm test
 - `JWT_SECRET` - Secret for JWT signing
 - `WEBAUTHN_RP_ID` - WebAuthn relying party ID
 - `WEBAUTHN_RP_NAME` - WebAuthn relying party name
+- `GOOGLE_LIVE_BACKEND_URL` - HTTPS base URL for `opencto-google-live-backend`
+- `GOOGLE_LIVE_SHARED_SECRET` - HMAC shared secret used to sign Google live bootstrap session tokens
 
 ## Frontend Integration
 

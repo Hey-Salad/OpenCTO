@@ -94,8 +94,13 @@ function formatConnectionError(message: string): string {
   if (lower.includes('token request failed') || lower.includes('missing clientsecret')) {
     return 'Failed to initialize the OpenAI realtime session token. Verify backend auth/token configuration.'
   }
-  if (lower.includes('google_api_key') || lower.includes('api key')) {
-    return 'Google Live requires a valid API key. Set VITE_GOOGLE_API_KEY and retry.'
+  if (
+    lower.includes('google_live_backend_url')
+    || lower.includes('google_live_shared_secret')
+    || lower.includes('google live bootstrap failed')
+    || lower.includes('vertex')
+  ) {
+    return 'Google Live is not configured correctly in OpenCTO. Verify the API Worker bootstrap settings and the Google live backend deployment.'
   }
   if (lower.includes('timed out') || lower.includes('websocket connection error')) {
     return 'Realtime connection timed out. Check network connectivity and model availability, then retry.'
@@ -629,6 +634,7 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
       model: audioConfig.voiceModel,
       reasoningModel: audioConfig.reasoningModel,
       instructions: audioConfig.systemInstructions,
+      agentProfile: audioConfig.agentProfile,
       voice: audioConfig.voice,
       turnDetection: audioConfig.turnDetection,
       threshold: audioConfig.threshold,

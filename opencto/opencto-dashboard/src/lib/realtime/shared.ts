@@ -6,6 +6,7 @@ export interface CTOAgentConfig {
   model: string
   reasoningModel?: string
   instructions: string
+  agentProfile?: 'dispatch' | 'repo' | 'deploy' | 'incident'
   voice: string
   turnDetection: boolean
   threshold: number
@@ -35,9 +36,18 @@ export type FunctionTool = {
   }
 }
 
-const API_BASE = getApiBaseUrl()
+export interface GoogleLiveSessionBootstrap {
+  provider: 'google_vertex'
+  mode: 'vertex_live'
+  wsUrl: string
+  sessionToken: string
+  expiresAt: string
+  workspaceId: string
+  sessionId: string
+}
 
-export const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY
+const API_BASE = getApiBaseUrl()
+const GOOGLE_LIVE_BOOTSTRAP_URL = `${API_BASE}/api/v1/google-live/session`
 
 export const CONNECT_TIMEOUT_MS = 10_000
 export const GOOGLE_LIVE_VOICE_MODELS = [
@@ -331,6 +341,29 @@ export async function executeToolProxy(name: string, args: Record<string, unknow
     default:
       return JSON.stringify({ error: `Unknown tool: ${name}` })
   }
+}
+
+export async function createGoogleLiveSession(config: CTOAgentConfig): Promise<GoogleLiveSessionBootstrap> {
+  const res = await fetch(GOOGLE_LIVE_BOOTSTRAP_URL, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: normalizeGeminiModel(selectSupportedGoogleLiveModel(config.model)),
+      workspaceId: getWorkspaceId(),
+      instructions: config.instructions,
+      voice: config.voice,
+      agentProfile: config.agentProfile ?? 'dispatch',
+    }),
+  })
+
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`Google live bootstrap failed (${res.status}): ${text}`)
+  }
+  return JSON.parse(text) as GoogleLiveSessionBootstrap
 }
 
 export function pickString(obj: Record<string, unknown>, camel: string, snake: string): string | undefined {

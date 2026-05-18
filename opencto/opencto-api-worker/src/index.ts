@@ -14,6 +14,7 @@ import * as github from './github'
 import * as codebaseRuns from './codebaseRuns'
 import * as marketplace from './marketplace'
 import * as providerKeys from './providerKeys'
+import * as googleLive from './googleLive'
 import { enforceRateLimit } from './rateLimit'
 import { appendTraceHeaders, extractTraceContext, tracePropagationHeaders, withTraceResponseHeaders } from './tracing'
 
@@ -305,6 +306,16 @@ async function route(path: string, request: Request, ctx: RequestContext): Promi
       workspaceId: body.workspaceId,
     })
     return await mintRealtimeToken(request, ctx)
+  }
+
+  if (path === '/api/v1/google-live/session' && method === 'POST') {
+    const body = await request.clone().json().catch(() => ({})) as { workspaceId?: string }
+    await enforceRateLimit(ctx, 'google_live_session', {
+      limit: parseRateLimit(ctx.env.RATE_LIMIT_GOOGLE_LIVE_SESSIONS_PER_MINUTE, DEFAULT_REALTIME_RATE_LIMIT_PER_MINUTE),
+      windowSeconds: 60,
+      workspaceId: body.workspaceId,
+    })
+    return await googleLive.createGoogleLiveSession(request, ctx)
   }
 
   // Billing endpoints

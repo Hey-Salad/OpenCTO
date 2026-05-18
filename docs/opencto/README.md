@@ -8,6 +8,8 @@ This folder is the working documentation source for the OpenCTO platform build-o
 - `OPENCTO_FRONTEND_BRAND_MONETISATION_SPEC.md`: Frontend, brand, domain, and monetisation spec (v0.4 baseline).
 - `IMPLEMENTATION_ROADMAP.md`: Practical phased delivery plan mapped to current repository state.
 - `OPENAI_IMPLEMENTATION_GUIDE.md`: OpenAI-only implementation map, env setup, and runbook.
+- `GOOGLE_MULTIMODAL_INTEGRATION_PLAN.md`: Google multimodal architecture and phased rollout plan.
+- `GOOGLE_LIVE_IMPLEMENTATION_GUIDE.md`: Implemented Google realtime path, env setup, backend runbook, and usage guide.
 - `ANYWAY_IMPLEMENTATION_GUIDE.md`: Anyway-only tracing implementation guide for cloudbot workflows.
 - `TRACELOOP_IMPLEMENTATION_GUIDE.md`: Traceloop-only rollout and instrumentation guide.
 - `OPENAI_CLOUDFLARE_TRACELOOP_IMPLEMENTATION_GUIDE.md`: Task-based implementation guide for OpenAI, Cloudflare, and Traceloop workflows.

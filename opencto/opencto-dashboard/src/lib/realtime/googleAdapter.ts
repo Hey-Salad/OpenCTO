@@ -1,9 +1,9 @@
 import {
   CONNECT_TIMEOUT_MS,
-  GOOGLE_API_KEY,
   TOOLS,
   arrayBufferToBase64,
   base64ToArrayBuffer,
+  createGoogleLiveSession,
   executeToolProxy,
   loadPcmCaptureWorklet,
   normalizeGeminiModel,
@@ -34,34 +34,19 @@ export class GoogleLiveAdapter {
   ) {}
 
   async connect(): Promise<void> {
-    if (!GOOGLE_API_KEY) throw new Error('VITE_GOOGLE_API_KEY is not set')
-
     this.isDisconnecting = false
     this.latestInputTranscript = ''
     this.latestOutputTranscript = ''
     this.latestInputTranscriptAt = 0
     this.latestOutputTranscriptAt = 0
     this.hasEmittedSessionEnded = false
-    const wsUrls = [
-      `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(GOOGLE_API_KEY)}`,
-      `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(GOOGLE_API_KEY)}`,
-    ]
-
-    let lastError: Error | null = null
-    for (const wsUrl of wsUrls) {
-      try {
-        await this._connectSocket(wsUrl)
-        return
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error))
-        this.ws?.close()
-        this.ws = null
-      }
-    }
-    throw lastError ?? new Error('Google Live WebSocket connection failed')
+    this.handledToolCallIds.clear()
+    const bootstrap = await createGoogleLiveSession(this.config)
+    await this._connectSocket(bootstrap.wsUrl, `session_token=${encodeURIComponent(bootstrap.sessionToken)}`)
   }
 
-  private async _connectSocket(wsUrl: string): Promise<void> {
+  private async _connectSocket(baseUrl: string, query?: string): Promise<void> {
+    const wsUrl = query ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${query}` : baseUrl
     this.ws = new WebSocket(wsUrl)
     await new Promise<void>((resolve, reject) => {
       const ws = this.ws
@@ -82,7 +67,7 @@ export class GoogleLiveAdapter {
         settled = true
         clearTimeout(timeout)
         this.isDisconnecting = false
-        this._sendSetup()
+        this._sendLegacySetup()
         this.playbackCtx = new AudioContext({ sampleRate: 24000 })
         this.onEvent({ type: 'session_started' })
         resolve()
@@ -114,7 +99,7 @@ export class GoogleLiveAdapter {
       }
 
       ws.onmessage = (event: MessageEvent<unknown>) => {
-        void this._handleIncoming(event.data)
+        void this._handleLegacyIncoming(event.data)
       }
     })
   }
@@ -142,10 +127,11 @@ export class GoogleLiveAdapter {
     this.workletNode = new AudioWorkletNode(this.captureCtx, 'pcm-capture-processor')
 
     this.workletNode.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-      this._send({
+      const audio = arrayBufferToBase64(event.data)
+      this._sendLegacy({
         realtimeInput: {
           audio: {
-            data: arrayBufferToBase64(event.data),
+            data: audio,
             mimeType: 'audio/pcm;rate=16000',
           },
         },
@@ -166,7 +152,7 @@ export class GoogleLiveAdapter {
   }
 
   sendText(text: string): void {
-    this._send({
+    this._sendLegacy({
       clientContent: {
         turns: [{ role: 'user', parts: [{ text }] }],
         turnComplete: true,
@@ -180,7 +166,7 @@ export class GoogleLiveAdapter {
     this.onEvent({ type: 'session_ended' })
   }
 
-  private _sendSetup(): void {
+  private _sendLegacySetup(): void {
     const requestedModel = this.config.model
     const selectedModel = selectSupportedGoogleLiveModel(requestedModel)
     if (selectedModel !== requestedModel && selectedModel !== requestedModel.replace(/^models\//, '')) {
@@ -190,11 +176,13 @@ export class GoogleLiveAdapter {
       })
     }
 
-    this._send({
+    this._sendLegacy({
       setup: {
         model: normalizeGeminiModel(selectedModel),
         generationConfig: { responseModalities: ['AUDIO'] },
         systemInstruction: { parts: [{ text: this.config.instructions }] },
+        voice: this.config.voice,
+        agentProfile: this.config.agentProfile ?? 'dispatch',
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         tools: [
@@ -210,12 +198,10 @@ export class GoogleLiveAdapter {
     })
   }
 
-  private async _handleIncoming(raw: unknown): Promise<void> {
+  private async _handleLegacyIncoming(raw: unknown): Promise<void> {
     try {
       const event = await parseMessagePayload(raw)
       if (!event) return
-
-      console.log('[Agent][google]', event)
 
       const setupComplete = event.setupComplete as Record<string, unknown> | undefined
       if (setupComplete?.error) {
@@ -296,7 +282,7 @@ export class GoogleLiveAdapter {
         this.handledToolCallIds.add(id)
 
         const args = (call.args as Record<string, unknown> | undefined) ?? {}
-        void this._handleToolCall(id, name, args)
+        void this._handleLegacyToolCall(id, name, args)
       }
 
       const err = event.error as Record<string, unknown> | undefined
@@ -309,7 +295,7 @@ export class GoogleLiveAdapter {
     }
   }
 
-  private async _handleToolCall(callId: string, name: string, args: Record<string, unknown>): Promise<void> {
+  private async _handleLegacyToolCall(callId: string, name: string, args: Record<string, unknown>): Promise<void> {
     this.onEvent({ type: 'tool_start', toolName: name })
     try {
       const output = await executeToolProxy(name, args)
@@ -321,14 +307,14 @@ export class GoogleLiveAdapter {
         }
       })()
 
-      this._send({
+      this._sendLegacy({
         toolResponse: {
           functionResponses: [{ id: callId, name, response }],
         },
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      this._send({
+      this._sendLegacy({
         toolResponse: {
           functionResponses: [{ id: callId, name, response: { error: message } }],
         },
@@ -360,7 +346,7 @@ export class GoogleLiveAdapter {
     this.nextPlaybackTime = startAt + audioBuffer.duration
   }
 
-  private _send(msg: unknown): void {
+  private _sendLegacy(msg: unknown): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg))
     }

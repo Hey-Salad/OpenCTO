@@ -3,6 +3,7 @@ import { GOOGLE_LIVE_VOICE_MODELS, isGeminiLiveModel, selectSupportedGoogleLiveM
 
 export interface AudioConfig {
   systemInstructions: string
+  agentProfile: 'dispatch' | 'repo' | 'deploy' | 'incident'
   voice: string
   turnDetection: boolean
   threshold: number
@@ -198,6 +199,11 @@ export function AudioConfigPanel({ config, onConfigChange }: AudioConfigPanelPro
                 </optgroup>
               ))}
             </select>
+            {isGeminiLiveModel(config.voiceModel) && (
+              <div className="audio-config-sub-label">
+                Gemini Live sessions run through the OpenCTO Google backend on Vertex AI.
+              </div>
+            )}
 
             <div className="audio-config-sub-label">Reasoning model</div>
             <select
@@ -214,6 +220,18 @@ export function AudioConfigPanel({ config, onConfigChange }: AudioConfigPanelPro
                   ))}
                 </optgroup>
               ))}
+            </select>
+
+            <div className="audio-config-sub-label">Google live agent profile</div>
+            <select
+              className="audio-config-select"
+              value={config.agentProfile}
+              onChange={(e) => update('agentProfile', e.target.value as AudioConfig['agentProfile'])}
+            >
+              <option value="dispatch">Dispatch Agent</option>
+              <option value="repo">Repo Agent</option>
+              <option value="deploy">Deploy Agent</option>
+              <option value="incident">Incident Agent</option>
             </select>
 
             <div className="audio-config-sub-label">
