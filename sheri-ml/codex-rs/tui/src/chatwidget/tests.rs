@@ -5055,6 +5055,19 @@ async fn full_access_confirmation_popup_snapshot() {
     assert_snapshot!("full_access_confirmation_popup", popup);
 }
 
+#[tokio::test]
+async fn approvals_popup_includes_read_only_preset() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(None).await;
+
+    chat.open_approvals_popup();
+
+    let popup = render_bottom_popup(&chat, 80);
+    assert!(
+        popup.contains("Read Only"),
+        "expected approvals popup to include read-only preset: {popup}"
+    );
+}
+
 #[cfg(target_os = "windows")]
 #[tokio::test]
 async fn windows_auto_mode_prompt_requests_enabling_sandbox_feature() {

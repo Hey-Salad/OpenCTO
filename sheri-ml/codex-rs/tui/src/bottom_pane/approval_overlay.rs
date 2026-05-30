@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::path::PathBuf;
 
 use crate::app_event::AppEvent;
@@ -63,7 +64,7 @@ pub(crate) enum ApprovalRequest {
 pub(crate) struct ApprovalOverlay {
     current_request: Option<ApprovalRequest>,
     current_variant: Option<ApprovalVariant>,
-    queue: Vec<ApprovalRequest>,
+    queue: VecDeque<ApprovalRequest>,
     app_event_tx: AppEventSender,
     list: ListSelectionView,
     options: Vec<ApprovalOption>,
@@ -77,7 +78,7 @@ impl ApprovalOverlay {
         let mut view = Self {
             current_request: None,
             current_variant: None,
-            queue: Vec::new(),
+            queue: VecDeque::new(),
             app_event_tx: app_event_tx.clone(),
             list: ListSelectionView::new(Default::default(), app_event_tx),
             options: Vec::new(),
@@ -90,7 +91,7 @@ impl ApprovalOverlay {
     }
 
     pub fn enqueue_request(&mut self, req: ApprovalRequest) {
-        self.queue.push(req);
+        self.queue.push_back(req);
     }
 
     fn set_current(&mut self, request: ApprovalRequest) {
@@ -235,8 +236,26 @@ impl ApprovalOverlay {
             }));
     }
 
+    fn cancel_request(&self, request: &ApprovalRequest) {
+        match request {
+            ApprovalRequest::Exec { id, command, .. } => {
+                self.handle_exec_decision(id, command, ReviewDecision::Abort);
+            }
+            ApprovalRequest::ApplyPatch { id, .. } => {
+                self.handle_patch_decision(id, ReviewDecision::Abort);
+            }
+            ApprovalRequest::McpElicitation {
+                server_name,
+                request_id,
+                ..
+            } => {
+                self.handle_elicitation_decision(server_name, request_id, ElicitationAction::Cancel);
+            }
+        }
+    }
+
     fn advance_queue(&mut self) {
-        if let Some(next) = self.queue.pop() {
+        if let Some(next) = self.queue.pop_front() {
             self.set_current(next);
         } else {
             self.done = true;
@@ -291,28 +310,13 @@ impl BottomPaneView for ApprovalOverlay {
             return CancellationEvent::Handled;
         }
         if !self.current_complete
-            && let Some(variant) = self.current_variant.as_ref()
+            && let Some(request) = self.current_request.as_ref()
         {
-            match &variant {
-                ApprovalVariant::Exec { id, command, .. } => {
-                    self.handle_exec_decision(id, command, ReviewDecision::Abort);
-                }
-                ApprovalVariant::ApplyPatch { id, .. } => {
-                    self.handle_patch_decision(id, ReviewDecision::Abort);
-                }
-                ApprovalVariant::McpElicitation {
-                    server_name,
-                    request_id,
-                } => {
-                    self.handle_elicitation_decision(
-                        server_name,
-                        request_id,
-                        ElicitationAction::Cancel,
-                    );
-                }
-            }
+            self.cancel_request(request);
         }
-        self.queue.clear();
+        while let Some(request) = self.queue.pop_front() {
+            self.cancel_request(&request);
+        }
         self.done = true;
         CancellationEvent::Handled
     }
@@ -590,13 +594,53 @@ mod tests {
 
     #[test]
     fn ctrl_c_aborts_and_clears_queue() {
-        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let (tx, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx);
         let mut view = ApprovalOverlay::new(make_exec_request(), tx, Features::with_defaults());
         view.enqueue_request(make_exec_request());
         assert_eq!(CancellationEvent::Handled, view.on_ctrl_c());
         assert!(view.queue.is_empty());
         assert!(view.is_complete());
+
+        let mut approvals = 0;
+        while let Ok(ev) = rx.try_recv() {
+            if matches!(ev, AppEvent::CodexOp(Op::ExecApproval { .. })) {
+                approvals += 1;
+            }
+        }
+        assert_eq!(approvals, 2, "expected current and queued requests to be aborted");
+    }
+
+    #[test]
+    fn queued_requests_are_processed_fifo() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut view = ApprovalOverlay::new(make_exec_request(), tx, Features::with_defaults());
+        view.enqueue_request(ApprovalRequest::Exec {
+            id: "first".to_string(),
+            command: vec!["echo".to_string(), "first".to_string()],
+            reason: None,
+            network_approval_context: None,
+            proposed_execpolicy_amendment: None,
+        });
+        view.enqueue_request(ApprovalRequest::Exec {
+            id: "second".to_string(),
+            command: vec!["echo".to_string(), "second".to_string()],
+            reason: None,
+            network_approval_context: None,
+            proposed_execpolicy_amendment: None,
+        });
+
+        view.apply_selection(0);
+
+        let ApprovalRequest::Exec { id, .. } = view
+            .current_request
+            .as_ref()
+            .expect("queued request becomes current")
+        else {
+            panic!("expected exec request");
+        };
+        assert_eq!(id, "first");
     }
 
     #[test]
