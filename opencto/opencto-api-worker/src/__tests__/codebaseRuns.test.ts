@@ -597,6 +597,7 @@ describe('Codebase run endpoints', () => {
       repoUrl: 'https://github.com/Hey-Salad/CTO-AI.git',
       commands: ['npm run build'],
     })
+    await new Promise((resolve) => setTimeout(resolve, 5))
     const second = await createRun(env, {
       repoUrl: 'https://github.com/Hey-Salad/OpenCTO.git',
       commands: ['npm run build'],

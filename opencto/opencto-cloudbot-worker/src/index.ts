@@ -990,7 +990,10 @@ function infobipConfigured(env: Env, channel: "whatsapp" | "sms") {
 }
 
 function normalizeInfobipBaseUrl(env: Env) {
-  return (env.OPENCTO_INFOBIP_BASE_URL || "").replace(/\/+$/, "");
+  const value = env.OPENCTO_INFOBIP_BASE_URL || "";
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
 }
 
 function normalizeInfobipAddress(value: string) {
@@ -1474,8 +1477,44 @@ async function sendSlackMessage(
   });
 }
 
+function isAsciiOrJsWhitespace(char: string): boolean {
+  switch (char) {
+    case " ":
+    case "\f":
+    case "\n":
+    case "\r":
+    case "\t":
+    case "\v":
+    case "\u00a0":
+    case "\u1680":
+    case "\u2028":
+    case "\u2029":
+    case "\u202f":
+    case "\u205f":
+    case "\u3000":
+    case "\ufeff":
+      return true;
+    default:
+      return char >= "\u2000" && char <= "\u200a";
+  }
+}
+
 function normalizeSlackText(text: string) {
-  return text.replace(/<@[^>]+>\s*/g, "").trim();
+  const parts: string[] = [];
+  let index = 0;
+  while (index < text.length) {
+    if (text.charCodeAt(index) === 60 && text.charCodeAt(index + 1) === 64) {
+      const close = text.indexOf(">", index + 2);
+      if (close !== -1) {
+        index = close + 1;
+        while (index < text.length && isAsciiOrJsWhitespace(text[index])) index += 1;
+        continue;
+      }
+    }
+    parts.push(text[index]);
+    index += 1;
+  }
+  return parts.join("").trim();
 }
 
 function parseHex(input: string) {

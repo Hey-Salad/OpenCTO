@@ -1,6 +1,5 @@
 import type { RequestContext } from './types'
 import { BadRequestException, ForbiddenException, InternalServerException, NotFoundException, jsonResponse } from './errors'
-import { redactSecrets } from './redaction'
 
 interface ProviderKeyRow {
   id: string
@@ -121,10 +120,11 @@ export async function resolveProviderApiKey(
   try {
     return await decryptForUser(row.encrypted_key_b64, row.iv_b64, ctx.userId, ctx.env.JWT_SECRET)
   } catch (error) {
+    console.error('Stored provider key could not be decrypted:', error instanceof Error ? error.name : 'Error')
     throw new InternalServerException('Stored provider key could not be decrypted', {
       provider,
       workspaceId,
-      reason: redactSecrets(String(error)),
+      reason: 'decrypt_failed',
     })
   }
 }

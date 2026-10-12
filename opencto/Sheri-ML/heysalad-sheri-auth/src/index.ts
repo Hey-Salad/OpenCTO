@@ -75,6 +75,42 @@ function errorResponse(message: string, status: number = 400): Response {
   return jsonResponse({ error: message }, status);
 }
 
+function isJsWhitespace(char: string): boolean {
+  switch (char) {
+    case ' ':
+    case '\f':
+    case '\n':
+    case '\r':
+    case '\t':
+    case '\v':
+    case '\u00a0':
+    case '\u1680':
+    case '\u2028':
+    case '\u2029':
+    case '\u202f':
+    case '\u205f':
+    case '\u3000':
+    case '\ufeff':
+      return true;
+    default:
+      return char >= '\u2000' && char <= '\u200a';
+  }
+}
+
+// Same acceptance as ^[^\s@]+@[^\s@]+\.[^\s@]+$ without polynomial backtracking.
+function isPlausibleEmail(email: string): boolean {
+  const at = email.indexOf('@');
+  if (at <= 0 || email.indexOf('@', at + 1) !== -1) return false;
+  for (let i = 0; i < email.length; i++) {
+    if (isJsWhitespace(email[i])) return false;
+  }
+  const domain = email.slice(at + 1);
+  for (let i = 1; i < domain.length - 1; i++) {
+    if (domain.charCodeAt(i) === 46) return true;
+  }
+  return false;
+}
+
 // Route handlers
 async function handleRegister(request: Request, env: Env): Promise<Response> {
   try {
@@ -84,8 +120,8 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
       return errorResponse('Email and password required', 400);
     }
 
-    // Validate email format
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    // Validate email format without a backtracking regular expression.
+    if (!isPlausibleEmail(email)) {
       return errorResponse('Invalid email format', 400);
     }
 

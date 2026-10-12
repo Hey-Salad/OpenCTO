@@ -64,8 +64,8 @@ if ANYWAY_API_KEY:
             disable_batch=False,
         )
         logger.info("Traceloop initialized for app_name=%s", APP_NAME)
-    except Exception as exc:  # pragma: no cover
-        init_error = str(exc)
+    except Exception:  # pragma: no cover
+        init_error = "Failed to initialize Traceloop"
         logger.exception("Failed to initialize Traceloop")
 else:
     init_error = "Missing ANYWAY_API_KEY (or TRACELOOP_API_KEY)"

@@ -48,7 +48,7 @@ describe('Realtime token endpoint hardening', () => {
     const body = await res.json() as { error?: string; detail?: string }
     expect(res.status).toBe(502)
     expect(body.error).toBe('Fetch to OpenAI failed')
-    expect(body.detail).toContain('network down')
+    expect(body.detail).toBe('upstream_request_failed')
   })
 })
 

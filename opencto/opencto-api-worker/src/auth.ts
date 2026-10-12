@@ -384,12 +384,13 @@ export async function completeGitHubOAuth(request: Request, env: Env): Promise<R
       }),
     })
   } catch (err) {
+    console.error('GitHub token exchange request failed:', err instanceof Error ? err.name : 'Error')
     return jsonResponse(
       {
         error: 'GitHub token exchange request failed',
         code: 'UPSTREAM_ERROR',
         status: 502,
-        details: { provider: 'github', stage: 'oauth_token_exchange', reason: String(err) },
+        details: { provider: 'github', stage: 'oauth_token_exchange', reason: 'upstream_request_failed' },
       },
       502,
     )
@@ -425,12 +426,13 @@ export async function completeGitHubOAuth(request: Request, env: Env): Promise<R
       },
     })
   } catch (err) {
+    console.error('GitHub user profile request failed:', err instanceof Error ? err.name : 'Error')
     return jsonResponse(
       {
         error: 'GitHub user profile request failed',
         code: 'UPSTREAM_ERROR',
         status: 502,
-        details: { provider: 'github', stage: 'load_profile', reason: String(err) },
+        details: { provider: 'github', stage: 'load_profile', reason: 'upstream_request_failed' },
       },
       502,
     )
@@ -467,12 +469,13 @@ export async function completeGitHubOAuth(request: Request, env: Env): Promise<R
         },
       })
     } catch (err) {
+      console.error('GitHub email lookup request failed:', err instanceof Error ? err.name : 'Error')
       return jsonResponse(
         {
           error: 'GitHub email lookup request failed',
           code: 'UPSTREAM_ERROR',
           status: 502,
-          details: { provider: 'github', stage: 'load_emails', reason: String(err) },
+          details: { provider: 'github', stage: 'load_emails', reason: 'upstream_request_failed' },
         },
         502,
       )
@@ -587,9 +590,15 @@ function nowEpochSeconds(): number {
   return Math.floor(Date.now() / 1000)
 }
 
+function stripTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1
+  return value.slice(0, end)
+}
+
 function resolveApiBaseUrl(request: Request, env: Env): string {
   const configured = (env.API_BASE_URL || '').trim()
-  if (configured) return configured.replace(/\/+$/, '')
+  if (configured) return stripTrailingSlashes(configured)
   return new URL(request.url).origin
 }
 

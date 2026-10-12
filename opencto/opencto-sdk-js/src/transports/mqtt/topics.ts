@@ -3,8 +3,14 @@ export interface TopicBuilderOptions {
   topicPrefix?: string
 }
 
+function stripTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1
+  return value.slice(0, end)
+}
+
 function root(opts: TopicBuilderOptions): string {
-  const prefix = (opts.topicPrefix ?? 'opencto').replace(/\/+$/, '')
+  const prefix = stripTrailingSlashes(opts.topicPrefix ?? 'opencto')
   return `${prefix}/workspace/${opts.workspaceId}`
 }
 

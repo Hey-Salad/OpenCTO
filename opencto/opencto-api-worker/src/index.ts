@@ -619,8 +619,9 @@ async function proxySupervisorResponse(
       },
     })
   } catch (error) {
+    console.error('Supervisor endpoint unavailable:', error instanceof Error ? error.name : 'Error')
     return jsonResponse(
-      { error: 'Supervisor endpoint unavailable', code: 'UPSTREAM_ERROR', detail: String(error) },
+      { error: 'Supervisor endpoint unavailable', code: 'UPSTREAM_ERROR', detail: 'upstream_request_failed' },
       502,
     )
   } finally {
@@ -673,6 +674,7 @@ async function mintRealtimeToken(_request: Request, ctx: RequestContext): Promis
 
     return jsonResponse({ clientSecret: secret, expiresAt })
   } catch (err) {
-    return jsonResponse({ error: 'Fetch to OpenAI failed', detail: String(err) }, 502)
+    console.error('Fetch to OpenAI failed:', err instanceof Error ? err.name : 'Error')
+    return jsonResponse({ error: 'Fetch to OpenAI failed', detail: 'upstream_request_failed' }, 502)
   }
 }

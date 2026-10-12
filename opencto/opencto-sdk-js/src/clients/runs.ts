@@ -7,6 +7,12 @@ import type {
 import type { HttpClientOptions } from '../core/http.js'
 import { createHttpClient } from '../core/http.js'
 
+function stripTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1
+  return value.slice(0, end)
+}
+
 export interface RunsClient {
   create(payload: CreateCodebaseRunPayload): Promise<GetCodebaseRunResponse>
   get(runId: string): Promise<GetCodebaseRunResponse>
@@ -18,7 +24,7 @@ export interface RunsClient {
 
 export function createRunsClient(options: HttpClientOptions): RunsClient {
   const http = createHttpClient(options)
-  const baseUrl = options.baseUrl.replace(/\/+$/, '')
+  const baseUrl = stripTrailingSlashes(options.baseUrl)
 
   return {
     create(payload: CreateCodebaseRunPayload) {
