@@ -37,6 +37,14 @@ interface AudioRealtimeViewProps {
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error'
 
 const TOKEN_URL = `${getApiBaseUrl()}/api/v1/realtime/token`
+
+function createRealtimeSessionId(): string {
+  const bytes = new Uint8Array(6)
+  crypto.getRandomValues(bytes)
+  let suffix = ''
+  for (let i = 0; i < bytes.length; i++) suffix += (bytes[i] % 36).toString(36)
+  return `session-${Date.now()}-${suffix}`
+}
 const RUNS_BASE_URL = import.meta.env.VITE_AGENT_BASE_URL ?? 'https://cloud-services-api.opencto.works'
 
 hljs.registerLanguage('typescript', typescript)
@@ -623,7 +631,7 @@ export function AudioRealtimeView({ messages, onAddMessage, audioConfig }: Audio
     setSessionElapsedMs(0)
     activeToolIds.current.clear()
 
-    const sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const sessionId = createRealtimeSessionId()
     activeSessionIdRef.current = sessionId
     const client = new CTOAgentSession(TOKEN_URL, {
       model: audioConfig.voiceModel,
